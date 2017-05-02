@@ -1,0 +1,6 @@
+mail.smtp.port=your_smtp_port
+mail.smtp.auth=true|false
+mail.smtp.starttls.enable=true|false
+mail.smtp.host=smtp.your_provider.com
+mail.smtp.user=your_email@your_provider.com
+mail.smtp.password=your_password

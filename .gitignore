@@ -1,7 +1,6 @@
+# Java common
 *.class
-
-# Mobile Tools for Java (J2ME)
-.mtj.tmp/
+target/
 
 # Package Files #
 *.jar
@@ -10,3 +9,42 @@
 
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
+
+# =========================
+# Operating System Files
+# =========================
+
+# OSX
+# =========================
+
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbnails
+._*
+
+# Windows image file caches
+Thumbs.db
+ehthumbs.db
+
+# NetBeans specific
+nbproject
+.nbproject
+.nbproject/*
+nbproject/*
+nbproject/private/
+build/
+nbbuild/
+dist/
+nbdist/
+nbactions.xml
+nb-configuration.xml
+build.xml
+
+# Project specific
+src/main/resources/Email.properties
+src/main/resources/KafkaProducer.properties
+src/main/resources/KafkaConsumer.properties
+src/main/resources/NoGuiScheduledSimulation.properties
+manifest.mf

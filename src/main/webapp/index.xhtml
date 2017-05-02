@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:h="http://xmlns.jcp.org/jsf/html"
+      xmlns:p="http://primefaces.org/ui"
+      xmlns:f="http://xmlns.jcp.org/jsf/core">
+
+    <h:head>
+        <h:outputStylesheet name="css/default.css" />
+        <h:outputScript name="js/scripts.js" library="js"/>
+        <h:outputScript name="calendar_es.js" library="js"/>
+        <!-- JYFR: Para que funcionen los mapas de Google Maps. Además, no puede estar encerrado en ningún panel -->
+        <script src="https://maps.google.com/maps/api/js?key=AIzaSyC-ERfFaO2TCQcdRXPTI3P6CL4Qxwd675U" type="text/javascript" ></script>
+        <script>
+            //<![CDATA[
+            function updatePrimefacesMapBounds() {
+                var map = PF('gmap').getMap();
+                map.fitBounds = google.maps.Map.prototype.fitBounds;
+                let latlngbounds = new google.maps.LatLngBounds();
+
+                for (var i in map.markers) {
+                    latlngbounds.extend(map.markers[i].getPosition());
+                }
+                map.fitBounds(latlngbounds);
+            }
+
+            function handleMapComplete(xhr, status, args) {
+                if (args !== undefined) {
+                    var map = PF('gmap').getMap();
+
+                    for (var i in map.markers) {
+                        var marker = map.markers[i];
+
+                        var icon = "icon_" + marker["id"];
+                        if (args.hasOwnProperty(icon)) {
+                            marker.setIcon(args[icon]);
+                        }
+                        var title = "title_" + marker["id"];
+                        if (args.hasOwnProperty(title)) {
+                            marker.setTitle(args[title]);
+                        }
+                        var latLng = "latLng_" + marker["id"];
+                        if (args.hasOwnProperty(latLng)) {
+                            var comp = args[latLng].split(",");
+                            if (comp.length === 2) {
+                                marker.setPosition(new google.maps.LatLng(comp[0], comp[1]));
+                            }
+                        }
+                    }
+
+                    for (var j in map.circles) {
+                        var circle = map.circles[j];
+
+                        var latLng = "clatLng_" + circle["id"];
+                        if (args.hasOwnProperty(latLng)) {
+                            var comp = args[latLng].split(",");
+                            if (comp.length === 2) {
+                                circle.setCenter(new google.maps.LatLng(comp[0], comp[1]));
+                            }
+                        }
+                        var color = "cColor_" + circle["id"];
+                        if (args.hasOwnProperty(color)) {
+                            circle.setOptions({fillColor: args[color], strokeColor: args[color]});
+                        }
+                    }
+                }
+            }
+
+            function handleComplete(xhr, status, args) {
+                if (args !== undefined) {
+                    if (args.hasOwnProperty("ended")) {
+                        PF('finishDialogVar').show();
+                        delete args.ended;
+                    } else if (args.hasOwnProperty("interrupted")) {
+                        PF('interruptedDialogVar').show();
+                        delete args.interrupted;
+                    }
+                }
+            }
+            // ]]>
+        </script>
+    </h:head>
+    <h:body onload="updatePrimefacesMapBounds();">
+        <h:form id="SimulatorMapForm">
+            <p:growl id="growl" showDetail="true" />
+            <h:panelGroup id="checkFinishPanel">
+                <p:poll widgetVar="finished" interval="10" listener="#{simulatorController.checkFinished()}" oncomplete="handleComplete(xhr, status, args)" rendered="#{simulatorController.isConfigLock()}"/>
+            </h:panelGroup>
+            <h:panelGroup id="gmapUpdaterPanel">
+                <p:poll widgetVar="gmapUpdater" interval="1" listener="#{simulatorController.updateMapGUI()}" oncomplete="handleMapComplete(xhr, status, args)" rendered="#{simulatorController.isConfigLock()}"/>
+            </h:panelGroup>
+            <p:layout fullPage="true">
+                <p:layoutUnit position="west" resizable="false" style="width: 360px;">
+                    <h:panelGroup id="configurationPanel">
+                        <p:fieldset legend="#{bundle.SimulationConditions}" style="margin-bottom:10px" toggleable="false">
+                            <p:panelGrid columns="1" styleClass="myPanelGrid">
+                                <h:outputText id="outputDistanceFromSevilleCenter" value="#{bundle.DistanceFromSevilleCenter} #{simulatorController.distanceFromSevilleCenter} Km" style="font-weight:bold"/>
+                                <p:slider for="distanceFromSevilleCenter" minValue="0" maxValue="100" display="outputDistanceFromSevilleCenter" displayTemplate="#{bundle.DistanceFromSevilleCenter} {value} Km" disabled="#{simulatorController.isConfigLock()}" class="mySlider">
+                                    <p:ajax event="slideEnd" listener="#{simulatorController.configChanged()}" update="simulateButton" />
+                                </p:slider>
+                                <h:inputHidden id="distanceFromSevilleCenter" value="#{simulatorController.distanceFromSevilleCenter}"/>
+
+                                <h:outputText id="outputPathDistance" value="#{bundle.PathDistance} #{simulatorController.distance} Km" style="font-weight:bold"/>
+                                <p:slider for="distance" minValue="1" maxValue="100" display="outputPathDistance" displayTemplate="#{bundle.PathDistance} {value} Km" disabled="#{simulatorController.isConfigLock()}" class="mySlider">
+                                    <p:ajax event="slideEnd" listener="#{simulatorController.configChanged()}" update="simulateButton" />
+                                </p:slider>
+                                <h:inputHidden id="distance" value="#{simulatorController.distance}"/>
+
+                                <h:panelGroup id="pathsAmountPanel">
+                                    <h:outputText id="outputPathsAmount" value="#{bundle.PathsAmount} #{simulatorController.pathsAmount}" style="font-weight:bold"/>
+                                    <p:slider for="pathsAmount" widgetVar="pathsAmountVar" minValue="1" maxValue="30" display="outputPathsAmount" displayTemplate="#{bundle.PathsAmount} {value}" disabled="#{simulatorController.isConfigLock()}" class="mySlider" style="margin-top: 8px;">
+                                        <p:ajax event="slideEnd" listener="#{simulatorController.onSlideEndPathsAmount}" update="simulatedSmartDriversPanel, simulateButton" />
+                                    </p:slider>
+                                    <h:inputHidden id="pathsAmount" value="#{simulatorController.pathsAmount}"/>
+                                </h:panelGroup>
+
+                                <h:panelGroup id="simulatedSmartDriversPanel">
+                                    <h:outputText id="outputSimulatedSmartDrivers" value="#{bundle.SimulatedSmartDriversByPath} #{simulatorController.simulatedSmartDrivers}" style="font-weight:bold"/>
+                                    <p:slider for="simulatedSmartDrivers" minValue="1" maxValue="#{simulatorController.maxSmartDrivers}" display="outputSimulatedSmartDrivers" displayTemplate="#{bundle.SimulatedSmartDriversByPath} {value}" disabled="#{simulatorController.isConfigLock()}" class="mySlider" style="margin-top: 8px;"/>
+                                    <h:inputHidden id="simulatedSmartDrivers" value="#{simulatorController.simulatedSmartDrivers}"/>
+                                </h:panelGroup>
+                                <p:selectBooleanCheckbox value="#{simulatorController.randomizeEachSmartDriverBehaviour}" itemLabel="#{bundle.RandomizeEachSmartDriver}" style="font-weight:bold" disabled="#{simulatorController.isConfigLock()}"/>
+
+                                <p:outputLabel value="#{bundle.PathsGenerationMethod}" for="pathsGenerationMethod" style="font-weight:bold"/>
+                                <p:selectOneMenu id="pathsGenerationMethod" value="#{simulatorController.pathsGenerationMethod}" disabled="#{simulatorController.isConfigLock()}">
+                                    <f:selectItem itemValue="0" itemLabel="Google Maps"/>
+                                    <f:selectItem itemValue="1" itemLabel="OpenStreetMap"/>
+                                </p:selectOneMenu>
+
+                                <p:selectBooleanCheckbox value="#{simulatorController.interpolate}" itemLabel="#{bundle.Interpolate}" style="font-weight:bold" disabled="#{simulatorController.isConfigLock()}">
+                                    <p:ajax update="simulateButton" listener="#{simulatorController.configChanged()}" />
+                                </p:selectBooleanCheckbox>
+
+                                <p:commandButton id="generateButton" value="#{bundle.GeneratePaths}" action="#{simulatorController.generateSimulatedPaths()}" update="gmap, simulateButton, pathsAmountPanel, simulatedSmartDriversPanel, growl" disabled="#{simulatorController.isConfigLock()}" styleClass="ui-priority-primary" style="width: 50%; position: relative; left: 20%" onstart="PF('statusDialog').show()" oncomplete="updatePrimefacesMapBounds();PF('statusDialog').hide()"/>
+                            </p:panelGrid>
+                        </p:fieldset>
+
+                        <p:fieldset legend="#{bundle.Options}" style="margin-bottom:10px" toggleable="false">
+                            <p:panelGrid columns="1" styleClass="myPanelGrid">
+                                <p:outputLabel value="#{bundle.StreamServer}" for="streamServer" style="font-weight:bold"/>
+                                <p:selectOneMenu id="streamServer" value="#{simulatorController.streamServer}" disabled="#{simulatorController.isConfigLock()}" >
+                                    <f:selectItem itemValue="0" itemLabel="#{bundle.OnlyKafka}"/>
+                                    <f:selectItem itemValue="1" itemLabel="#{bundle.OnlyZtreamy}"/>
+                                    <f:selectItem itemValue="2" itemLabel="#{bundle.FirstKafkaThenZtreamy}"/>
+                                    <f:selectItem itemValue="3" itemLabel="#{bundle.FirstZtreamyThenKafka}"/>
+                                    <p:ajax event="change" update="streamServerPanel" />
+                                </p:selectOneMenu>
+
+                                <h:panelGroup id="streamServerPanel">
+                                    <p:selectBooleanCheckbox id="infiniteSimulation" value="#{simulatorController.infiniteSimulation}" itemLabel="#{bundle.InfiniteSimulation}" style="font-weight:bold" rendered="#{simulatorController.streamServer lt 2}" disabled="#{simulatorController.isConfigLock()}"/>
+                                    <p:selectBooleanCheckbox id="kafkaProducerPerSmartDriver" value="#{simulatorController.kafkaProducerPerSmartDriver}" itemLabel="#{bundle.KafkaProducerPerSmartDriver}" style="font-weight:bold" rendered="#{simulatorController.streamServer % 2 eq 0}" disabled="#{simulatorController.isConfigLock()}"/>
+                                </h:panelGroup>
+
+                                <p:outputLabel value="#{bundle.SmartDriversStartingMode}" for="startingMode" style="font-weight:bold"/>
+                                <p:selectOneMenu id="startingMode" value="#{simulatorController.startingMode}" disabled="#{simulatorController.isConfigLock()}">
+                                    <f:selectItem itemValue="0" itemLabel="#{bundle.Aleatory}"/>
+                                    <f:selectItem itemValue="1" itemLabel="#{bundle.Lineal}"/>
+                                    <f:selectItem itemValue="2" itemLabel="#{bundle.SameTime}"/>
+                                </p:selectOneMenu>
+                                <!--
+                                <h:outputText value="#{bundle.SimulationSpeed}" style="font-weight:bold"/>
+                                <p:selectOneButton value="#{simulatorController.simulatedSpeed}" disabled="#{simulatorController.isConfigLock()}" >
+                                    <f:selectItem itemValue="0" itemLabel="1x"/>
+                                    <f:selectItem itemValue="1" itemLabel="10x"/>
+                                    <f:selectItem itemValue="2" itemLabel="100x"/>
+                                    <f:selectItem itemValue="3" itemLabel="1000x"/>
+                                </p:selectOneButton>
+                                -->
+                                <p:selectBooleanCheckbox value="#{simulatorController.enableGUI}" itemLabel="#{bundle.EnableGUI}" style="font-weight:bold">
+                                    <p:ajax update="gmapUpdaterPanel" />
+                                </p:selectBooleanCheckbox>
+                                <p:selectBooleanCheckbox value="#{simulatorController.retryOnFail}" itemLabel="#{bundle.RetryOnFail}" style="font-weight:bold" disabled="#{simulatorController.isConfigLock()}">
+                                    <p:ajax update="retriesOnFailPanel" />
+                                </p:selectBooleanCheckbox>
+                                <h:panelGroup id="retriesOnFailPanel">
+                                    <h:outputText id="outputTimeBetweenRetries" value="#{bundle.TimeBetweenRetries} #{simulatorController.secondsBetweenRetries} s" rendered="#{simulatorController.retryOnFail}" style="font-weight:bold"/>
+                                    <p:slider id="sliderTimeBetweenRetries" for="timeBetweenRetries" minValue="1" maxValue="60" display="outputTimeBetweenRetries" displayTemplate="#{bundle.TimeBetweenRetries} {value}" rendered="#{simulatorController.retryOnFail}" disabled="#{simulatorController.isConfigLock()}" class="mySlider" style="margin-top: 5px;"/>
+                                    <h:inputHidden id="timeBetweenRetries" value="#{simulatorController.secondsBetweenRetries}" rendered="#{simulatorController.retryOnFail}"/>
+                                </h:panelGroup>
+                                <p:selectBooleanCheckbox value="#{simulatorController.monitorEachSmartDriver}" itemLabel="#{bundle.MonitorEachSmartDriver}" style="font-weight:bold" disabled="#{simulatorController.isConfigLock()}"/>
+
+                                <p:outputLabel value="#{bundle.Email}" for="email" style="font-weight:bold"/>
+                                <p:inputText id="email" value="#{simulatorController.email}" title="#{bundle.Email}"
+                                             validatorMessage="#{bundle.InvalidEmail}" style="width: 200px;" disabled="#{simulatorController.isConfigLock()}">
+                                    <!-- JYFR: Validación de e-mail que permite nulo, ya que es un campo opcional. Se ha encapsulado la expresión regular en '( )?' -->
+                                    <f:validateRegex pattern="(^[_A-Za-z0-9-\+]+(\.[_A-Za-z0-9-]+)*@[A-Za-z0-9-]+(\.[A-Za-z0-9]+)*(\.[A-Za-z]{2,})$)?" /> 
+                                    <f:validateLength minimum="1" />
+                                </p:inputText>
+
+                                <p:outputLabel value="#{bundle.ScheduleSimulation}" for="scheduledSimulate" style="font-weight:bold" />
+                                <h:panelGroup>                                    
+                                    <p:calendar id="scheduledSimulate" value="#{simulatorController.scheduledDate}" pattern="dd/MM/yyyy HH:mm:ss" disabled="#{simulatorController.isConfigLock()}" style="padding-right: 2px;"/>
+                                    <p:commandButton icon="ui-icon-circle-close" action="#{simulatorController.resetScheduledDate()}" styleClass="ui-priority-primary, redIcon" disabled="#{simulatorController.isConfigLock()}" update="scheduledSimulate"/>
+                                </h:panelGroup>                               
+
+                            </p:panelGrid>
+                        </p:fieldset>
+
+                        <p:commandButton widgetVar="simulateButtonVar" id="simulateButton" value="#{simulatorController.isConfigLock() ? bundle.StopSimulation : bundle.StartSimulation}" action="#{simulatorController.simulate()}" update="gmap, gmapUpdaterPanel, checkFinishPanel, configurationPanel, growl" styleClass="ui-priority-primary" style="width: 50%; position: relative; left: 20%" onstart="PF('statusDialog').show()" oncomplete="updatePrimefacesMapBounds(); handleComplete(xhr, status, args);PF('statusDialog').hide()" disabled="#{!simulatorController.buttonStartStopEnabled}"/>
+                        <h:outputText value="v1.4" style="font-size: 70%; font-weight:bold; bottom: 0; right: 0; float: right"/>
+
+                    </h:panelGroup>
+                </p:layoutUnit>
+
+                <p:layoutUnit position="center">
+                    <!-- FIXME: Poner 'fitBounds' cuando se corrija el 'bug' que tiene Primefaces con Google Maps -->
+                    <p:gmap id="gmap" widgetVar="gmap" center="#{simulatorController.markerLatitudeLongitude}" zoom="10" type="ROADMAP" model="#{simulatorController.simulatedMapModel}" style="height:100%">
+                        <p:ajax event="overlaySelect" listener="#{simulatorController.onMarkerSelect}"/>
+                        <p:gmapInfoWindow id="infoWindow">
+                            <p:outputPanel style="text-align: center; display: block; margin: auto">
+                                <h:outputText value="#{simulatorController.marker.title}" />
+                            </p:outputPanel>
+                        </p:gmapInfoWindow>
+                    </p:gmap>
+                </p:layoutUnit>
+            </p:layout>
+
+            <p:dialog widgetVar="finishDialogVar" modal="true" showEffect="fade" hideEffect="fade" header="#{bundle.Information}">
+                <h:outputText value="#{bundle.AllSimulationsFinished}" />
+                <p:ajax event="close" update="gmap, gmapUpdaterPanel, checkFinishPanel, configurationPanel" listener="#{simulatorController.handleCloseFinishDialog}" />
+            </p:dialog>
+
+            <p:dialog widgetVar="interruptedDialogVar" modal="true" showEffect="fade" hideEffect="fade" header="#{bundle.Information}">
+                <h:outputText value="#{bundle.InterruptedSimulation}" />
+                <p:ajax event="close" update="gmap, gmapUpdaterPanel, checkFinishPanel, configurationPanel" listener="#{simulatorController.handleCloseFinishDialog}" />
+            </p:dialog>
+
+            <p:dialog widgetVar="statusDialog" modal="true" draggable="false" closable="false" resizable="false" showHeader="false">
+                #{bundle.Processing}<br />
+                <p:graphicImage name="img/loading.gif"/>
+            </p:dialog>
+        </h:form>
+    </h:body>
+</html>

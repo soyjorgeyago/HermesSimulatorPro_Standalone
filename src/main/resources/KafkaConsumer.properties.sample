@@ -1,0 +1,12 @@
+bootstrap.servers=your_Kafka_server_IP:Port
+
+# Consumer
+group.id=consumer_group_id
+key.deserializer=key_deserializer
+value.deserializer=value_deserializer
+enable.auto.commit=true|false
+auto.commit.interval.ms=interval_between_commits
+session.timeout.ms=timeout_to_remove_consumer
+
+# Custom
+consumer.poll.timeout.ms=interval_between_polls

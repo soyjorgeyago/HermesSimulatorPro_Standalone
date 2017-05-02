@@ -1,0 +1,28 @@
+# Maximum distance from city center (Seville) in kilometers.
+distance.from.center=1
+# Maximum distance of generated paths in kilometers.
+max.path.distance=5
+# Amount of generated paths from 1 to 10.
+paths.amount=10
+# Drivers by path from 1 to 3000.
+drivers.by.path=1000
+# 0 for Google Maps, 1 for OpenStreetMap.
+paths.generation.method=1
+# 0 for Kafka server, 1 for Ztreamy server.
+stream.server=0
+# 0 for aleatory, 1 for lineal, 2 for all at the same time.
+starting.mode=1
+# Indicates if trying to send a fail stream again or not.
+retry.on.fail=true
+# Interval of seconds between retries, in case of retrying on fail.
+interval.between.retries.s=10
+# Scheduled date and time to do the simulation. Format: yyyy-MM-dd_HH.mm.ss
+scheduled.simulation=2017-01-16_09.00.00
+# Email where to send results of simulation.
+send.results.to.email=jorgeyago.ingeniero@gmail.com
+# Indicates if the behaviour of each SmartDriver is randomized.
+randomize.behaviour=true
+# Indicates if is monitorized each SmartDriver, creating individual CSVs.
+monitor.each.driver=false
+# Number of retries sending an event before being discarded from -1 (means infinite retries) to 5
+retries = 1

@@ -1,0 +1,15 @@
+.ui-widget {
+    font-size: 80%;
+ }
+.ui-widget .ui-widget {
+    font-size: 90%;
+ }
+
+.mySlider{
+    width: 200px;
+}
+
+.myPanelGrid.ui-panelgrid>*>tr,
+.myPanelGrid.ui-panelgrid .ui-panelgrid-cell {
+    border: none;
+}

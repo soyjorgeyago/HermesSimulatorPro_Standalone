@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app version="3.1" xmlns="http://xmlns.jcp.org/xml/ns/javaee" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee http://xmlns.jcp.org/xml/ns/javaee/web-app_3_1.xsd">
+    
+    <!-- CONTEXT PARAM -->
+    <!-- JYFR: Para que no se muestren los comentarios en el HTML que se genera al usuario -->
+    <context-param>
+        <param-name>javax.faces.FACELETS_SKIP_COMMENTS</param-name>
+        <param-value>true</param-value>
+    </context-param>
+    <!-- JYFR: Tema visual -->
+    <context-param>
+        <param-name>primefaces.THEME</param-name>
+        <param-value>bootstrap</param-value>
+    </context-param>
+    <!-- JYFR: Para indicar las extensiones que debe considerar que usan Facelets -->
+    <context-param>
+        <param-name>javax.faces.FACELETS_VIEW_MAPPINGS</param-name>
+        <param-value>*.xhtml</param-value>
+    </context-param>
+    <!-- JYFR: Para evitar problemas con las horas al usar 'p:calendar' y 'p:schedule' -->
+    <context-param>
+        <param-name>javax.faces.DATETIMECONVERTER_DEFAULT_TIMEZONE_IS_SYSTEM_TIMEZONE</param-name>
+        <param-value>true</param-value>
+    </context-param>
+    <!-- JYFR: Para evitar problemas de compatibilidad en JSF al crear una nueva vista ya que en esta aplicación no hay objeto de sesión para cada usuario -->
+    <context-param>
+        <param-name>com.sun.faces.enableRestoreView11Compatibility</param-name>
+        <param-value>true</param-value>
+    </context-param>
+    <!-- SERVLET -->
+    <servlet>
+        <servlet-name>Faces Servlet</servlet-name>
+        <servlet-class>javax.faces.webapp.FacesServlet</servlet-class>
+        <load-on-startup>1</load-on-startup>
+    </servlet>
+    <!-- SERVLET MAPPING -->
+    <servlet-mapping>
+        <servlet-name>Faces Servlet</servlet-name>
+        <url-pattern>/faces/*</url-pattern>
+    </servlet-mapping>
+    <!-- WELCOME FILE LIST -->
+    <welcome-file-list>
+        <welcome-file>/faces/index.xhtml</welcome-file>
+    </welcome-file-list>
+    <error-page>
+        <location>/faces/error.xhtml?faces-redirect=true</location>
+    </error-page>
+    
+    <!-- JYFR: Filtro para no 'cachear' las páginas -->
+    <!--
+    <filter>
+        <filter-name>NoCacheFilter</filter-name>
+        <filter-class>es.us.lsi.hermes.util.NoCacheFilter</filter-class>
+    </filter>
+    <filter-mapping>
+        <filter-name>NoCacheFilter</filter-name>
+        <url-pattern>/faces/*</url-pattern>
+    </filter-mapping>
+    -->
+</web-app>
