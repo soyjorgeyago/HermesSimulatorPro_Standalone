@@ -120,15 +120,15 @@ public class LocationLogDetail implements Serializable {
         return sb.toString();
     }
 
-    public String getMarkerTitle() {
-        StringBuilder sb = new StringBuilder();
-        sb.append(ResourceBundle.getBundle("/Bundle").getString("Time")).append(": ").append(Constants.dfTime.format(System.currentTimeMillis() + (secondsToBeHere * 1000)));
-        sb.append(" ");
-        sb.append(ResourceBundle.getBundle("/Bundle").getString("HeartRate")).append(": ").append(Integer.toString(getHeartRate()));
-        sb.append(" ");
-        sb.append(ResourceBundle.getBundle("/Bundle").getString("Speed")).append(": ").append(Constants.df2Decimals.format(getSpeed())).append(" Km/h");
-        sb.append(" (").append(getLatitude()).append(", ").append(getLongitude()).append(")");
-
-        return sb.toString();
-    }
+//    public String getMarkerTitle() {
+//        StringBuilder sb = new StringBuilder();
+//        sb.append(ResourceBundle.getBundle("/Bundle").getString("Time")).append(": ").append(Constants.dfTime.format(System.currentTimeMillis() + (secondsToBeHere * 1000)));
+//        sb.append(" ");
+//        sb.append(ResourceBundle.getBundle("/Bundle").getString("HeartRate")).append(": ").append(Integer.toString(getHeartRate()));
+//        sb.append(" ");
+//        sb.append(ResourceBundle.getBundle("/Bundle").getString("Speed")).append(": ").append(Constants.df2Decimals.format(getSpeed())).append(" Km/h");
+//        sb.append(" (").append(getLatitude()).append(", ").append(getLongitude()).append(")");
+//
+//        return sb.toString();
+//    }
 }

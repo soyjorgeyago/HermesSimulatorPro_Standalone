@@ -10,7 +10,7 @@ import java.util.ResourceBundle;
  */
 public class HermesException extends Exception {
 
-    private static ResourceBundle bundle = ResourceBundle.getBundle("/Bundle");
+    private static ResourceBundle bundle = ResourceBundle.getBundle("Bundle");
     private final int code;
 
     public HermesException() {

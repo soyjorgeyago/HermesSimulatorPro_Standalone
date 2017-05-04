@@ -8,29 +8,13 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.servlet.ServletContextEvent;
-import javax.servlet.ServletContextListener;
-import javax.servlet.annotation.WebListener;
 
-@WebListener
-public class PathRequestWebService implements ServletContextListener {
+public class PathRequestWebService {
 
     private static final Logger LOG = Logger.getLogger(PathRequestWebService.class.getName());
 
     private static ThreadPoolExecutor executor;
     private static ThreadPoolMonitor monitor;
-
-    @Override
-    public void contextInitialized(ServletContextEvent sce) {
-        createExecutor();
-        LOG.log(Level.INFO, "contextInitialized() - Inicialización");
-    }
-
-    @Override
-    public void contextDestroyed(ServletContextEvent sce) {
-        executor.shutdown();
-        LOG.log(Level.INFO, "contextDestroyed() - Finalización");
-    }
 
     public static synchronized void submitTask(Runnable runnable) {
         init();
@@ -48,6 +32,7 @@ public class PathRequestWebService implements ServletContextListener {
     }
 
     private static void init() {
+        LOG.log(Level.INFO, "init() - Petición de rutas");
         shutdown();
         createExecutor();
         monitor = new ThreadPoolMonitor(executor, 1);

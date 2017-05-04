@@ -9,17 +9,12 @@ import java.util.Date;
 import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.annotation.PostConstruct;
-import javax.ejb.Singleton;
-import javax.ejb.Startup;
 
-@Singleton
-@Startup
 public class NoGuiScheduledSimulation {
 
     private static final Logger LOG = Logger.getLogger(NoGuiScheduledSimulation.class.getName());
 
-    private Properties noGuiScheduledSimulationProperties;
+    private static Properties noGuiScheduledSimulationProperties;
 
     private static Integer distanceFromCenter;
     private static Integer maxPathDistance;
@@ -36,9 +31,8 @@ public class NoGuiScheduledSimulation {
     private static Boolean monitorEachSmartDriver;
     private static Integer retries;
 
-    @PostConstruct
-    public void onStartup() {
-        LOG.log(Level.INFO, "onStartup() - Se comprueba si existe un archivo de configuración de una simulación sin interfaz gráfica");
+    static {
+        LOG.log(Level.INFO, "init() - Se comprueba si existe un archivo de configuración de una simulación sin interfaz gráfica");
 
         try {
             ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
@@ -47,7 +41,7 @@ public class NoGuiScheduledSimulation {
             noGuiScheduledSimulationProperties.load(input);
             validate();
         } catch (IOException ex) {
-            LOG.log(Level.INFO, "onStartup() - No existe un archivo de configuración válido (NoGuiScheduledSimulation.properties)");
+            LOG.log(Level.INFO, "init() - No existe un archivo de configuración válido (NoGuiScheduledSimulation.properties)");
         }
     }
 
@@ -56,7 +50,7 @@ public class NoGuiScheduledSimulation {
      * válida, se notifica por log. No se usará el archivo de propiedades si
      * algún valor es incorrecto.
      */
-    private void validate() {
+    private static void validate() {
 
         String property;
 

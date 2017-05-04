@@ -12,8 +12,6 @@ import javax.activation.DataHandler;
 import javax.activation.DataSource;
 import javax.activation.FileDataSource;
 import javax.annotation.PostConstruct;
-import javax.ejb.Singleton;
-import javax.ejb.Startup;
 import javax.mail.Message;
 import javax.mail.MessagingException;
 import javax.mail.Multipart;
@@ -25,8 +23,6 @@ import javax.mail.internet.MimeBodyPart;
 import javax.mail.internet.MimeMessage;
 import javax.mail.internet.MimeMultipart;
 
-@Singleton
-@Startup
 public class Email {
 
     private static final Logger LOG = Logger.getLogger(Email.class.getName());
@@ -34,9 +30,8 @@ public class Email {
     private static Properties mailServerProperties;
     private static Session mailSession;
 
-    @PostConstruct
-    public void onStartup() {
-        LOG.log(Level.INFO, "onStartup() - Inicialización del gestor de correo");
+    static {
+        LOG.log(Level.INFO, "init() - Inicialización del gestor de correo");
 
         try {
             ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
@@ -44,7 +39,7 @@ public class Email {
             mailServerProperties = new Properties();
             mailServerProperties.load(input);
         } catch (IOException ex) {
-            LOG.log(Level.SEVERE, "onStartup() - Error al cargar el archivo de propiedades del correo (Email.properties)", ex);
+            LOG.log(Level.SEVERE, "init() - Error al cargar el archivo de propiedades del correo (Email.properties)", ex);
         }
 
         mailSession = Session.getDefaultInstance(mailServerProperties, null);

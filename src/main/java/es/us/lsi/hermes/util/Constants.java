@@ -3,13 +3,7 @@ package es.us.lsi.hermes.util;
 import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
 import java.util.logging.Logger;
-import javax.ejb.Singleton;
-import javax.ejb.Startup;
-import javax.inject.Named;
 
-@Named(value = "constants")
-@Singleton
-@Startup
 public class Constants {
 
     private static final Logger LOG = Logger.getLogger(Constants.class.getName());

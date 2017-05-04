@@ -5,6 +5,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
+import com.google.maps.model.LatLng;
 import es.us.lsi.hermes.analysis.Vehicle;
 import es.us.lsi.hermes.csv.CSVEvent;
 import es.us.lsi.hermes.csv.CSVSimulatorStatus;
@@ -22,8 +23,6 @@ import es.us.lsi.hermes.util.Constants;
 import es.us.lsi.hermes.util.Email;
 import es.us.lsi.hermes.util.HermesException;
 import es.us.lsi.hermes.util.HermesSimulatorConfig;
-import es.us.lsi.hermes.util.JsfUtil;
-import es.us.lsi.hermes.util.MessageBundle;
 import es.us.lsi.hermes.util.Util;
 import java.io.File;
 import java.io.FileWriter;
@@ -56,10 +55,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.annotation.PostConstruct;
-import javax.enterprise.context.ApplicationScoped;
-import javax.inject.Inject;
-import javax.inject.Named;
 import javax.mail.MessagingException;
 import net.lingala.zip4j.core.ZipFile;
 import net.lingala.zip4j.exception.ZipException;
@@ -68,23 +63,11 @@ import net.lingala.zip4j.util.Zip4jConstants;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.time.DurationFormatUtils;
 import org.apache.kafka.clients.producer.KafkaProducer;
-import org.primefaces.context.RequestContext;
-import org.primefaces.event.CloseEvent;
-import org.primefaces.event.SlideEndEvent;
-import org.primefaces.event.map.OverlaySelectEvent;
-import org.primefaces.model.map.Circle;
-import org.primefaces.model.map.DefaultMapModel;
-import org.primefaces.model.map.LatLng;
-import org.primefaces.model.map.MapModel;
-import org.primefaces.model.map.Marker;
-import org.primefaces.model.map.Polyline;
 import org.supercsv.cellprocessor.ift.CellProcessor;
 import org.supercsv.io.CsvBeanWriter;
 import org.supercsv.io.ICsvBeanWriter;
 import org.supercsv.prefs.CsvPreference;
 
-@Named("simulatorController")
-@ApplicationScoped
 public class SimulatorController implements Serializable, ISimulatorControllerObserver {
 
     private static final Logger LOG = Logger.getLogger(SimulatorController.class.getName());
@@ -93,11 +76,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     public static final String ZTREAMY_URL = HermesSimulatorConfig.getHermesSimulatorProperties().getProperty("ztreamy.url", "http://hermes1.gast.it.uc3m.es:9220/collector/publish"); // URL de Ztreamy OFICIAL
 
     private static final Location SEVILLE = new Location(37.3898358, -5.986069);
-    public static final String MARKER_GREEN_CAR_ICON_PATH = "resources/img/greenCar.png";
-    public static final String MARKER_YELLOW_CAR_ICON_PATH = "resources/img/yellowCar.png";
-    public static final String MARKER_RED_CAR_ICON_PATH = "resources/img/redCar.png";
-    private static final String MARKER_START_ICON_PATH = "resources/img/home.png";
-    private static final String MARKER_FINISH_ICON_PATH = "resources/img/workplace.png";
 
     private static final String DEFAULT_EMAIL = "jorgeyago.ingeniero@gmail.com";
 
@@ -154,8 +132,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     };
     private static Paths_Generation_Method pathsGenerationMethod = Paths_Generation_Method.GOOGLE;
 
-    private Marker marker;
-
     // Distancia del trayecto.
     private static int distance = 10;
     // Distancia desde el centro de Sevilla.
@@ -171,7 +147,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     // harían falta más puntos. Se calculará la interpolación tomando la velocidad mínima de 10Km/h.
     static boolean interpolate = true;
 
-    private static MapModel simulatedMapModel;
     private static ArrayList<LocationLog> locationLogList;
 
     private static int simulatedSmartDrivers = 1;
@@ -208,9 +183,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     // Directorio temporal para almacenar los archivos generados.
     private static Path tempFolder;
 
-    @Inject
-    @MessageBundle
-    private ResourceBundle bundle;
+    private final ResourceBundle bundle;
 
     private static enum Stream_Server {
         KAFKA, ZTREAMY, FIRST_KAFKA_THEN_ZTREAMY, FIRST_ZTREAMY_THEN_KAFKA
@@ -229,8 +202,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
     private static ScheduledThreadPoolExecutor threadPool;
 
-    private static List<String> markersToRemove;
-
     private static boolean monitorEachSmartDriver = false;
     private static boolean randomizeEachSmartDriverBehaviour = true;
 
@@ -247,17 +218,13 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     private static Properties kafkaProperties;
 
     public SimulatorController() {
-    }
-
-    @PostConstruct
-    public void init() {
         LOG.log(Level.INFO, "init() - Inicialización del controlador del simulador");
+        
+        // Cargamos los recursos de internacionalización.
+        this.bundle = ResourceBundle.getBundle("Bundle");
+        
         // Iniciamos el 'pool' de hilos de ejecución para los SmartDrivers.
         initThreadPool();
-
-        // Establecemos la posición del mapa donde se generarán los recorridos en Sevilla.
-        marker = new Marker(new LatLng(SEVILLE.getLat(), SEVILLE.getLng()));
-        marker.setDraggable(false);
 
         maxSmartDriversDelay = new AtomicLong(0);
         currentSmartDriversDelay = new AtomicLong(0);
@@ -265,7 +232,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         // Comprobamos si existe una configuración asignada en el archivo de propiedades y generamos la simulación.
         initNoGuiScheduledSimulation();
 
-        markersToRemove = new ArrayList<>();
         kafkaRecordId = new AtomicLong(0);
         kafkaProperties = Kafka.getKafkaProducerProperties();
     }
@@ -329,22 +295,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         }
     }
 
-    public String getMarkerLatitudeLongitude() {
-        if (marker != null) {
-            return marker.getLatlng().getLat() + "," + marker.getLatlng().getLng();
-        }
-
-        return "";
-    }
-
-    public Marker getMarker() {
-        return marker;
-    }
-
     public void generateSimulatedPaths() {
-        simulatedMapModel = new DefaultMapModel();
-        // Eliminamos los 'Marker' existentes.
-        simulatedMapModel.getMarkers().clear();
         locationLogList = new ArrayList<>();
 
         // Lista con las tareas de petición de rutas.
@@ -434,9 +385,9 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 if (simulatedSmartDrivers > maxSmartDrivers) {
                     simulatedSmartDrivers = maxSmartDrivers;
                 }
-                JsfUtil.addInfoMessage(bundle.getString("PathsAmountAvailable"));
+                LOG.log(Level.INFO, bundle.getString("PathsAmountAvailable"));
             } else {
-                JsfUtil.addWarnMessage(bundle.getString("UnableToGetPathsFromService"));
+                LOG.log(Level.INFO, bundle.getString("UnableToGetPathsFromService"));
             }
         }
     }
@@ -561,20 +512,8 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         return person;
     }
 
-    public MapModel getSimulatedMapModel() {
-        return simulatedMapModel;
-    }
-
     private void createPathOpenStreetMaps(List<PositionSimulatedSpeed> pssList, LocationLog ll) {
         if (pssList != null && !pssList.isEmpty()) {
-            Polyline polyline = new Polyline();
-            polyline.setStrokeWeight(4);
-            polyline.setStrokeOpacity(0.7);
-
-            Random rand = new Random();
-
-            // Hacemos que las rutas sean variaciones de azul.
-            polyline.setStrokeColor("#2222" + String.format("%02x", rand.nextInt(0x100)));
 
             // Listado de posiciones que componen el trayecto de SmartDriver.
             ArrayList<LocationLogDetail> locationLogDetailList = new ArrayList<>();
@@ -595,7 +534,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
                 // Añadimos un nuevo punto en la polilínea que se dibujará por pantalla.
                 LatLng latlng = new LatLng(currentCoordinates.get(1), currentCoordinates.get(0));
-                polyline.getPaths().add(latlng);
 
                 // Creamos un nodo del trayecto, como si usásemos SmartDriver.
                 LocationLogDetail lld = new LocationLogDetail();
@@ -605,16 +543,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 lld.setSpeed(pss.getSpeed());
                 lld.setRrTime(RR_TIME);
                 lld.setHeartRate((int) Math.ceil(60.0d / (RR_TIME / 1000.0d)));
-
-                // Si ha variado el límite de velocidad respecto al anterior, añadimos un 'marker' con el límite de velocidad.
-                if (!previous.getSpeed().equals(pss.getSpeed())) {
-                    Marker m = new Marker(latlng);
-                    m.setVisible(true);
-                    m.setDraggable(false);
-
-                    m.setIcon("resources/img/" + (Math.round(pss.getSpeed())) + ".png");
-                    simulatedMapModel.addOverlay(m);
-                }
 
                 List<Double> previousCoordinates = previous.getPosition().getCoordinates();
                 // Calculamos la distancia en metros entre los puntos previo y actual, así como el tiempo necesario para recorrer dicha distancia.
@@ -637,11 +565,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 previous = pss;
             }
 
-            simulatedMapModel.addOverlay(polyline);
-
-            // Asignamos un 'marker' con la posición inicial y final de cada trayecto.
-            createStartAndEndMarkers(locationLogDetailList.get(0), locationLogDetailList.get(locationLogDetailList.size() - 1));
-
             // Asignamos el listado de posiciones.
             ll.setLocationLogDetailList(locationLogDetailList);
 
@@ -652,13 +575,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
     private void createPathGoogleMaps(GeocodedWaypoints gcwp, LocationLog ll) {
         if (gcwp.getRoutes() != null) {
-            Polyline polyline = new Polyline();
-            polyline.setStrokeWeight(4);
-            polyline.setStrokeOpacity(0.7);
-
-            Random rand = new Random();
-            // Hacemos que las rutas sean variaciones de verde.
-            polyline.setStrokeColor("#22" + String.format("%02x", rand.nextInt(0x100)) + "22");
 
             // Listado de posiciones que componen el trayecto de SmartDriver.
             ArrayList<LocationLogDetail> locationLogDetailList = new ArrayList<>();
@@ -683,10 +599,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 //                PolynomialFunction p = new PolynomialFunction(new double[]{speed, averagePolylineSpeed,});
                     for (int i = 0; i < locationList.size(); i++) {
                         Location location = locationList.get(i);
-
-                        // Añadimos un nuevo punto en la polilínea que se dibujará por pantalla.
-                        LatLng latlng = new LatLng(location.getLat(), location.getLng());
-                        polyline.getPaths().add(latlng);
 
                         // Creamos un nodo del trayecto, como si usásemos SmartDriver.
                         LocationLogDetail lld = new LocationLogDetail();
@@ -717,11 +629,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                         previous = location;
                     }
 
-                    simulatedMapModel.addOverlay(polyline);
-
-                    // Asignamos un 'marker' con la posición inicial y final de cada trayecto.
-                    createStartAndEndMarkers(locationLogDetailList.get(0), locationLogDetailList.get(locationLogDetailList.size() - 1));
-
                     // Asignamos el listado de posiciones.
                     ll.setLocationLogDetailList(locationLogDetailList);
 
@@ -730,25 +637,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 }
             }
         }
-    }
-
-    private void createStartAndEndMarkers(LocationLogDetail startPosition, LocationLogDetail endPosition) {
-        LatLng startLatLng = new LatLng(startPosition.getLatitude(), startPosition.getLongitude());
-
-        Marker startMarker = new Marker(startLatLng);
-        startMarker.setVisible(true);
-        startMarker.setDraggable(false);
-        startMarker.setTitle(bundle.getString("Home"));
-        startMarker.setIcon(MARKER_START_ICON_PATH);
-        simulatedMapModel.addOverlay(startMarker);
-
-        LatLng endLatLng = new LatLng(endPosition.getLatitude(), endPosition.getLongitude());
-        Marker endMarker = new Marker(endLatLng);
-        endMarker.setVisible(true);
-        endMarker.setDraggable(false);
-        endMarker.setTitle(bundle.getString("Workplace"));
-        endMarker.setIcon(MARKER_FINISH_ICON_PATH);
-        simulatedMapModel.addOverlay(endMarker);
     }
 
     private Location getRandomLocation(double latitude, double longitude, int radius) {
@@ -779,18 +667,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         return result;
     }
 
-    public void onMarkerSelect(OverlaySelectEvent event) {
-        try {
-            marker = (Marker) event.getOverlay();
-            if (marker != null) {
-                String sb = marker.getTitle();
-                // FIXME: Ver si se puede añadir salto de línea. No funciona '\n' ni '<br/>'
-                marker.setTitle(sb);
-            }
-        } catch (ClassCastException ex) {
-        }
-    }
-
     public int getDistance() {
         return distance;
     }
@@ -813,11 +689,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
     public void setPathsAmount(int ta) {
         pathsAmount = ta;
-    }
-
-    public void onSlideEndPathsAmount(SlideEndEvent event) {
-        relatePathsAndSmartDrivers(event.getValue());
-        configChanged();
     }
 
     private void relatePathsAndSmartDrivers(int pathAmount) {
@@ -868,70 +739,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         simulatedSmartDrivers = ssd;
     }
 
-    public synchronized void updateMapGUI() {
-        RequestContext context = RequestContext.getCurrentInstance();
-        if (!threadPool.getQueue().isEmpty()) {
-            if (enableGUI) {
-                for (Marker m : simulatedMapModel.getMarkers()) {
-                    LOG.log(Level.FINE, "updateMapGUI() - Id del marker: {0}", m.getId());
-                    LatLng latLng = m.getLatlng();
-                    // Posición.
-                    if (latLng != null) {
-                        context.addCallbackParam("latLng_" + m.getId(), latLng.getLat() + "," + latLng.getLng());
-                    }
-                    // Icono.
-                    String icon = m.getIcon();
-                    if (icon != null) {
-                        context.addCallbackParam("icon_" + m.getId(), icon);
-                    }
-                    // Información.
-                    String title = m.getTitle();
-                    if (title != null) {
-                        context.addCallbackParam("title_" + m.getId(), title);
-                    }
-                }
-
-                for (Circle c : simulatedMapModel.getCircles()) {
-                    LOG.log(Level.FINE, "updateMapGUI() - Id del circle: {0}", c.getId());
-                    LatLng latLng = c.getCenter();
-                    // Posición.
-                    if (latLng != null) {
-                        context.addCallbackParam("clatLng_" + c.getId(), latLng.getLat() + "," + latLng.getLng());
-                        context.addCallbackParam("cColor_" + c.getId(), c.getFillColor());
-                    }
-                }
-
-                // Por último comprobamos si hay que eliminar 'markers' de vehículos, porque hayan terminado su recorrido.
-                if (!markersToRemove.isEmpty()) {
-
-                    List<Marker> markersList = simulatedMapModel.getMarkers();
-
-                    for (int i = markersList.size() - 1; i >= 0; i--) {
-                        Marker m = markersList.get(i);
-                        // Quitamos sólo los 'markers' de los coches.
-                        if (markersToRemove.contains(m.getId())) {
-                            // Retiramos el identificador de la lista de 'markers' a eliminar.
-                            markersToRemove.remove(m.getId());
-                            // Eliminamos su círculo de interacción.
-                            for (Circle c : simulatedMapModel.getCircles()) {
-                                if (c.getId().equals(m.getId())) {
-                                    simulatedMapModel.getCircles().remove(c);
-                                    break;
-                                }
-                            }
-                            // Eliminamos el 'marker'.
-                            markersList.remove(i);
-
-                            if (markersToRemove.isEmpty()) {
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     public boolean isButtonStartStopEnabled() {
         return currentState.equals(State.READY_TO_SIMULATE) || currentState.equals(State.SCHEDULED_SIMULATION) || currentState.equals(State.SIMULATING);
     }
@@ -967,8 +774,8 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         if (!threadPool.getQueue().isEmpty()) {
             finishSimulation(true);
         } else {
-            String pattern = bundle.getString("LimitedSimulationTime");
             // JYFR: PRUEBA
+//            String pattern = bundle.getString("LimitedSimulationTime");
 //            JsfUtil.addInfoMessage(MessageFormat.format(pattern, DurationFormatUtils.formatDuration(MAX_SIMULATION_TIME, "HH:mm:ss", true)));
             if (scheduledDate != null) {
                 if (simulationScheduler != null) {
@@ -976,10 +783,8 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                     simulationScheduler.cancel(true);
                     simulationScheduler = null;
                     currentState = State.READY_TO_SIMULATE;
-                    JsfUtil.addInfoMessage(bundle.getString("ScheduledSimulationCancelled"));
                 } else {
                     scheduledSimulation();
-                    JsfUtil.addInfoMessage(bundle.getString("ScheduledSimulationWillBeExecuted") + " " + Constants.df.format(scheduledDate) + " - " + Constants.dfTime.format(scheduledDate));
                 }
             } else {
                 // Es una simulación sin programar.
@@ -1029,12 +834,12 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 int smartDriversBunch = simulatedSmartDrivers > 10 ? (int) (simulatedSmartDrivers * 0.10) : 1;
 
                 LOG.log(Level.FINE, "executeSimulation() - Cada 10 segundos, se iniciarán {0} SmartDrivers en el trayecto {1}", new Object[]{smartDriversBunch, i});
-                initSimulatedSmartDriver(id, smartDriverPosition.getMarkerTitle(), ll, latLng, smartDriversBunch);
+                initSimulatedSmartDriver(id, ll, latLng, smartDriversBunch);
                 id++;
                 startStatusMonitorTimer();
 
                 for (int j = 1; j < simulatedSmartDrivers; j++) {
-                    initSimulatedSmartDriver(id, smartDriverPosition.getMarkerTitle(), ll, latLng, smartDriversBunch);
+                    initSimulatedSmartDriver(id, ll, latLng, smartDriversBunch);
                     id++;
                 }
             }
@@ -1049,17 +854,9 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         }
     }
 
-    private void initSimulatedSmartDriver(int id, String title, LocationLog ll, LatLng latLng, int smartDriversBunch) throws MalformedURLException, HermesException {
-        Marker m = new Marker(latLng, title, null, MARKER_GREEN_CAR_ICON_PATH);
-        m.setVisible(true);
-        m.setDraggable(false);
+    private void initSimulatedSmartDriver(int id, LocationLog ll, LatLng latLng, int smartDriversBunch) throws MalformedURLException, HermesException {
 
-        Circle c = new Circle(latLng, 100);
-        c.setStrokeColor("#00FF00");
-        c.setFillColor("#00FF00");
-        c.setFillOpacity(0.2);
-
-        SimulatedSmartDriver ssd = new SimulatedSmartDriver(id, ll, m, c, randomizeEachSmartDriverBehaviour, monitorEachSmartDriver, infiniteSimulation, streamServer.ordinal() % 2, retries);
+        SimulatedSmartDriver ssd = new SimulatedSmartDriver(id, ll, randomizeEachSmartDriverBehaviour, monitorEachSmartDriver, infiniteSimulation, streamServer.ordinal() % 2, retries);
         simulatedSmartDriverHashMap.put(ssd.getSha(), ssd);
 
         long delay = 0;
@@ -1087,18 +884,9 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         LOG.log(Level.FINE, "SmartDriver {0} con inicio en {1}", new Object[]{id, totalDelay});
         threadPool.scheduleAtFixedRate(ssd, totalDelay, timeRate.getMilliseconds(), TimeUnit.MILLISECONDS);
 //                        ssd.startConsumer();
-
-        simulatedMapModel.addOverlay(m);
-        m.setId(ssd.getSha());
-        simulatedMapModel.addOverlay(c);
-        c.setId(ssd.getSha());
     }
 
     private void resetSimulation() {
-
-        // Eliminamos los 'markers' de los SmartDrivers representados en el mapa.
-        removeCarMarkers();
-        removeCarCircles();
 
         LOG.log(Level.INFO, "resetSimulation() - Se envía señal de cierre a las conexiones con el servidor de streams");
         // Cerramos todas las conexiones de envío de datos, ya sea de Ztreamy o de Kafka, si las hubiera.
@@ -1127,29 +915,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         csvStatusList = new ArrayList<>();
     }
 
-    private static void removeCarMarkers() {
-        List<Marker> markersList = simulatedMapModel.getMarkers();
-
-        // Tenemos que recorrer los 'markers' para eliminar sólo los coches y no el resto de elementos.
-        for (int i = markersList.size() - 1; i >= 0; i--) {
-            Marker m = markersList.get(i);
-            // Quitamos sólo los 'markers' de los coches.
-            if (m.getIcon().equals(MARKER_GREEN_CAR_ICON_PATH)
-                    || m.getIcon().equals(MARKER_YELLOW_CAR_ICON_PATH)
-                    || m.getIcon().equals(MARKER_RED_CAR_ICON_PATH)) {
-                markersList.remove(i);
-            }
-        }
-    }
-
-    private static void removetCarMarkerAndCircle(String id) {
-        markersToRemove.add(id);
-    }
-
-    private static void removeCarCircles() {
-        simulatedMapModel.getCircles().clear();
-    }
-
     public int getSimulatedSpeed() {
         return timeRate.ordinal();
     }
@@ -1170,8 +935,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
             maxSmartDriversDelay.set(ssd.getMaxDelay());
             LOG.log(Level.FINE, "smartDriverHasFinished() - Quedan {0} restantes. Máximo retraso detectado hasta ahora: {0}", new Object[]{threadPool.getQueue().size(), maxSmartDriversDelay.get()});
         }
-
-        removetCarMarkerAndCircle(id);
     }
 
     private synchronized void finishSimulation(boolean interrupted) {
@@ -1233,7 +996,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 //                LOG.log(Level.INFO, "finishSimulation() - La siguiente simulación será a las: {0}", Constants.dfISO8601.format(scheduledDate));
 //                scheduledSimulation();
 //            }
-
             if (kafkaProducer != null) {
                 kafkaProducer.flush();
                 kafkaProducer.close();
@@ -1444,10 +1206,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         }
     }
 
-    public void handleCloseFinishDialog(CloseEvent event) {
-        currentState = State.READY_TO_SIMULATE;
-    }
-
     public static boolean isConfigLock() {
         boolean result = false;
 
@@ -1459,11 +1217,9 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 result = true;
                 break;
             case ENDED:
-                RequestContext.getCurrentInstance().addCallbackParam("ended", true);
                 result = true;
                 break;
             case INTERRUPTED:
-                RequestContext.getCurrentInstance().addCallbackParam("interrupted", true);
                 result = true;
                 break;
             default:
@@ -1502,9 +1258,9 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         SimulatedSmartDriver ssd = simulatedSmartDriverHashMap.get(v.getId());
         if (ssd != null) {
             if (!v.getSurroundingVehicles().isEmpty()) {
-                ssd.updateCircle("#FF0000");
+                // TODO
             } else {
-                ssd.updateCircle("#00FF00");
+                // TODO
             }
         }
     }
@@ -1551,7 +1307,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 //            emergencyScheduler.cancel(true);
 //        }
 //    }
-
     // JYFR: PRUEBA
 //    private void startShutdownTimer() {
 //        if (emergencyScheduler != null) {
@@ -1561,7 +1316,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 //        // Por seguridad, se establece un tiempo máximo de simulación (más un minuto extra de margen). Cumplido este tiempo se llamará a la finalización de emergencia.
 //        emergencyScheduler = scheduledExecutorService.scheduleAtFixedRate(new EmergencyShutdown(startSimulationTime, MAX_SIMULATION_TIME + 60000), 0, 5, TimeUnit.SECONDS);
 //    }
-
     public boolean isMonitorEachSmartDriver() {
         return monitorEachSmartDriver;
     }

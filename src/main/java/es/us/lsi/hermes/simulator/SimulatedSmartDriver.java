@@ -28,7 +28,6 @@ import java.util.Properties;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.ws.rs.core.MediaType;
 import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.lang.time.DurationFormatUtils;
@@ -37,9 +36,6 @@ import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.primefaces.model.map.Circle;
-import org.primefaces.model.map.LatLng;
-import org.primefaces.model.map.Marker;
 import org.supercsv.cellprocessor.ift.CellProcessor;
 import org.supercsv.io.CsvBeanWriter;
 import org.supercsv.io.ICsvBeanWriter;
@@ -47,7 +43,7 @@ import org.supercsv.prefs.CsvPreference;
 import ztreamy.JSONSerializer;
 import ztreamy.PublisherHC;
 
-public class SimulatedSmartDriver implements Runnable, ISimulatedSmartDriverObserver {
+public class SimulatedSmartDriver implements Runnable {
 
     private static final Logger LOG = Logger.getLogger(SimulatedSmartDriver.class.getName());
 
@@ -70,10 +66,6 @@ public class SimulatedSmartDriver implements Runnable, ISimulatedSmartDriverObse
     public static enum Event_Type {
         NORMAL_VEHICLE_LOCATION, RECOVERED_VEHICLE_LOCATION, NORMAL_DATA_SECTION, RECOVERED_DATA_SECTION
     };
-
-    // Elementos de Google Maps para el coche y su zona de influencia.
-    private final Marker pathMarker;
-    private final Circle pathCircle;
 
     // Tiempo de simulación transcurrido en segundos del SmartDriver.
     private int elapsedSeconds;
@@ -145,11 +137,9 @@ public class SimulatedSmartDriver implements Runnable, ISimulatedSmartDriverObse
      * @throws MalformedURLException
      * @throws HermesException
      */
-    public SimulatedSmartDriver(int id, LocationLog ll, Marker pathMarker, Circle pathCircle, boolean randomBehaviour, boolean monitorize, boolean infiniteSimulation, int streamServer, int retries) throws MalformedURLException, HermesException {
+    public SimulatedSmartDriver(int id, LocationLog ll, boolean randomBehaviour, boolean monitorize, boolean infiniteSimulation, int streamServer, int retries) throws MalformedURLException, HermesException {
         this.id = id;
         this.ll = ll;
-        this.pathMarker = pathMarker;
-        this.pathCircle = pathCircle;
         this.elapsedSeconds = 0;
         this.locationChanged = false;
         this.currentPosition = 0;
@@ -289,8 +279,6 @@ public class SimulatedSmartDriver implements Runnable, ISimulatedSmartDriverObse
                     // Comprobamos si hemos llegado al destino.
                     if (currentPosition == localLocationLogDetailList.size() - 1) {
                         if (!infiniteSimulation) {
-                            // Si hemos llegado, hacemos invisible el marker del mapa.
-                            pathMarker.setVisible(false);
                             // Notificamos que ha terminado el SmartDriver actual.
                             SimulatorController.smartDriverHasFinished(this.getSha());
 
@@ -328,10 +316,6 @@ public class SimulatedSmartDriver implements Runnable, ISimulatedSmartDriverObse
                         currentLocationLogDetail = localLocationLogDetailList.get(currentPosition);
                         LOG.log(Level.FINE, "SimulatedSmartDriver.run() - El usuario de SmartDriver se encuentra en: ({0}, {1})", new Object[]{currentLocationLogDetail.getLatitude(), currentLocationLogDetail.getLongitude()});
 
-                        // Modificamos el 'marker' de Google Maps.
-                        LatLng newPosition = new LatLng(currentLocationLogDetail.getLatitude(), currentLocationLogDetail.getLongitude());
-                        pathMarker.setLatlng(newPosition);
-                        pathCircle.setCenter(newPosition);
                         LocationLogDetail previousLocationLogDetail = localLocationLogDetailList.get(previousPosition);
 
                         // Calculamos la distancia recorrida.
@@ -360,7 +344,6 @@ public class SimulatedSmartDriver implements Runnable, ISimulatedSmartDriverObse
                         // Medimos las unidades de estrés y dibujamos el marker del color correspondiente (verde -> sin estrés, amarillo -> ligeramente estresado, rojo -> estresado)
                         if (stressLoad == 0) {
                             // No hay estrés.
-                            pathMarker.setIcon(SimulatorController.MARKER_GREEN_CAR_ICON_PATH);
                         } else {
                             // Si se está calmando, le subimos el intervalo RR y si se está estresando, le bajamos el intervalo RR.
                             if (relaxing) {
@@ -377,10 +360,8 @@ public class SimulatedSmartDriver implements Runnable, ISimulatedSmartDriverObse
                             if (stressLoad < 5) {
                                 // Existe una situación de estrés 'ligero'.
                                 // Para que Víctor pueda detectar una situación de estrés, debe haber una diferencia de 50ms en el RR.
-                                pathMarker.setIcon(SimulatorController.MARKER_YELLOW_CAR_ICON_PATH);
                             } else {
                                 //  Estrés elevado.
-                                pathMarker.setIcon(SimulatorController.MARKER_RED_CAR_ICON_PATH);
                             }
                         }
 
@@ -392,9 +373,6 @@ public class SimulatedSmartDriver implements Runnable, ISimulatedSmartDriverObse
 
                         // Hacemos el análisis del PKE (Positive Kinetic Energy)
                         cummulativePositiveSpeeds += analyzePKE(currentLocationLogDetail, previousLocationLogDetail);
-
-                        // Información.
-                        pathMarker.setTitle(currentLocationLogDetail.getMarkerTitle());
 
                         // Creamos un elementos de tipo 'RoadSection', para añadirlo al 'DataSection' que se envía a 'Ztreamy' cada 500 metros.
                         RoadSection rs = new RoadSection();
@@ -642,7 +620,7 @@ public class SimulatedSmartDriver implements Runnable, ISimulatedSmartDriverObse
         bodyObject.put("Location", smartDriverLocation);
         SimulatorController.increaseGenerated();
 
-        ExtendedEvent event = new ExtendedEvent(sha, MediaType.APPLICATION_JSON, Constants.SIMULATOR_APPLICATION_ID, VEHICLE_LOCATION, bodyObject, retries);
+        ExtendedEvent event = new ExtendedEvent(sha, "application/json", Constants.SIMULATOR_APPLICATION_ID, VEHICLE_LOCATION, bodyObject, retries);
 
         SimulatorController.increaseSends();
         switch (streamServer) {
@@ -802,7 +780,7 @@ public class SimulatedSmartDriver implements Runnable, ISimulatedSmartDriverObse
         bodyObject.put(DATA_SECTION, dataSection);
         SimulatorController.increaseGenerated();
 
-        ExtendedEvent event = new ExtendedEvent(sha, MediaType.APPLICATION_JSON, Constants.SIMULATOR_APPLICATION_ID, DATA_SECTION, bodyObject, retries);
+        ExtendedEvent event = new ExtendedEvent(sha, "application/json", Constants.SIMULATOR_APPLICATION_ID, DATA_SECTION, bodyObject, retries);
         csvEventList.add(new CSVEvent(event.getEventId(), event.getTimestamp()));
 
         SimulatorController.increaseSends();
@@ -921,12 +899,6 @@ public class SimulatedSmartDriver implements Runnable, ISimulatedSmartDriverObse
             // y no lo ha hecho.
         }
         LOG.log(Level.FINE, "reconnectPublisher() - Publisher reconnected");
-    }
-
-    @Override
-    public void updateCircle(String color) {
-        pathCircle.setStrokeColor("#FF0000");
-        pathCircle.setFillColor("#FF0000");
     }
 
     public void finish() {
