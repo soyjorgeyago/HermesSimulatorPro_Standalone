@@ -1,27 +1,16 @@
 package es.us.lsi.hermes.util;
 
+import javax.activation.DataHandler;
+import javax.activation.DataSource;
+import javax.activation.FileDataSource;
+import javax.mail.*;
+import javax.mail.internet.*;
 import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.activation.DataHandler;
-import javax.activation.DataSource;
-import javax.activation.FileDataSource;
-import javax.annotation.PostConstruct;
-import javax.mail.Message;
-import javax.mail.MessagingException;
-import javax.mail.Multipart;
-import javax.mail.Session;
-import javax.mail.Transport;
-import javax.mail.internet.AddressException;
-import javax.mail.internet.InternetAddress;
-import javax.mail.internet.MimeBodyPart;
-import javax.mail.internet.MimeMessage;
-import javax.mail.internet.MimeMultipart;
 
 public class Email {
 
@@ -33,14 +22,7 @@ public class Email {
     static {
         LOG.log(Level.INFO, "init() - Inicialización del gestor de correo");
 
-        try {
-            ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-            InputStream input = classLoader.getResourceAsStream("Email.properties");
-            mailServerProperties = new Properties();
-            mailServerProperties.load(input);
-        } catch (IOException ex) {
-            LOG.log(Level.SEVERE, "init() - Error al cargar el archivo de propiedades del correo (Email.properties)", ex);
-        }
+        mailServerProperties = Util.initProperties("Email.properties", LOG);
 
         mailSession = Session.getDefaultInstance(mailServerProperties, null);
     }

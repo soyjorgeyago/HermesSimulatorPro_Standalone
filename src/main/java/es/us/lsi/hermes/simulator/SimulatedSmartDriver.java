@@ -219,35 +219,25 @@ public class SimulatedSmartDriver implements Runnable {
     }
 
     private void decreasePendingVehicleLocationsRetries() {
-        int total = pendingVehicleLocations.size();
-        for (int i = total - 1; i >= 0; i--) {
-            ExtendedEvent ee = pendingVehicleLocations.get(i);
-            if (ee.getRetries() > 0) {
-                ee.decreaseRetries();
-            } else {
-                pendingVehicleLocations.remove(i);
-            }
-        }
-        int discarded = total - pendingVehicleLocations.size();
-        if (discarded > 0) {
-            LOG.log(Level.INFO, "Se han descartado: {0} 'Vehicle Location' por alcanzar el máximo número de reintentos de envío", discarded);
-        }
+        decreaseEventList(pendingVehicleLocations, "Vehicle Location");
     }
 
     private void decreasePendingDataSectionsRetries() {
-        int total = pendingDataSections.size();
+        decreaseEventList(pendingDataSections, "Data Section");
+    }
+
+    private void decreaseEventList(List<ExtendedEvent> extendedEvents, String eventType){
+        int total = extendedEvents.size();
         for (int i = total - 1; i >= 0; i--) {
-            ExtendedEvent ee = pendingDataSections.get(i);
-            if (ee.getRetries() > 0) {
+            ExtendedEvent ee = extendedEvents.get(i);
+            if (ee.getRetries() > 0)
                 ee.decreaseRetries();
-            } else {
-                pendingDataSections.remove(i);
-            }
+            else
+                extendedEvents.remove(i);
         }
-        int discarded = total - pendingDataSections.size();
-        if (discarded > 0) {
-            LOG.log(Level.INFO, "Se han descartado: {0} 'Data Section' por alcanzar el máximo número de reintentos de envío", discarded);
-        }
+        int discardedEvents = total - extendedEvents.size();
+        if (discardedEvents > 0)
+            LOG.log(Level.INFO, "Se han descartado: {0} '" + eventType + "' por alcanzar el máximo número de reintentos de envío", discardedEvents);
     }
 
 //    public void startConsumer() {
