@@ -2,8 +2,7 @@ package es.us.lsi.hermes.simulator;
 
 import es.us.lsi.hermes.util.Constants;
 import es.us.lsi.hermes.util.Util;
-import java.io.IOException;
-import java.io.InputStream;
+
 import java.text.ParseException;
 import java.util.Date;
 import java.util.Properties;
@@ -34,15 +33,10 @@ public class NoGuiScheduledSimulation {
     static {
         LOG.log(Level.INFO, "init() - Se comprueba si existe un archivo de configuración de una simulación sin interfaz gráfica");
 
-        try {
-            ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-            InputStream input = classLoader.getResourceAsStream("NoGuiScheduledSimulation.properties");
-            noGuiScheduledSimulationProperties = new Properties();
-            noGuiScheduledSimulationProperties.load(input);
+        noGuiScheduledSimulationProperties = Util.initProperties("NoGuiScheduledSimulation.properties", LOG);
+
+        if(noGuiScheduledSimulationProperties != null)
             validate();
-        } catch (IOException ex) {
-            LOG.log(Level.INFO, "init() - No existe un archivo de configuración válido (NoGuiScheduledSimulation.properties)");
-        }
     }
 
     /**

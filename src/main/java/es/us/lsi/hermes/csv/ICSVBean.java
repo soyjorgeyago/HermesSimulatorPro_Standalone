@@ -5,12 +5,11 @@ import org.supercsv.cellprocessor.ift.CellProcessor;
 
 public interface ICSVBean {
     
-    public void init();
+    void init();
 
-    public CellProcessor[] getProcessors();
+    CellProcessor[] getProcessors();
 
-    public String[] getFields();
+    String[] getFields();
 
-    public String[] getHeaders();
-
+    String[] getHeaders();
 }

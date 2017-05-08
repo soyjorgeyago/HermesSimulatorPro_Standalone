@@ -1,7 +1,6 @@
 package es.us.lsi.hermes.simulator.kafka;
 
-import java.io.IOException;
-import java.io.InputStream;
+import es.us.lsi.hermes.util.Util;
 import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -19,23 +18,9 @@ public class Kafka {
     static {
         LOG.log(Level.INFO, "onStartup() - Inicialización de Kafka");
 
-        try {
-            ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-            InputStream input = classLoader.getResourceAsStream("KafkaProducer.properties");
-            kafkaProducerProperties = new Properties();
-            kafkaProducerProperties.load(input);
-        } catch (IOException ex) {
-            LOG.log(Level.SEVERE, "onStartup() - Error al cargar el archivo de propiedades del 'producer' Kafka (KafkaProducer.properties)", ex);
-        }
+        kafkaProducerProperties = Util.initProperties("KafkaProducer.properties", LOG);
 
-        try {
-            ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-            InputStream input = classLoader.getResourceAsStream("KafkaConsumer.properties");
-            kafkaConsumerProperties = new Properties();
-            kafkaConsumerProperties.load(input);
-        } catch (IOException ex) {
-            LOG.log(Level.SEVERE, "onStartup() - Error al cargar el archivo de propiedades del 'consumer' de Kafka (KafkaConsumer.properties)", ex);
-        }
+        kafkaConsumerProperties = Util.initProperties("KafkaConsumer.properties", LOG);
     }
 
     public static Properties getKafkaProducerProperties() {

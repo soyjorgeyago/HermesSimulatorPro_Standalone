@@ -1,6 +1,11 @@
 package es.us.lsi.hermes.util;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Properties;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class Util {
 
@@ -76,5 +81,18 @@ public class Util {
         double x = Math.cos(latitude1) * Math.sin(latitude2) - Math.sin(latitude1) * Math.cos(latitude2) * Math.cos(longDiff);
 
         return (Math.toDegrees(Math.atan2(y, x)) + 360) % 360;
+    }
+
+    public static Properties initProperties(String properties, Logger logger){
+        try {
+            ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+            InputStream input = classLoader.getResourceAsStream(properties);
+            Properties result = new Properties();
+            result.load(input);
+            return result;
+        } catch (IOException ex) {
+            logger.log(Level.SEVERE, "Error al cargar el archivo de propiedades (" + properties + ")", ex);
+            return null;
+        }
     }
 }
