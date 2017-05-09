@@ -120,9 +120,6 @@ public class SimulatedSmartDriver implements Runnable {
      * Constructor para cada instancia de 'SmartDriver'.
      *
      * @param ll Contendrá los datos de la ruta que debe seguir.
-     * @param pathMarker 'Marker' para mostrar la posición actual en el mapa.
-     * @param pathCircle 'Circle' para mostrar la zona de influencia del
-     * conductor en el mapa.
      * @param randomBehaviour Indicará si tendrá una componente aleatoria en su
      * comportamiento. no.
      * @param monitorize Indicará si se generará un archivo CSV con la

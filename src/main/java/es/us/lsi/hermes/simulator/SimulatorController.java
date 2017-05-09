@@ -8,7 +8,9 @@ import com.google.gson.reflect.TypeToken;
 import com.google.maps.model.LatLng;
 import es.us.lsi.hermes.analysis.Vehicle;
 import es.us.lsi.hermes.csv.CSVEvent;
+import es.us.lsi.hermes.csv.CSVLocation;
 import es.us.lsi.hermes.csv.CSVSimulatorStatus;
+import es.us.lsi.hermes.csv.ICSVBean;
 import es.us.lsi.hermes.location.detail.LocationLogDetail;
 import es.us.lsi.hermes.google.directions.GeocodedWaypoints;
 import es.us.lsi.hermes.google.directions.Leg;
@@ -19,13 +21,8 @@ import es.us.lsi.hermes.location.LocationLog;
 import es.us.lsi.hermes.openStreetMap.PositionSimulatedSpeed;
 import es.us.lsi.hermes.person.Person;
 import es.us.lsi.hermes.simulator.kafka.Kafka;
-import es.us.lsi.hermes.util.Constants;
-import es.us.lsi.hermes.util.Email;
-import es.us.lsi.hermes.util.HermesException;
-import es.us.lsi.hermes.util.HermesSimulatorConfig;
-import es.us.lsi.hermes.util.Util;
+import es.us.lsi.hermes.util.*;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Serializable;
 import java.lang.reflect.Type;
@@ -35,7 +32,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.MessageFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -56,17 +52,9 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.mail.MessagingException;
-import net.lingala.zip4j.core.ZipFile;
-import net.lingala.zip4j.exception.ZipException;
-import net.lingala.zip4j.model.ZipParameters;
-import net.lingala.zip4j.util.Zip4jConstants;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.time.DurationFormatUtils;
 import org.apache.kafka.clients.producer.KafkaProducer;
-import org.supercsv.cellprocessor.ift.CellProcessor;
-import org.supercsv.io.CsvBeanWriter;
-import org.supercsv.io.ICsvBeanWriter;
-import org.supercsv.prefs.CsvPreference;
 
 public class SimulatorController implements Serializable, ISimulatorControllerObserver {
 
@@ -111,7 +99,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     private static final AtomicInteger SENT = new AtomicInteger(0);
 
     // Ratio de ejecución para la simulación.
-    private static enum Time_Rate {
+    private enum Time_Rate {
         X1(1000), X10(100), X100(10), X1000(1);
         private final int milliseconds;
 
@@ -127,9 +115,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     private static Time_Rate timeRate = Time_Rate.X1;
 
     // Mecanismos de generación de trayectos.
-    public static enum Paths_Generation_Method {
-        GOOGLE, OPENSTREETMAP
-    };
+    public enum Paths_Generation_Method { GOOGLE, OPENSTREETMAP }
     private static Paths_Generation_Method pathsGenerationMethod = Paths_Generation_Method.GOOGLE;
 
     // Distancia del trayecto.
@@ -159,17 +145,15 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     private static int maxSmartDrivers = 20000;
 
     // Información de los eventos enviados, para poder generar un CSV y enviarlo por e-mail.
-    private static volatile List<CSVEvent> csvEventList;
+    private static volatile List<ICSVBean> csvEventList;
     // Información de monitorización del simulador, para poder generar un CSV y enviarlo por e-mail.
-    private static volatile List<CSVSimulatorStatus> csvStatusList;
+    private static volatile List<ICSVBean> csvStatusList;
 
-    public static enum State {
-        CONFIG_CHANGED, READY_TO_SIMULATE, SCHEDULED_SIMULATION, SIMULATING, ENDED, INTERRUPTED
-    };
+    public enum State { CONFIG_CHANGED, READY_TO_SIMULATE, SCHEDULED_SIMULATION, SIMULATING, ENDED, INTERRUPTED }
     private static State currentState = State.READY_TO_SIMULATE;
 
     private static volatile SurroundingVehiclesConsumer surroundingVehiclesConsumer;
-    private static ConcurrentHashMap<String, SimulatedSmartDriver> simulatedSmartDriverHashMap = new ConcurrentHashMap();
+    private static ConcurrentHashMap<String, SimulatedSmartDriver> simulatedSmartDriverHashMap = new ConcurrentHashMap<>();
     // JYFR: PRUEBA
 //    private static ScheduledFuture emergencyScheduler;
     private static ScheduledFuture simulationScheduler;
@@ -307,37 +291,34 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
             final Location origin = getRandomLocation(destination.getLat(), destination.getLng(), distance);
 
             // Tarea para la petición de un trayecto.
-            Callable callable = new Callable() {
-                @Override
-                public String call() {
-                    String jsonPath = null;
-                    Location o = origin;
-                    Location d = destination;
-                    while (jsonPath == null) {
-                        try {
-                            if (pathsGenerationMethod.equals(Paths_Generation_Method.GOOGLE)) {
-                                /////////////////
-                                // GOOGLE MAPS //
-                                /////////////////
+            Callable callable = () -> {
+                String jsonPath = null;
+                Location o = origin;
+                Location d = destination;
+                while (jsonPath == null) {
+                    try {
+                        if (pathsGenerationMethod.equals(Paths_Generation_Method.GOOGLE)) {
+                            /////////////////
+                            // GOOGLE MAPS //
+                            /////////////////
 
-                                jsonPath = IOUtils.toString(new URL("https://maps.googleapis.com/maps/api/directions/json?origin=" + o.getLat() + "," + o.getLng() + "&destination=" + d.getLat() + "," + d.getLng()), "UTF-8");
-                            } else if (pathsGenerationMethod.equals(Paths_Generation_Method.OPENSTREETMAP)) {
-                                ///////////////////
-                                // OPENSTREETMAP //
-                                ///////////////////
+                            jsonPath = IOUtils.toString(new URL("https://maps.googleapis.com/maps/api/directions/json?origin=" + o.getLat() + "," + o.getLng() + "&destination=" + d.getLat() + "," + d.getLng()), "UTF-8");
+                        } else if (pathsGenerationMethod.equals(Paths_Generation_Method.OPENSTREETMAP)) {
+                            ///////////////////
+                            // OPENSTREETMAP //
+                            ///////////////////
 
-                                jsonPath = IOUtils.toString(new URL("http://cronos.lbd.org.es/hermes/api/smartdriver/network/simulate?fromLat=" + o.getLat() + "&fromLng=" + o.getLng() + "&toLat=" + d.getLat() + "&toLng=" + d.getLng() + "&speedFactor=1.0"), "UTF-8");
-                            }
-                        } catch (IOException ex) {
-                            LOG.log(Level.SEVERE, "generateSimulatedPaths() - " + pathsGenerationMethod.name() + " - Error I/O: {0}", ex.getMessage());
-                            // Generamos nuevos puntos aleatorios hasta que sean aceptados.
-                            o = getRandomLocation(SEVILLE.getLat(), SEVILLE.getLng(), distanceFromSevilleCenter);
-                            d = getRandomLocation(origin.getLat(), origin.getLng(), distance);
+                            jsonPath = IOUtils.toString(new URL("http://cronos.lbd.org.es/hermes/api/smartdriver/network/simulate?fromLat=" + o.getLat() + "&fromLng=" + o.getLng() + "&toLat=" + d.getLat() + "&toLng=" + d.getLng() + "&speedFactor=1.0"), "UTF-8");
                         }
+                    } catch (IOException ex) {
+                        LOG.log(Level.SEVERE, "generateSimulatedPaths() - " + pathsGenerationMethod.name() + " - Error I/O: {0}", ex.getMessage());
+                        // Generamos nuevos puntos aleatorios hasta que sean aceptados.
+                        o = getRandomLocation(SEVILLE.getLat(), SEVILLE.getLng(), distanceFromSevilleCenter);
+                        d = getRandomLocation(origin.getLat(), origin.getLng(), distance);
                     }
-
-                    return jsonPath;
                 }
+
+                return jsonPath;
             };
 
             // Añadimos la tarea al listado de peticiones.            
@@ -394,14 +375,17 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
     private void requestPaths(List<Callable<String>> pathRequestTaskSublist) {
         try {
+            // RDL: Necessary for routes to csv export
+            SimulatorController.createTempFolder();
+
             List<Future<String>> futureTaskList = PathRequestWebService.submitAllTask(pathRequestTaskSublist);
-            for (Future<String> future : futureTaskList) {
+            for (int i = 0; i < futureTaskList.size(); i++) {
                 // Creamos un objeto de localizaciones de 'SmartDriver'.
                 LocationLog ll = new LocationLog();
 
                 // Procesamos el JSON de respuesta, en función de la plataforma a la que le hayamos hecho la petición.
                 try {
-                    String json = future.get();
+                    String json = futureTaskList.get(i).get();
 
                     if (pathsGenerationMethod.equals(Paths_Generation_Method.GOOGLE)) {
                         /////////////////
@@ -412,8 +396,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                         Gson gson = new GsonBuilder()
                                 .setFieldNamingPolicy(FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES)
                                 .create();
-                        GeocodedWaypoints gcwp = gson.fromJson(json, GeocodedWaypoints.class
-                        );
+                        GeocodedWaypoints gcwp = gson.fromJson(json, GeocodedWaypoints.class);
                         createPathGoogleMaps(gcwp, ll);
 
                     } else {
@@ -449,6 +432,13 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 ll.setFilename(person.getFullName());
 
                 locationLogList.add(ll);
+
+                // RDL: Once a full route is created, store it on routes folder
+                List<ICSVBean> locationList = new ArrayList<>();
+                for(LocationLogDetail lld : ll.getLocationLogDetailList())
+                    locationList.add(new CSVLocation(lld.getLatitude(), lld.getLongitude()));
+
+                CSVUtils.createRouteDataFile(String.valueOf(i+1), locationList, LOG);
             }
         } catch (InterruptedException ex) {
             LOG.log(Level.SEVERE, "Error al obtener el JSON de la ruta", ex);
@@ -963,7 +953,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 String timeSummary = MessageFormat.format("Inicio de la simulacion: {0} -> Fin de la simulación: {1} ({2})", new Object[]{Constants.dfISO8601.format(startSimulationTime), Constants.dfISO8601.format(endSimulationTime), DurationFormatUtils.formatDuration(endSimulationTime - startSimulationTime, "HH:mm:ss", true)});
                 LOG.log(Level.INFO, "finishSimulation() - {0}", timeSummary);
 
-                List<String> zipSplitFiles = generateZippedCSV();
+                List<String> zipSplitFiles = CSVUtils.generateZippedCSV(csvEventList, csvStatusList, LOG);
                 int i = 1;
                 String body = "<html><head><title></title></head><body>" + (interrupted ? "<h1 style=\"color:red;\">SIMULACION INTERRUMPIDA</h1>" : "") + "<p>" + simulationSummary.replaceAll("\n", "<br/>") + "</p><p>" + timeSummary + "</p><p>Un saludo.</p></body></html>";
                 if (zipSplitFiles.size() > 1) {
@@ -1066,7 +1056,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         csvEventList.addAll(list);
     }
 
-    private static void createTempFolder() {
+    public static void createTempFolder() {
         try {
             // Creamos un directorio temporal para contener los archivos generados.
             tempFolder = Files.createTempDirectory("Hermes_Simulator");
@@ -1081,144 +1071,13 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         return tempFolder;
     }
 
-    private List<String> generateZippedCSV() {
-        List<String> zipFilesPathsList = new ArrayList<>();
-
-        try {
-            if (csvEventList != null && !csvEventList.isEmpty()) {
-                // Creamos un archivo temporal para el CSV con los datos de los eventos.
-                String eventsFileName = Constants.dfFile.format(System.currentTimeMillis());
-                String eventsFileNameCSV = eventsFileName + "_events.csv";
-                LOG.log(Level.INFO, "generateZippedCSV() - Generando archivo CSV con los eventos: {0}", eventsFileNameCSV);
-                File eventsFile = new File(tempFolder.toUri().getPath(), eventsFileNameCSV);
-                createEventsDataFile(CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, false, eventsFile);
-            }
-
-            // Creamos un archivo temporal para el CSV con los estados de la simulación.
-            String statusFileName = Constants.dfFile.format(System.currentTimeMillis());
-            String statusFileNameCSV = statusFileName + "_status.csv";
-            LOG.log(Level.INFO, "generateZippedCSV() - Generando archivo CSV con los estados de la simulación: {0}", statusFileNameCSV);
-            File statusFile = new File(tempFolder.toUri().getPath(), statusFileNameCSV);
-            createStatusDataFile(CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, false, statusFile);
-
-            // Creamos el archivo ZIP.
-            ZipFile zipFile = new ZipFile(statusFileName + ".zip");
-
-            // Inicializamos los parámetros de compresión del ZIP.
-            ZipParameters parameters = new ZipParameters();
-            parameters.setCompressionMethod(Zip4jConstants.COMP_DEFLATE);
-            parameters.setCompressionLevel(Zip4jConstants.DEFLATE_LEVEL_ULTRA);
-
-            // Creamos un archivo múltiple si supera los 25MB.
-            zipFile.createZipFile(new ArrayList<>(Arrays.asList(tempFolder.toFile().listFiles())), parameters, true, 26214400);
-
-            zipFilesPathsList = zipFile.getSplitZipFiles();
-        } catch (ZipException ex) {
-            LOG.log(Level.SEVERE, "generateZippedCSV() - Error al crear el ZIP con los datos de todos los eventos y los estados del simulador", ex);
-        }
-
-        return zipFilesPathsList;
-    }
-
-    private void createEventsDataFile(CsvPreference csvPreference, boolean ignoreHeaders, File file) {
-        ICsvBeanWriter beanWriter = null;
-
-        if (csvEventList != null && !csvEventList.isEmpty()) {
-            try {
-
-                beanWriter = new CsvBeanWriter(new FileWriter(file), csvPreference);
-
-                CSVEvent bean = csvEventList.get(0);
-                // Seleccionamos los atributos que vamos a exportar.
-                final String[] fields = bean.getFields();
-
-                // Aplicamos las características de los campos.
-                final CellProcessor[] processors = bean.getProcessors();
-
-                if (!ignoreHeaders) {
-                    // Ponemos la cabecera con los nombres de los atributos.
-                    if (bean.getHeaders() != null) {
-                        beanWriter.writeHeader(bean.getHeaders());
-                    } else {
-                        beanWriter.writeHeader(fields);
-                    }
-                }
-
-                // Procesamos los elementos.
-                for (final CSVEvent element : csvEventList) {
-                    beanWriter.write(element, fields, processors);
-                }
-            } catch (IOException ex) {
-                LOG.log(Level.SEVERE, "createEventsDataFile() - Error al exportar a CSV de eventos", ex);
-            } finally {
-                // Cerramos.
-                if (beanWriter != null) {
-                    try {
-                        beanWriter.close();
-                    } catch (IOException ex) {
-                        LOG.log(Level.SEVERE, "createEventsDataFile() - Error al cerrar el 'writer'", ex);
-                    }
-                }
-            }
-        }
-    }
-
-    private void createStatusDataFile(CsvPreference csvPreference, boolean ignoreHeaders, File file) {
-        ICsvBeanWriter beanWriter = null;
-
-        if (csvStatusList != null && !csvStatusList.isEmpty()) {
-            try {
-
-                beanWriter = new CsvBeanWriter(new FileWriter(file), csvPreference);
-
-                CSVSimulatorStatus bean = csvStatusList.get(0);
-                // Seleccionamos los atributos que vamos a exportar.
-                final String[] fields = bean.getFields();
-
-                // Aplicamos las características de los campos.
-                final CellProcessor[] processors = bean.getProcessors();
-
-                if (!ignoreHeaders) {
-                    // Ponemos la cabecera con los nombres de los atributos.
-                    if (bean.getHeaders() != null) {
-                        beanWriter.writeHeader(bean.getHeaders());
-                    } else {
-                        beanWriter.writeHeader(fields);
-                    }
-                }
-
-                // Procesamos los elementos.
-                for (final CSVSimulatorStatus element : csvStatusList) {
-                    beanWriter.write(element, fields, processors);
-                }
-            } catch (IOException ex) {
-                LOG.log(Level.SEVERE, "createStatusDataFile() - Error al exportar a CSV los estados del simulador", ex);
-            } finally {
-                // Cerramos.
-                if (beanWriter != null) {
-                    try {
-                        beanWriter.close();
-                    } catch (IOException ex) {
-                        LOG.log(Level.SEVERE, "createStatusDataFile() - Error al cerrar el 'writer'", ex);
-                    }
-                }
-            }
-        }
-    }
-
     public static boolean isConfigLock() {
         boolean result = false;
 
         switch (currentState) {
             case SIMULATING:
-                result = true;
-                break;
             case SCHEDULED_SIMULATION:
-                result = true;
-                break;
             case ENDED:
-                result = true;
-                break;
             case INTERRUPTED:
                 result = true;
                 break;
