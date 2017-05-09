@@ -1,7 +1,10 @@
 package es.us.lsi.hermes.util;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
@@ -92,6 +95,58 @@ public class Util {
             return result;
         } catch (IOException ex) {
             logger.log(Level.SEVERE, "Error al cargar el archivo de propiedades (" + properties + ")", ex);
+            return null;
+        }
+    }
+
+    // TODO Review merge
+    private static Path createFolder(boolean temporal, Logger LOG) {
+        try {
+            String folderStr;
+            Path folderPath;
+
+            if(temporal) {
+                folderPath = Files.createTempDirectory("Hermes_Simulator");
+                folderStr = folderPath.toAbsolutePath().toString() + File.separator;
+            }else {
+                File directory = new File("Hermes_Simulator_CSV");
+                directory.mkdir();
+                folderPath = directory.toPath();
+                folderStr = folderPath.toString() + File.separator;
+            }
+            LOG.log(Level.INFO, "createFolder() - Directorio temporal para almacenar los CSV: {0}", folderStr);
+            return folderPath;
+        } catch (IOException ex) {
+            LOG.log(Level.SEVERE, "createFolder() - No se ha podido generar el directorio", ex);
+            return null;
+        }
+    }
+
+    public static Path createTempFolder(Logger LOG) {
+        try {
+            // Creamos un directorio temporal para contener los archivos generados.
+            Path tempFolder = Files.createTempDirectory("Hermes_Simulator");
+            String tempFolderPath = tempFolder.toAbsolutePath().toString() + File.separator;
+
+            LOG.log(Level.INFO, "createTempFolder() - Directorio temporal para almacenar los CSV: {0}", tempFolderPath);
+            return tempFolder;
+        } catch (IOException ex) {
+            LOG.log(Level.SEVERE, "createTempFolder() - No se ha podido generar el archivo con los datos de todos los eventos y los estados del simulador", ex);
+            return null;
+        }
+    }
+
+    public static Path getOrCreateCsvFolder(Logger LOG) {
+        try {
+            // Creamos un directorio para contener los CSV generados.
+            File directory = new File("Hermes_Simulator_CSV");
+            String tempFolderPath = directory.toPath().toString() + File.separator;
+            directory.mkdir();
+
+            LOG.log(Level.INFO, "createTempFolder() - Directorio permanente para almacenar los CSV: {0}", tempFolderPath);
+            return directory.toPath();
+        } catch (SecurityException ex) {
+            LOG.log(Level.SEVERE, "createTempFolder() - No se ha podido generar el archivo con los datos de todos los eventos y los estados del simulador", ex);
             return null;
         }
     }

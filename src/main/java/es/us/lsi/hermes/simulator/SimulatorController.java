@@ -60,29 +60,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
     private static final Logger LOG = Logger.getLogger(SimulatorController.class.getName());
 
-    // El 'dashboard' está en: http://hermes1.gast.it.uc3m.es:9209/backend/dashboard.html
-    public static final String ZTREAMY_URL = HermesSimulatorConfig.getHermesSimulatorProperties().getProperty("ztreamy.url", "http://hermes1.gast.it.uc3m.es:9220/collector/publish"); // URL de Ztreamy OFICIAL
-
-    private static final Location SEVILLE = new Location(37.3898358, -5.986069);
-
-    private static final String DEFAULT_EMAIL = "jorgeyago.ingeniero@gmail.com";
-
-    private static final int RR_TIME = 850; // Equivale a una frecuencia cardíaca en reposo media (70 ppm).
-
-    // Máximo retardo para iniciar la ruta, en milisegundos:
-    private static final int MAX_INITIAL_DELAY = 60000;
-
-    // Paquetes de peticiones en la generación de trayectos. Google ha limitado más el número de peticiones por segundo.
-    private static final int REQUEST_PACK_SIZE = 10;
-
-    // Número máximo de hilos en el simulador.
-    private static final int MAX_THREADS = Integer.parseInt(HermesSimulatorConfig.getHermesSimulatorProperties().getProperty("max.threads", "10000"));
-    // Tiempo máximo de simulación.
-    // JYFR: PRUEBA
-//    public static final long MAX_SIMULATION_TIME = Long.parseLong(HermesSimulatorConfig.getHermesSimulatorProperties().getProperty("max.simulation.time.ms", "14400000"));
-
-    private static final int STATUS_SAMPLING_INTERVAL = Integer.parseInt(HermesSimulatorConfig.getHermesSimulatorProperties().getProperty("status.sampling.interval.s", "2"));
-
     // Número de tramas de Ztreamy generadas.
     private static final AtomicInteger GENERATED = new AtomicInteger(0);
     // Número de errores contabilizados al enviar las tramas a Ztreamy, distintos de los 'no OK'.
@@ -139,7 +116,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     static long startSimulationTime = 0l;
     private static long endSimulationTime = 0l;
 
-    private static String email = DEFAULT_EMAIL;
+    private static String email = Constants.DEFAULT_EMAIL;
     private static boolean enableGUI = false;
 
     private static int maxSmartDrivers = 20000;
@@ -190,6 +167,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     private static boolean randomizeEachSmartDriverBehaviour = true;
 
     private static int retries = 5;
+    private static boolean offline = false;
 
     // JYFR: PRUEBA
 //    private static boolean infiniteSimulation = false;
@@ -273,7 +251,13 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         if (NoGuiScheduledSimulation.getRetries() != null) {
             setRetries(NoGuiScheduledSimulation.getRetries());
         }
-        generateSimulatedPaths();
+
+        // Use pre-calculated routes or get new ones if requested
+        if(NoGuiScheduledSimulation.getUseRoutesFromHdd())
+            CSVUtils.extractSimulatedPaths(); // TODO convert imported to generated
+        else
+            generateSimulatedPaths();
+
         if (scheduledDate != null) {
             scheduledSimulation();
         }
@@ -285,10 +269,13 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         // Lista con las tareas de petición de rutas.
         List<Callable<String>> pathRequestTaskList = new ArrayList<>();
 
+        Double sevLat = Constants.SEVILLE.getLat(),
+                sevLng = Constants.SEVILLE.getLng();
+
         // Crearemos tantas tareas como trayectos se quieran generar.
         for (int i = 0; i < pathsAmount; i++) {
-            final Location destination = getRandomLocation(SEVILLE.getLat(), SEVILLE.getLng(), distanceFromSevilleCenter);
-            final Location origin = getRandomLocation(destination.getLat(), destination.getLng(), distance);
+            final Location destination = RoutesUtils.getRandomLocation(sevLat, sevLng, distanceFromSevilleCenter, LOG);
+            final Location origin = RoutesUtils.getRandomLocation(destination.getLat(), destination.getLng(), distance, LOG);
 
             // Tarea para la petición de un trayecto.
             Callable callable = () -> {
@@ -313,8 +300,8 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                     } catch (IOException ex) {
                         LOG.log(Level.SEVERE, "generateSimulatedPaths() - " + pathsGenerationMethod.name() + " - Error I/O: {0}", ex.getMessage());
                         // Generamos nuevos puntos aleatorios hasta que sean aceptados.
-                        o = getRandomLocation(SEVILLE.getLat(), SEVILLE.getLng(), distanceFromSevilleCenter);
-                        d = getRandomLocation(origin.getLat(), origin.getLng(), distance);
+                        o = RoutesUtils.getRandomLocation(sevLat, sevLng, distanceFromSevilleCenter, LOG);
+                        d = RoutesUtils.getRandomLocation(origin.getLat(), origin.getLng(), distance, LOG);
                     }
                 }
 
@@ -329,7 +316,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         // Aplicamos el mismo criterio para OpenStreetMap, aunque no sea necesario en principio.
         long timeMark = System.currentTimeMillis();
         // Ejecutamos el listado de tareas, que se dividirá en los hilos y con las condiciones que haya configurados en 'PathRequestWebService'.
-        for (int i = 0; i <= pathRequestTaskList.size(); i += REQUEST_PACK_SIZE) {
+        for (int i = 0; i <= pathRequestTaskList.size(); i += Constants.REQUEST_PACK_SIZE) {
             if (i > 0) {
                 long elapsedTime = System.currentTimeMillis() - timeMark;
                 if (elapsedTime < 1500) {
@@ -341,10 +328,10 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                         timeMark = System.currentTimeMillis();
                     }
                 }
-                requestPaths(pathRequestTaskList.subList(i - REQUEST_PACK_SIZE, i));
+                requestPaths(pathRequestTaskList.subList(i - Constants.REQUEST_PACK_SIZE, i));
             }
         }
-        int remaining = pathRequestTaskList.size() % REQUEST_PACK_SIZE;
+        int remaining = pathRequestTaskList.size() % Constants.REQUEST_PACK_SIZE;
         if (remaining != 0) {
             try {
                 // Antes de hacer la siguiente petición, esperamos 1 segundo, para cumplir las restricciones de Google.
@@ -362,7 +349,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
             if (pathsAmount > 0) {
                 // Asignamos la cantidad de trayectos válidos que han podido obtenerse, a pesar de que el usuario haya solicitado una cantidad mayor.
                 pathsAmount = locationLogList.size();
-                maxSmartDrivers = MAX_THREADS / pathsAmount;
+                maxSmartDrivers = Constants.MAX_THREADS / pathsAmount;
                 if (simulatedSmartDrivers > maxSmartDrivers) {
                     simulatedSmartDrivers = maxSmartDrivers;
                 }
@@ -375,9 +362,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
     private void requestPaths(List<Callable<String>> pathRequestTaskSublist) {
         try {
-            // RDL: Necessary for routes to csv export
-            SimulatorController.createTempFolder();
-
             List<Future<String>> futureTaskList = PathRequestWebService.submitAllTask(pathRequestTaskSublist);
             for (int i = 0; i < futureTaskList.size(); i++) {
                 // Creamos un objeto de localizaciones de 'SmartDriver'.
@@ -397,7 +381,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                                 .setFieldNamingPolicy(FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES)
                                 .create();
                         GeocodedWaypoints gcwp = gson.fromJson(json, GeocodedWaypoints.class);
-                        createPathGoogleMaps(gcwp, ll);
+                        RoutesUtils.createPathGoogleMaps(gcwp, ll);
 
                     } else {
                         ///////////////////
@@ -405,10 +389,9 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                         ///////////////////
 
                         // Procesamos el JSON obtenido de OpenStreetMap con las localizaciones y las velocidades de SmartDriver.
-                        Type listType = new TypeToken<ArrayList<PositionSimulatedSpeed>>() {
-                        }.getType();
+                        Type listType = new TypeToken<ArrayList<PositionSimulatedSpeed>>() {}.getType();
                         List<PositionSimulatedSpeed> pssList = new Gson().fromJson(json, listType);
-                        createPathOpenStreetMaps(pssList, ll);
+                        RoutesUtils.createPathOpenStreetMaps(pssList, ll);
                     }
                 } catch (InterruptedException | ExecutionException | JsonSyntaxException ex) {
                     LOG.log(Level.SEVERE, "Error al decodificar el JSON de la ruta", ex);
@@ -502,161 +485,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         return person;
     }
 
-    private void createPathOpenStreetMaps(List<PositionSimulatedSpeed> pssList, LocationLog ll) {
-        if (pssList != null && !pssList.isEmpty()) {
-
-            // Listado de posiciones que componen el trayecto de SmartDriver.
-            ArrayList<LocationLogDetail> locationLogDetailList = new ArrayList<>();
-
-            double pathDistance = 0.0d;
-            int pathDurationInSeconds = 0;
-
-            // Posición anterior en el trayecto.
-            PositionSimulatedSpeed previous = pssList.get(0);
-
-            // Analizamos la información obtenida de la consulta a OpenStreetMap.
-            for (PositionSimulatedSpeed pss : pssList) {
-                List<Double> currentCoordinates = pss.getPosition().getCoordinates();
-                // Comprobamos que vengan las coordenadas.
-                if (currentCoordinates == null || currentCoordinates.isEmpty() || currentCoordinates.size() < 2) {
-                    continue;
-                }
-
-                // Añadimos un nuevo punto en la polilínea que se dibujará por pantalla.
-                LatLng latlng = new LatLng(currentCoordinates.get(1), currentCoordinates.get(0));
-
-                // Creamos un nodo del trayecto, como si usásemos SmartDriver.
-                LocationLogDetail lld = new LocationLogDetail();
-                lld.setLocationLog(ll);
-                lld.setLatitude(currentCoordinates.get(1)); // La posición 1 es la latitud.
-                lld.setLongitude(currentCoordinates.get(0)); // La posición 0 es la longitud.
-                lld.setSpeed(pss.getSpeed());
-                lld.setRrTime(RR_TIME);
-                lld.setHeartRate((int) Math.ceil(60.0d / (RR_TIME / 1000.0d)));
-
-                List<Double> previousCoordinates = previous.getPosition().getCoordinates();
-                // Calculamos la distancia en metros entre los puntos previo y actual, así como el tiempo necesario para recorrer dicha distancia.
-                Double pointDistance = Util.distanceHaversine(previousCoordinates.get(1), previousCoordinates.get(0), currentCoordinates.get(1), currentCoordinates.get(0));
-                pathDistance += pointDistance;
-
-                // Convertimos los Km/h en m/s.
-                double currentSpeedMS = lld.getSpeed() / 3.6d;
-
-                // Añadimos los segundos correspondientes a la distancia recorrida entre puntos.
-                int pointDuration = (int) Math.ceil(pointDistance / currentSpeedMS);
-                // Añadimos los segundos correspondientes a la distancia recorrida entre puntos.
-                // Indicamos cuántos segundos deben pasar para estar en esta posición.
-                pathDurationInSeconds += pointDuration;
-                lld.setSecondsToBeHere(pathDurationInSeconds);
-
-                locationLogDetailList.add(lld);
-
-                // Asignamos el actual al anterior, para poder seguir calculando las distancias y tiempos respecto al punto previo.
-                previous = pss;
-            }
-
-            // Asignamos el listado de posiciones.
-            ll.setLocationLogDetailList(locationLogDetailList);
-
-            ll.setDistance(pathDistance);
-            ll.setDuration(pathDurationInSeconds);
-        }
-    }
-
-    private void createPathGoogleMaps(GeocodedWaypoints gcwp, LocationLog ll) {
-        if (gcwp.getRoutes() != null) {
-
-            // Listado de posiciones que componen el trayecto de SmartDriver.
-            ArrayList<LocationLogDetail> locationLogDetailList = new ArrayList<>();
-
-            // Analizamos la información obtenida de la consulta a Google Directions.
-            // Nuestra petición sólo devolverá una ruta.
-            if (gcwp.getRoutes() != null && !gcwp.getRoutes().isEmpty()) {
-                Route r = gcwp.getRoutes().get(0);
-                // Comprobamos que traiga información de la ruta.
-                if (r.getLegs() != null) {
-                    Leg l = r.getLegs().get(0);
-
-                    double speed;
-                    double pathDistance = 0.0d;
-                    int pathDurationInSeconds = 0;
-
-                    ArrayList<Location> locationList = PolylineDecoder.decodePoly(r.getOverviewPolyline().getPoints());
-                    // Posición anterior en el trayecto.
-                    Location previous = locationList.get(0);
-
-                    // FIXME: ¿Interpolación de velocidades? Otra opción es consultar a Google Distance Matrix para consultar el tiempo que se tarda entre 2 puntos (le afecta el tráfico) y sacar la velocidad.
-//                PolynomialFunction p = new PolynomialFunction(new double[]{speed, averagePolylineSpeed,});
-                    for (int i = 0; i < locationList.size(); i++) {
-                        Location location = locationList.get(i);
-
-                        // Creamos un nodo del trayecto, como si usásemos SmartDriver.
-                        LocationLogDetail lld = new LocationLogDetail();
-                        lld.setLocationLog(ll);
-                        lld.setLatitude(location.getLat());
-                        lld.setLongitude(location.getLng());
-                        lld.setRrTime(RR_TIME);
-                        lld.setHeartRate((int) Math.ceil(60.0d / (RR_TIME / 1000.0d)));
-
-                        // Calculamos la distancia en metros entre los puntos previo y actual, así como el tiempo necesario para recorrer dicha distancia.
-                        Double pointDistance = Util.distanceHaversine(previous.getLat(), previous.getLng(), location.getLat(), location.getLng());
-                        pathDistance += pointDistance;
-                        // Calculamos el tiempo en segundos que tarda en recorrer la distancia entre los puntos.
-                        int pointDuration = (int) Math.ceil(l.getDuration().getValue() * pointDistance / l.getDistance().getValue());
-
-                        // Convertimos la velocidad a Km/h.
-                        speed = pointDuration > 0 ? pointDistance * 3.6 / pointDuration : 0.0d;
-                        lld.setSpeed(speed);
-
-                        // Añadimos los segundos correspondientes a la distancia recorrida entre puntos.
-                        pathDurationInSeconds += pointDuration;
-                        // Indicamos cuántos segundos deben pasar para estar en esta posición.
-                        lld.setSecondsToBeHere(pathDurationInSeconds);
-
-                        locationLogDetailList.add(lld);
-
-                        // Asignamos el actual al anterior, para poder seguir calculando las distancias y tiempos respecto al punto previo.
-                        previous = location;
-                    }
-
-                    // Asignamos el listado de posiciones.
-                    ll.setLocationLogDetailList(locationLogDetailList);
-
-                    ll.setDistance(pathDistance);
-                    ll.setDuration(pathDurationInSeconds);
-                }
-            }
-        }
-    }
-
-    private Location getRandomLocation(double latitude, double longitude, int radius) {
-        Random random = new Random();
-
-        // TODO: Comprobar que es una localización que no sea 'unnamed'
-        // El radio se considerará en kilómetros. Lo convertimos a grados.
-        double radiusInDegrees = radius / 111f;
-
-        double u = random.nextDouble();
-        double v = random.nextDouble();
-        double w = radiusInDegrees * Math.sqrt(u);
-        double t = 2 * Math.PI * v;
-        double x = w * Math.cos(t);
-        double y = w * Math.sin(t);
-
-        double new_x = x / Math.cos(latitude);
-
-        double foundLongitude = new_x + longitude;
-        double foundLatitude = y + latitude;
-
-        LOG.log(Level.FINE, "getRandomLocation() - Longitud: {0}, Latitud: {1}", new Object[]{foundLongitude, foundLatitude});
-
-        Location result = new Location();
-        result.setLat(foundLatitude);
-        result.setLng(foundLongitude);
-
-        return result;
-    }
-
     public int getDistance() {
         return distance;
     }
@@ -682,7 +510,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     }
 
     private void relatePathsAndSmartDrivers(int pathAmount) {
-        maxSmartDrivers = MAX_THREADS / pathAmount;
+        maxSmartDrivers = Constants.MAX_THREADS / pathAmount;
         if (simulatedSmartDrivers > maxSmartDrivers) {
             simulatedSmartDrivers = maxSmartDrivers;
         }
@@ -755,7 +583,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                     finishSimulation(false);
                 }
             }
-        }, 0, STATUS_SAMPLING_INTERVAL, TimeUnit.SECONDS
+        }, 0, Constants.STATUS_SAMPLING_INTERVAL, TimeUnit.SECONDS
         );
     }
 
@@ -802,8 +630,8 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         currentState = State.SIMULATING;
 
         kafkaProducer = new KafkaProducer<>(kafkaProperties);
-        resetSimulation();
-        createTempFolder();
+//        resetSimulation();
+        Util.createTempFolder(LOG);
         startSimulationTime = System.currentTimeMillis();
         LOG.log(Level.INFO, "executeSimulation() - Comienzo de la simulación: {0}", Constants.dfISO8601.format(startSimulationTime));
         LOG.log(Level.INFO, "executeSimulation() - Envío de tramas a: {0}", Stream_Server.values()[streamServer.ordinal() % 2].name());
@@ -854,7 +682,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         switch (startingMode) {
             case ALEATORY:
                 Random rand = new Random();
-                delay = rand.nextInt(MAX_INITIAL_DELAY);
+                delay = rand.nextInt(Constants.MAX_INITIAL_DELAY);
                 break;
             case LINEAL:
                 // Se repartirá el total de SmartDrivers en 50 segundos.
@@ -1056,37 +884,20 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         csvEventList.addAll(list);
     }
 
-    public static void createTempFolder() {
-        try {
-            // Creamos un directorio temporal para contener los archivos generados.
-            tempFolder = Files.createTempDirectory("Hermes_Simulator");
-            String tempFolderPath = tempFolder.toAbsolutePath().toString() + File.separator;
-            LOG.log(Level.INFO, "createTempFolder() - Directorio temporal para almacenar los CSV: {0}", tempFolderPath);
-        } catch (IOException ex) {
-            LOG.log(Level.SEVERE, "createTempFolder() - No se ha podido generar el archivo con los datos de todos los eventos y los estados del simulador", ex);
-        }
-    }
-
     public static Path getTempFolder() {
         return tempFolder;
     }
 
     public static boolean isConfigLock() {
-        boolean result = false;
-
         switch (currentState) {
             case SIMULATING:
             case SCHEDULED_SIMULATION:
             case ENDED:
             case INTERRUPTED:
-                result = true;
-                break;
+                return true;
             default:
-                break;
-
+                return false;
         }
-
-        return result;
     }
 
     public int getStreamServer() {
@@ -1151,13 +962,10 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
     private static String getComputerName() {
         Map<String, String> env = System.getenv();
-        if (env.containsKey("COMPUTERNAME")) {
+        if (env.containsKey("COMPUTERNAME"))
             return env.get("COMPUTERNAME");
-        } else if (env.containsKey("HOSTNAME")) {
-            return env.get("HOSTNAME");
-        } else {
-            return "Unknown";
-        }
+        else
+            return env.getOrDefault("HOSTNAME", "Unknown");
     }
 
     // JYFR: PRUEBA

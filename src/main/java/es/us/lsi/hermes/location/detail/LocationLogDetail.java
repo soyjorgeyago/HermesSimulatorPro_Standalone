@@ -3,7 +3,6 @@ package es.us.lsi.hermes.location.detail;
 import es.us.lsi.hermes.location.LocationLog;
 import es.us.lsi.hermes.util.Constants;
 import java.io.Serializable;
-import java.util.ResourceBundle;
 
 public class LocationLogDetail implements Serializable {
 
@@ -24,6 +23,16 @@ public class LocationLogDetail implements Serializable {
         this.heartRate = 0;
         this.rrTime = 0;
         this.secondsToBeHere = 0;
+    }
+
+    public LocationLogDetail(LocationLog locationLog, double lat, double lng, Double speed) {
+        this.locationLog = locationLog;
+        this.latitude = lat;
+        this.longitude = lng;
+        this.rrTime = Constants.RR_TIME;
+        this.heartRate = (int) Math.ceil(60.0d / (Constants.RR_TIME / 1000.0d));
+        if(speed != null)
+            this.speed = speed;
     }
 
     public LocationLogDetail(Integer locationLogDetailId) {
@@ -105,19 +114,7 @@ public class LocationLogDetail implements Serializable {
 
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder();
-
-        sb.append("[")
-                .append(this.latitude)
-                .append(", ")
-                .append(this.longitude)
-                .append(" -> HR: ")
-                .append(this.heartRate)
-                .append(", S: ")
-                .append(this.speed)
-                .append(" km/h]");
-
-        return sb.toString();
+        return "[" + this.latitude + ", " + this.longitude + " -> HR: " + this.heartRate + ", S: " + this.speed + " km/h]";
     }
 
 //    public String getMarkerTitle() {

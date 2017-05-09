@@ -14,6 +14,9 @@ public class CSVLocation implements Serializable, ICSVBean {
     protected String[] fields;
     protected String[] headers;
 
+    // RDL Required for CSV Reflection
+    public CSVLocation() { }
+
     public CSVLocation(Double lat, Double lng) {
         this.lat = lat;
         this.lng = lng;
@@ -50,5 +53,13 @@ public class CSVLocation implements Serializable, ICSVBean {
 
     public Double getLng() {
         return lng;
+    }
+
+    public void setLatitude(String lat) {
+        this.lat = Double.parseDouble(lat);
+    }
+
+    public void setLongitude(String lng) {
+        this.lng = Double.parseDouble(lng);
     }
 }

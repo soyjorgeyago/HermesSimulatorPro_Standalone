@@ -29,6 +29,7 @@ public class NoGuiScheduledSimulation {
     private static Boolean randomizeEachSmartDriverBehaviour;
     private static Boolean monitorEachSmartDriver;
     private static Integer retries;
+    private static Boolean useRoutesFromHdd;
 
     static {
         LOG.log(Level.INFO, "init() - Se comprueba si existe un archivo de configuración de una simulación sin interfaz gráfica");
@@ -37,6 +38,8 @@ public class NoGuiScheduledSimulation {
 
         if(noGuiScheduledSimulationProperties != null)
             validate();
+        else
+            LOG.log(Level.SEVERE, "init() - NoGuiScheduledSimulation.properties not found");
     }
 
     /**
@@ -46,6 +49,7 @@ public class NoGuiScheduledSimulation {
      */
     private static void validate() {
 
+        LOG.log(Level.INFO, "Validating NoGuiScheduledSimulation properties");
         String property;
 
         property = noGuiScheduledSimulationProperties.getProperty("distance.from.center");
@@ -159,6 +163,14 @@ public class NoGuiScheduledSimulation {
                 LOG.log(Level.SEVERE, "validate() - Valor no válido para 'retries' [-1 a 5]");
             }
         }
+
+        property = noGuiScheduledSimulationProperties.getProperty("use.routes.from.hdd");
+        if (property != null) {
+            useRoutesFromHdd = Boolean.parseBoolean(property);
+        }else
+            LOG.log(Level.SEVERE, "use.routes.from.hdd property not found");
+
+        LOG.log(Level.INFO, "Validation of NoGuiScheduledSimulation properties completed");
     }
 
     public static Integer getDistanceFromCenter() {
@@ -215,5 +227,9 @@ public class NoGuiScheduledSimulation {
 
     public static Integer getRetries() {
         return retries;
+    }
+
+    public static Boolean getUseRoutesFromHdd() {
+        return useRoutesFromHdd;
     }
 }
