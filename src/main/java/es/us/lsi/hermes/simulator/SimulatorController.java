@@ -216,13 +216,16 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     private static AtomicLong kafkaRecordId;
     private static volatile KafkaProducer<Long, String> kafkaProducer;
     private static Properties kafkaProperties;
+    
+    
+    private static double meanSmartDriversDelay = 0.0d;
 
     public SimulatorController() {
         LOG.log(Level.INFO, "init() - Inicialización del controlador del simulador");
-        
+
         // Cargamos los recursos de internacionalización.
         this.bundle = ResourceBundle.getBundle("Bundle");
-        
+
         // Iniciamos el 'pool' de hilos de ejecución para los SmartDrivers.
         initThreadPool();
 
@@ -764,6 +767,14 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 if (threadPool.getQueue().isEmpty()) {
                     finishSimulation(false);
                 }
+
+                // Evaluate the mean delay.
+                long meanDelay = 0l;
+                for (SimulatedSmartDriver ssd : simulatedSmartDriverHashMap.values()) {
+                    meanDelay += ssd.getCurrentDelay();
+                }
+                
+                meanSmartDriversDelay = meanDelay / simulatedSmartDriverHashMap.size();
             }
         }, 0, STATUS_SAMPLING_INTERVAL, TimeUnit.SECONDS
         );
@@ -812,7 +823,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         currentState = State.SIMULATING;
 
         kafkaProducer = new KafkaProducer<>(kafkaProperties);
-        resetSimulation();
+//        resetSimulation();
         createTempFolder();
         startSimulationTime = System.currentTimeMillis();
         LOG.log(Level.INFO, "executeSimulation() - Comienzo de la simulación: {0}", Constants.dfISO8601.format(startSimulationTime));
