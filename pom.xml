@@ -96,8 +96,8 @@
         <!-- JYFR: Kafka -->
         <dependency>
             <groupId>org.apache.kafka</groupId>
-            <artifactId>kafka_2.11</artifactId>
-            <version>0.10.2.0</version>
+            <artifactId>kafka_2.12</artifactId>
+            <version>0.10.2.1</version>
         </dependency>
         
         <!-- JYFR: Para la exportación a CSV de los resultados -->

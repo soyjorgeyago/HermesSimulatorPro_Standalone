@@ -16,11 +16,13 @@ public class Kafka {
     private static Properties kafkaConsumerProperties;
 
     static {
-        LOG.log(Level.INFO, "onStartup() - Inicialización de Kafka");
+        LOG.log(Level.INFO, "onStartup() - Kafka properties init");
 
         kafkaProducerProperties = Util.initProperties("KafkaProducer.properties", LOG);
 
         kafkaConsumerProperties = Util.initProperties("KafkaConsumer.properties", LOG);
+
+        LOG.log(Level.INFO, "onStartup() - Kafka properties init completed");
     }
 
     public static Properties getKafkaProducerProperties() {

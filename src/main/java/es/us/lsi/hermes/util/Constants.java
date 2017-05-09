@@ -18,6 +18,8 @@ public class Constants {
 
     public static final String SIMULATOR_APPLICATION_ID = "SmartDriver";
 
+    public static final int ZIP_FILE_SIZE = 26214400;
+
     public static Constants getInstance() {
         return instance;
     }
