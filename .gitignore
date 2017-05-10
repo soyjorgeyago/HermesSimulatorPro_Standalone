@@ -46,5 +46,5 @@ build.xml
 src/main/resources/Email.properties
 src/main/resources/KafkaProducer.properties
 src/main/resources/KafkaConsumer.properties
-src/main/resources/NoGuiScheduledSimulation.properties
+src/main/resources/PresetSimulation.properties
 manifest.mf

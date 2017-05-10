@@ -107,10 +107,10 @@ public class SimulatedSmartDriver implements Runnable {
     private final int streamServer;
 //    private final SurroundingVehiclesConsumer surroundingVehiclesConsumer;
 
-    // Maximum streaming server response delay.
-    private long maxDelay;
-    // Current streaming server response delay.
-    private long currentDelay;
+    // Maximum streaming server response delay in milliseconds.
+    private long maxDelay_ms;
+    // Current streaming server response delay in milliseconds.
+    private long currentDelay_ms;
     
     private boolean monitorize;
     private boolean infiniteSimulation;
@@ -153,8 +153,8 @@ public class SimulatedSmartDriver implements Runnable {
         int age = ThreadLocalRandom.current().nextInt(18, 65 + 1); // Simularemos conductores de distintas edades (entre 18 y 65 años), para establecer el ritmo cardíaco máximo en la simulación.
         this.minRrTime = (int) Math.ceil(60000.0d / (220 - age)); // Mínimo R-R, que establecerá el ritmo cardíaco máximo.
         this.sha = new String(Hex.encodeHex(DigestUtils.sha256(System.currentTimeMillis() + ll.getPerson().getEmail())));
-        this.maxDelay = 0;
-        this.currentDelay = 0;
+        this.maxDelay_ms = 0l;
+        this.currentDelay_ms = 0l;
         this.monitorize = monitorize;
         this.infiniteSimulation = infiniteSimulation;
 //        // TODO: Probar otros timeouts más altos.
@@ -407,8 +407,6 @@ public class SimulatedSmartDriver implements Runnable {
                             try {
                                 String json = new Gson().toJson(events);
                                 long id = SimulatorController.getNextKafkaRecordId();
-                                // JYFR: PRUEBA
-                                LOG.log(Level.INFO, "JSON: {0}", json);
                                 if (SimulatorController.kafkaProducerPerSmartDriver) {
                                     smartDriverKafkaProducer.send(new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION,
                                             smartDriverKafkaRecordId,
@@ -479,8 +477,6 @@ public class SimulatedSmartDriver implements Runnable {
                             try {
                                 String json = new Gson().toJson(events);
                                 long id = SimulatorController.getNextKafkaRecordId();
-                                // JYFR: PRUEBA
-                                LOG.log(Level.INFO, "JSON: {0}", json);
                                 if (SimulatorController.kafkaProducerPerSmartDriver) {
                                     smartDriverKafkaProducer.send(new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION,
                                             smartDriverKafkaRecordId,
@@ -619,8 +615,6 @@ public class SimulatedSmartDriver implements Runnable {
                 try {
                     String json = new Gson().toJson(event);
                     long id = SimulatorController.getNextKafkaRecordId();
-                    // JYFR: PRUEBA
-                    LOG.log(Level.INFO, "JSON: {0}", json);
                     if (SimulatorController.kafkaProducerPerSmartDriver) {
                         smartDriverKafkaProducer.send(new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION,
                                 smartDriverKafkaRecordId,
@@ -780,8 +774,6 @@ public class SimulatedSmartDriver implements Runnable {
                 try {
                     String json = new Gson().toJson(event);
                     long id = SimulatorController.getNextKafkaRecordId();
-                    // JYFR: PRUEBA
-                    LOG.log(Level.INFO, "JSON: {0}", json);
                     if (SimulatorController.kafkaProducerPerSmartDriver) {
                         smartDriverKafkaProducer.send(new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION,
                                 smartDriverKafkaRecordId,
@@ -921,12 +913,12 @@ public class SimulatedSmartDriver implements Runnable {
         }
     }
 
-    public long getMaxDelay() {
-        return maxDelay;
+    public long getMaxDelayMs() {
+        return maxDelay_ms;
     }
 
-    public long getCurrentDelay() {
-        return currentDelay;
+    public long getCurrentDelayMs() {
+        return currentDelay_ms;
     }
 
     private void createStatusDataFile(CsvPreference csvPreference, boolean ignoreHeaders, File file) {
@@ -1000,20 +992,20 @@ public class SimulatedSmartDriver implements Runnable {
         @Override
         public void onCompletion(RecordMetadata metadata, Exception exception) {
             if (metadata != null) {
-                currentDelay = System.currentTimeMillis() - startTime;
-                SimulatorController.setCurrentSmartDriversDelay(currentDelay);
+                currentDelay_ms = System.currentTimeMillis() - startTime;
+                SimulatorController.setCurrentSmartDriversDelay(currentDelay_ms);
 
                 // Register the maximum delay.
-                if (currentDelay > maxDelay) {
-                    maxDelay = currentDelay;
+                if (currentDelay_ms > maxDelay_ms) {
+                    maxDelay_ms = currentDelay_ms;
                 }
 
                 if (monitorize) {
                     // Register SmartDriver current status.
-                    csvStatusList.add(new CSVSmartDriverStatus(id, System.currentTimeMillis(), currentDelay, metadata.serializedValueSize()));
+                    csvStatusList.add(new CSVSmartDriverStatus(id, System.currentTimeMillis(), currentDelay_ms, metadata.serializedValueSize()));
                 }
 
-                LOG.log(Level.FINE, "onCompletion() - Message received in Kafka\n - Key: {0}\n - Events: {1}\n - Partition: {2}\n - Offset: {3}\n - Elapsed time: {4} ms", new Object[]{key, events.length, metadata.partition(), metadata.offset(), currentDelay});
+                LOG.log(Level.FINE, "onCompletion() - Message received in Kafka\n - Key: {0}\n - Events: {1}\n - Partition: {2}\n - Offset: {3}\n - Elapsed time: {4} ms", new Object[]{key, events.length, metadata.partition(), metadata.offset(), currentDelay_ms});
                 switch (type) {
                     case RECOVERED_VEHICLE_LOCATION:
                     case RECOVERED_DATA_SECTION:

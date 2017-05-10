@@ -9,6 +9,8 @@ import java.util.logging.Logger;
 
 public class Util {
 
+    private static final Logger LOG = Logger.getLogger(Util.class.getName());
+
     private static final String EMAIL_PATTERN = "^[_A-Za-z0-9-\\+]+(\\.[_A-Za-z0-9-]+)*@"
             + "[A-Za-z0-9-]+(\\.[A-Za-z0-9]+)*(\\.[A-Za-z]{2,})$";
     private static final String ALPHANUMERIC = "^[a-zA-Z0-9]*$";
@@ -83,16 +85,24 @@ public class Util {
         return (Math.toDegrees(Math.atan2(y, x)) + 360) % 360;
     }
 
-    public static Properties initProperties(String properties, Logger logger){
+    /**
+     * Method for loading a properties file.
+     *
+     * @param propertiesFileName Name of the properties file.
+     * @return Loaded properties file.
+     */
+    public static Properties initProperties(String propertiesFileName) {
+        Properties result = null;
+
         try {
             ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-            InputStream input = classLoader.getResourceAsStream(properties);
-            Properties result = new Properties();
+            InputStream input = classLoader.getResourceAsStream(propertiesFileName);
+            result = new Properties();
             result.load(input);
-            return result;
         } catch (IOException ex) {
-            logger.log(Level.SEVERE, "Error al cargar el archivo de propiedades (" + properties + ")", ex);
-            return null;
+            LOG.log(Level.SEVERE, "initProperties() - Error loading properties file: " + propertiesFileName, ex);
         }
+
+        return result;
     }
 }

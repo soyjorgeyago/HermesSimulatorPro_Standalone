@@ -8,15 +8,15 @@ public class HermesSimulatorConfig {
 
     private static final Logger LOG = Logger.getLogger(HermesSimulatorConfig.class.getName());
 
-    private static Properties hermesSimulatorProperties;
+    private static final Properties HERMES_SIMULATOR_PROPERTIES;
 
     static {
-        LOG.log(Level.INFO, "init() - Inicialización del simulador");
+        LOG.log(Level.INFO, "HermesSimulatorConfig() - Hermes simulator init.");
 
-        hermesSimulatorProperties = Util.initProperties("HermesSimulator.properties", LOG);
+        HERMES_SIMULATOR_PROPERTIES = Util.initProperties("HermesSimulator.properties");
     }
 
     public static Properties getHermesSimulatorProperties() {
-        return hermesSimulatorProperties;
+        return HERMES_SIMULATOR_PROPERTIES;
     }
 }

@@ -16,15 +16,14 @@ public class Email {
 
     private static final Logger LOG = Logger.getLogger(Email.class.getName());
 
-    private static Properties mailServerProperties;
-    private static Session mailSession;
+    private static final Properties MAIL_SERVER_PROPERTIES;
+    private static final Session MAIL_SESSION;
 
     static {
-        LOG.log(Level.INFO, "init() - Inicialización del gestor de correo");
+        LOG.log(Level.INFO, "Email() - Email manager init.");
 
-        mailServerProperties = Util.initProperties("Email.properties", LOG);
-
-        mailSession = Session.getDefaultInstance(mailServerProperties, null);
+        MAIL_SERVER_PROPERTIES = Util.initProperties("Email.properties");
+        MAIL_SESSION = Session.getDefaultInstance(MAIL_SERVER_PROPERTIES, null);
     }
 
     public static void generateAndSendEmail(String recipient, String subject, String body) throws AddressException, MessagingException {
@@ -40,7 +39,7 @@ public class Email {
     public static void generateAndSendEmail(String recipient, String subject, String body, List<File> attachedFiles) throws AddressException, MessagingException {
         LOG.log(Level.INFO, "generateAndSendEmail() - Generación y envío del correo a: {0}", recipient);
 
-        Message generateMailMessage = new MimeMessage(mailSession);
+        Message generateMailMessage = new MimeMessage(MAIL_SESSION);
         generateMailMessage.addRecipient(Message.RecipientType.TO, new InternetAddress(recipient));
 
         // Asunto.
@@ -67,8 +66,8 @@ public class Email {
         generateMailMessage.setContent(multipart);
         LOG.log(Level.FINE, "generateAndSendEmail() - Email generado correctamente");
 
-        Transport transport = mailSession.getTransport("smtp");
-        transport.connect((String) mailServerProperties.get("mail.smtp.host"), (String) mailServerProperties.get("mail.smtp.user"), (String) mailServerProperties.get("mail.smtp.password"));
+        Transport transport = MAIL_SESSION.getTransport("smtp");
+        transport.connect((String) MAIL_SERVER_PROPERTIES.get("mail.smtp.host"), (String) MAIL_SERVER_PROPERTIES.get("mail.smtp.user"), (String) MAIL_SERVER_PROPERTIES.get("mail.smtp.password"));
         transport.sendMessage(generateMailMessage, generateMailMessage.getAllRecipients());
         transport.close();
         LOG.log(Level.INFO, "generateAndSendEmail() - Email enviado correctamente");

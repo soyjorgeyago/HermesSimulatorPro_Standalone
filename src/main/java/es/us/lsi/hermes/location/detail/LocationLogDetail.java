@@ -1,6 +1,5 @@
 package es.us.lsi.hermes.location.detail;
 
-import es.us.lsi.hermes.location.LocationLog;
 import java.io.Serializable;
 
 public class LocationLogDetail implements Serializable {
@@ -12,7 +11,6 @@ public class LocationLogDetail implements Serializable {
     private double speed;
     private int heartRate;
     private int rrTime;
-    private LocationLog locationLog;
     private int secondsToBeHere;
 
     public LocationLogDetail() {
@@ -75,14 +73,6 @@ public class LocationLogDetail implements Serializable {
 
     public void setHeartRate(int heartRate) {
         this.heartRate = heartRate;
-    }
-
-    public LocationLog getLocationLog() {
-        return locationLog;
-    }
-
-    public void setLocationLog(LocationLog locationLog) {
-        this.locationLog = locationLog;
     }
 
     public int getRrTime() {

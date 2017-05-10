@@ -70,7 +70,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     private static final int RR_TIME = 850; // Equivale a una frecuencia cardíaca en reposo media (70 ppm).
 
     // Máximo retardo para iniciar la ruta, en milisegundos:
-    private static final int MAX_INITIAL_DELAY = 60000;
+    private static final int MAX_INITIAL_DELAY_MS = 60000;
 
     // Paquetes de peticiones en la generación de trayectos. Google ha limitado más el número de peticiones por segundo.
     private static final int REQUEST_PACK_SIZE = 10;
@@ -81,7 +81,9 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     // JYFR: PRUEBA
 //    public static final long MAX_SIMULATION_TIME = Long.parseLong(HermesSimulatorConfig.getHermesSimulatorProperties().getProperty("max.simulation.time.ms", "14400000"));
 
-    private static final int STATUS_SAMPLING_INTERVAL = Integer.parseInt(HermesSimulatorConfig.getHermesSimulatorProperties().getProperty("status.sampling.interval.s", "2"));
+    private static final int STATUS_SAMPLING_INTERVAL_S = Integer.parseInt(HermesSimulatorConfig.getHermesSimulatorProperties().getProperty("status.sampling.interval.s", "2"));
+
+    private static final int MAX_ACCEPTABLE_DELAY_S = Integer.parseInt(HermesSimulatorConfig.getHermesSimulatorProperties().getProperty("max.acceptable.delay.s", "5"));
 
     // Número de tramas de Ztreamy generadas.
     private static final AtomicInteger GENERATED = new AtomicInteger(0);
@@ -115,7 +117,9 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     private static Time_Rate timeRate = Time_Rate.X1;
 
     // Mecanismos de generación de trayectos.
-    public enum Paths_Generation_Method { GOOGLE, OPENSTREETMAP }
+    public enum Paths_Generation_Method {
+        GOOGLE, OPENSTREETMAP
+    }
     private static Paths_Generation_Method pathsGenerationMethod = Paths_Generation_Method.GOOGLE;
 
     // Distancia del trayecto.
@@ -149,7 +153,9 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     // Información de monitorización del simulador, para poder generar un CSV y enviarlo por e-mail.
     private static volatile List<ICSVBean> csvStatusList;
 
-    public enum State { CONFIG_CHANGED, READY_TO_SIMULATE, SCHEDULED_SIMULATION, SIMULATING, ENDED, INTERRUPTED }
+    public enum State {
+        CONFIG_CHANGED, READY_TO_SIMULATE, SCHEDULED_SIMULATION, SIMULATING, ENDED, INTERRUPTED
+    }
     private static State currentState = State.READY_TO_SIMULATE;
 
     private static volatile SurroundingVehiclesConsumer surroundingVehiclesConsumer;
@@ -159,10 +165,10 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     private static ScheduledFuture simulationScheduler;
     private static ScheduledFuture statusMonitorScheduler;
 
-    // Registrará cuál ha sido el retraso máximo de entre todos los SmartDrivers.
-    private static AtomicLong maxSmartDriversDelay;
-    // Registrará el retraso actual de entre todos los SmartDrivers.
-    private static AtomicLong currentSmartDriversDelay;
+    // Maximum delay among all SmartDrivers.
+    private static AtomicLong maxSmartDriversDelayMs;
+    // Current mean delay of all SmartDrivers.
+    private static AtomicLong currentMeanSmartDriversDelayMs;
 
     // Directorio temporal para almacenar los archivos generados.
     private static Path tempFolder;
@@ -200,9 +206,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     private static AtomicLong kafkaRecordId;
     private static volatile KafkaProducer<Long, String> kafkaProducer;
     private static Properties kafkaProperties;
-    
-    
-    private static double meanSmartDriversDelay = 0.0d;
 
     public SimulatorController() {
         LOG.log(Level.INFO, "init() - Inicialización del controlador del simulador");
@@ -210,17 +213,32 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         // Cargamos los recursos de internacionalización.
         this.bundle = ResourceBundle.getBundle("Bundle");
 
+        initAttributes();
+
         // Iniciamos el 'pool' de hilos de ejecución para los SmartDrivers.
         initThreadPool();
 
-        maxSmartDriversDelay = new AtomicLong(0);
-        currentSmartDriversDelay = new AtomicLong(0);
+        maxSmartDriversDelayMs = new AtomicLong(0);
+        currentMeanSmartDriversDelayMs = new AtomicLong(0);
 
         // Comprobamos si existe una configuración asignada en el archivo de propiedades y generamos la simulación.
-        initNoGuiScheduledSimulation();
+        initPresetSimulation();
 
         kafkaRecordId = new AtomicLong(0);
         kafkaProperties = Kafka.getKafkaProducerProperties();
+    }
+
+    private void initAttributes() {
+        simulatedSmartDriverHashMap = new ConcurrentHashMap<>();
+        GENERATED.set(0);
+        OK.set(0);
+        NOT_OK.set(0);
+        RECOVERED.set(0);
+        ERRORS.set(0);
+        FINALLY_PENDING.set(0);
+        SENT.set(0);
+        csvEventList = new ArrayList<>();
+        csvStatusList = new ArrayList<>();
     }
 
     private void initThreadPool() {
@@ -230,51 +248,51 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         threadPool.setRemoveOnCancelPolicy(true);
     }
 
-    private void initNoGuiScheduledSimulation() {
-        LOG.log(Level.INFO, "initNoGuiScheduledSimulation() - Se carga la configuración del simulador indicada en el archivo de propiedades.");
-        if (NoGuiScheduledSimulation.getDistanceFromCenter() != null) {
-            setDistanceFromSevilleCenter(NoGuiScheduledSimulation.getDistanceFromCenter());
+    private void initPresetSimulation() {
+        LOG.log(Level.INFO, "initPresetSimulation() - Se carga la configuración del simulador indicada en el archivo de propiedades.");
+        if (PresetSimulation.getDistanceFromCenter() != null) {
+            setDistanceFromSevilleCenter(PresetSimulation.getDistanceFromCenter());
         }
-        if (NoGuiScheduledSimulation.getMaxPathDistance() != null) {
-            setDistance(NoGuiScheduledSimulation.getMaxPathDistance());
+        if (PresetSimulation.getMaxPathDistance() != null) {
+            setDistance(PresetSimulation.getMaxPathDistance());
         }
-        if (NoGuiScheduledSimulation.getPathsAmount() != null) {
-            setPathsAmount(NoGuiScheduledSimulation.getPathsAmount());
+        if (PresetSimulation.getPathsAmount() != null) {
+            setPathsAmount(PresetSimulation.getPathsAmount());
         }
-        if (NoGuiScheduledSimulation.getDriversByPath() != null) {
-            setSimulatedSmartDrivers(NoGuiScheduledSimulation.getDriversByPath());
+        if (PresetSimulation.getDriversByPath() != null) {
+            setSimulatedSmartDrivers(PresetSimulation.getDriversByPath());
         }
         // Tiene que haber una coherencia entre trayectos y conductores, para no saturar el sistema.
         relatePathsAndSmartDrivers(pathsAmount);
-        if (NoGuiScheduledSimulation.getPathsGenerationMethod() != null) {
-            setPathsGenerationMethod(NoGuiScheduledSimulation.getPathsGenerationMethod());
+        if (PresetSimulation.getPathsGenerationMethod() != null) {
+            setPathsGenerationMethod(PresetSimulation.getPathsGenerationMethod());
         }
-        if (NoGuiScheduledSimulation.getStreamServer() != null) {
-            setStreamServer(NoGuiScheduledSimulation.getStreamServer());
+        if (PresetSimulation.getStreamServer() != null) {
+            setStreamServer(PresetSimulation.getStreamServer());
         }
-        if (NoGuiScheduledSimulation.getStartingMode() != null) {
-            setStartingMode(NoGuiScheduledSimulation.getStartingMode());
+        if (PresetSimulation.getStartingMode() != null) {
+            setStartingMode(PresetSimulation.getStartingMode());
         }
-        if (NoGuiScheduledSimulation.isRetryOnFail() != null) {
-            setRetryOnFail(NoGuiScheduledSimulation.isRetryOnFail());
+        if (PresetSimulation.isRetryOnFail() != null) {
+            setRetryOnFail(PresetSimulation.isRetryOnFail());
         }
-        if (NoGuiScheduledSimulation.getIntervalBetweenRetriesInSeconds() != null) {
-            setSecondsBetweenRetries(NoGuiScheduledSimulation.getIntervalBetweenRetriesInSeconds());
+        if (PresetSimulation.getIntervalBetweenRetriesInSeconds() != null) {
+            setSecondsBetweenRetries(PresetSimulation.getIntervalBetweenRetriesInSeconds());
         }
-        if (NoGuiScheduledSimulation.getSendResultsToEmail() != null) {
-            setEmail(NoGuiScheduledSimulation.getSendResultsToEmail());
+        if (PresetSimulation.getSendResultsToEmail() != null) {
+            setEmail(PresetSimulation.getSendResultsToEmail());
         }
-        if (NoGuiScheduledSimulation.getScheduledSimulation() != null) {
-            setScheduledDate(NoGuiScheduledSimulation.getScheduledSimulation());
+        if (PresetSimulation.getScheduledSimulation() != null) {
+            setScheduledDate(PresetSimulation.getScheduledSimulation());
         }
-        if (NoGuiScheduledSimulation.isRandomizeEachSmartDriverBehaviour() != null) {
-            setRandomizeEachSmartDriverBehaviour(NoGuiScheduledSimulation.isRandomizeEachSmartDriverBehaviour());
+        if (PresetSimulation.isRandomizeEachSmartDriverBehaviour() != null) {
+            setRandomizeEachSmartDriverBehaviour(PresetSimulation.isRandomizeEachSmartDriverBehaviour());
         }
-        if (NoGuiScheduledSimulation.isMonitorEachSmartDriver() != null) {
-            setMonitorEachSmartDriver(NoGuiScheduledSimulation.isMonitorEachSmartDriver());
+        if (PresetSimulation.isMonitorEachSmartDriver() != null) {
+            setMonitorEachSmartDriver(PresetSimulation.isMonitorEachSmartDriver());
         }
-        if (NoGuiScheduledSimulation.getRetries() != null) {
-            setRetries(NoGuiScheduledSimulation.getRetries());
+        if (PresetSimulation.getRetries() != null) {
+            setRetries(PresetSimulation.getRetries());
         }
         generateSimulatedPaths();
         if (scheduledDate != null) {
@@ -438,10 +456,11 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
                 // RDL: Once a full route is created, store it on routes folder
                 List<ICSVBean> locationList = new ArrayList<>();
-                for(LocationLogDetail lld : ll.getLocationLogDetailList())
+                for (LocationLogDetail lld : ll.getLocationLogDetailList()) {
                     locationList.add(new CSVLocation(lld.getLatitude(), lld.getLongitude()));
+                }
 
-                CSVUtils.createRouteDataFile(String.valueOf(i+1), locationList, LOG);
+                CSVUtils.createRouteDataFile(String.valueOf(i + 1), locationList, LOG);
             }
         } catch (InterruptedException ex) {
             LOG.log(Level.SEVERE, "Error al obtener el JSON de la ruta", ex);
@@ -480,7 +499,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         for (int i = 0; i < numberOfInnerLocations; i++) {
             LocationLogDetail lld = new LocationLogDetail();
 
-            lld.setLocationLog(lld1.getLocationLog());
             lld.setLatitude(i * latitudeFragment + lld1.getLatitude());
             lld.setLongitude(i * longitudeFragment + lld1.getLongitude());
             lld.setSpeed(i * speedFragment + lld1.getSpeed());
@@ -530,7 +548,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
                 // Creamos un nodo del trayecto, como si usásemos SmartDriver.
                 LocationLogDetail lld = new LocationLogDetail();
-                lld.setLocationLog(ll);
                 lld.setLatitude(currentCoordinates.get(1)); // La posición 1 es la latitud.
                 lld.setLongitude(currentCoordinates.get(0)); // La posición 0 es la longitud.
                 lld.setSpeed(pss.getSpeed());
@@ -595,7 +612,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
                         // Creamos un nodo del trayecto, como si usásemos SmartDriver.
                         LocationLogDetail lld = new LocationLogDetail();
-                        lld.setLocationLog(ll);
                         lld.setLatitude(location.getLat());
                         lld.setLongitude(location.getLng());
                         lld.setRrTime(RR_TIME);
@@ -738,59 +754,49 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
     private static void stopStatusMonitorTimer() {
         if (statusMonitorScheduler != null) {
+            LOG.log(Level.INFO, "stopStatusMonitorTimer() - Stopping simulator status monitor.");
             statusMonitorScheduler.cancel(true);
+            statusMonitorScheduler = null;
         }
     }
 
     private void startStatusMonitorTimer() {
-        if (statusMonitorScheduler != null) {
-            statusMonitorScheduler.cancel(true);
-        }
+        LOG.log(Level.INFO, "statusMonitorTimer() - Starting simulator status monitor.");
         ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
         statusMonitorScheduler = scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
             @Override
             public void run() {
-                csvStatusList.add(new CSVSimulatorStatus(System.currentTimeMillis(), GENERATED.intValue(), SENT.intValue(), OK.intValue(), NOT_OK.intValue(), ERRORS.intValue(), RECOVERED.intValue(), FINALLY_PENDING.intValue(), threadPool.getQueue().size(), maxSmartDriversDelay.get(), currentSmartDriversDelay.get()));
-                // Cada vez que registramos el retraso actual en el CSV, lo inicializamos.
-                currentSmartDriversDelay.set(0);
-                // Comprobamos si han terminado todos los hilos de ejecución.
-                if (threadPool.getQueue().isEmpty()) {
-                    finishSimulation(false);
-                }
+                csvStatusList.add(new CSVSimulatorStatus(System.currentTimeMillis(), GENERATED.intValue(), SENT.intValue(), OK.intValue(), NOT_OK.intValue(), ERRORS.intValue(), RECOVERED.intValue(), FINALLY_PENDING.intValue(), threadPool.getQueue().size(), maxSmartDriversDelayMs.get(), currentMeanSmartDriversDelayMs.get()));
 
                 // Evaluate the mean delay.
-                long meanDelay = 0l;
+                long totalDelaysMs = 0l;
                 for (SimulatedSmartDriver ssd : simulatedSmartDriverHashMap.values()) {
-                    meanDelay += ssd.getCurrentDelay();
+                    totalDelaysMs += ssd.getCurrentDelayMs();
                 }
-                
-                meanSmartDriversDelay = meanDelay / simulatedSmartDriverHashMap.size();
+
+                currentMeanSmartDriversDelayMs.set(totalDelaysMs / simulatedSmartDriverHashMap.size());
+                LOG.log(Level.FINE, "statusMonitorTimer() - SmartDrivers communication with streaming server mean delay in milliseconds: {0}", currentMeanSmartDriversDelayMs.get());
             }
-        }, 0, STATUS_SAMPLING_INTERVAL, TimeUnit.SECONDS
+        }, 0, STATUS_SAMPLING_INTERVAL_S, TimeUnit.SECONDS
         );
     }
 
     public void simulate() {
-        // Si el temporizador está instanciado, es que hay una simulación en marcha y se quiere parar.
-        if (!threadPool.getQueue().isEmpty()) {
-            finishSimulation(true);
-        } else {
-            // JYFR: PRUEBA
+        // JYFR: PRUEBA
 //            String pattern = bundle.getString("LimitedSimulationTime");
 //            JsfUtil.addInfoMessage(MessageFormat.format(pattern, DurationFormatUtils.formatDuration(MAX_SIMULATION_TIME, "HH:mm:ss", true)));
-            if (scheduledDate != null) {
-                if (simulationScheduler != null) {
-                    // Había programada una simulación y ha sido cancelada.
-                    simulationScheduler.cancel(true);
-                    simulationScheduler = null;
-                    currentState = State.READY_TO_SIMULATE;
-                } else {
-                    scheduledSimulation();
-                }
+        if (scheduledDate != null) {
+            if (simulationScheduler != null) {
+                // Había programada una simulación y ha sido cancelada.
+                simulationScheduler.cancel(true);
+                simulationScheduler = null;
+                currentState = State.READY_TO_SIMULATE;
             } else {
-                // Es una simulación sin programar.
-                executeSimulation();
+                scheduledSimulation();
             }
+        } else {
+            // Es una simulación sin programar.
+            executeSimulation();
         }
     }
 
@@ -813,7 +819,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         currentState = State.SIMULATING;
 
         kafkaProducer = new KafkaProducer<>(kafkaProperties);
-//        resetSimulation();
         createTempFolder();
         startSimulationTime = System.currentTimeMillis();
         LOG.log(Level.INFO, "executeSimulation() - Comienzo de la simulación: {0}", Constants.dfISO8601.format(startSimulationTime));
@@ -823,8 +828,13 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         surroundingVehiclesConsumer = new SurroundingVehiclesConsumer(this);
         surroundingVehiclesConsumer.start();
 
-        LOG.log(Level.INFO, "executeSimulation() - Se crearán: {0} hilos de ejecución", simulatedSmartDrivers * locationLogList.size());
+        // Simulator status monitor init.
+        startStatusMonitorTimer();
+
+        // Creation of simulated Smart Drivers.
+        LOG.log(Level.INFO, "executeSimulation() - {0} threads are going to be created", simulatedSmartDrivers * locationLogList.size());
         try {
+
             int id = 0;
             for (int i = 0; i < locationLogList.size(); i++) {
                 LocationLog ll = locationLogList.get(i);
@@ -837,7 +847,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 LOG.log(Level.FINE, "executeSimulation() - Cada 10 segundos, se iniciarán {0} SmartDrivers en el trayecto {1}", new Object[]{smartDriversBunch, i});
                 initSimulatedSmartDriver(id, ll, latLng, smartDriversBunch);
                 id++;
-                startStatusMonitorTimer();
 
                 for (int j = 1; j < simulatedSmartDrivers; j++) {
                     initSimulatedSmartDriver(id, ll, latLng, smartDriversBunch);
@@ -865,7 +874,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         switch (startingMode) {
             case ALEATORY:
                 Random rand = new Random();
-                delay = rand.nextInt(MAX_INITIAL_DELAY);
+                delay = rand.nextInt(MAX_INITIAL_DELAY_MS);
                 break;
             case LINEAL:
                 // Se repartirá el total de SmartDrivers en 50 segundos.
@@ -903,17 +912,10 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
             threadPool.shutdownNow();
         }
 
+        initAttributes();
+        
         initThreadPool();
-        simulatedSmartDriverHashMap = new ConcurrentHashMap<>();
-        GENERATED.set(0);
-        OK.set(0);
-        NOT_OK.set(0);
-        RECOVERED.set(0);
-        ERRORS.set(0);
-        FINALLY_PENDING.set(0);
-        SENT.set(0);
-        csvEventList = new ArrayList<>();
-        csvStatusList = new ArrayList<>();
+
     }
 
     public int getSimulatedSpeed() {
@@ -932,9 +934,9 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     public static void smartDriverHasFinished(String id) {
         LOG.log(Level.FINE, "smartDriverHasFinished() - Ha terminado el SmartDriver con id={0}, quedan {1} restantes", new Object[]{id, threadPool.getQueue().size()});
         SimulatedSmartDriver ssd = simulatedSmartDriverHashMap.remove(id);
-        if (ssd.getMaxDelay() > maxSmartDriversDelay.get()) {
-            maxSmartDriversDelay.set(ssd.getMaxDelay());
-            LOG.log(Level.FINE, "smartDriverHasFinished() - Quedan {0} restantes. Máximo retraso detectado hasta ahora: {0}", new Object[]{threadPool.getQueue().size(), maxSmartDriversDelay.get()});
+        if (ssd.getMaxDelayMs() > maxSmartDriversDelayMs.get()) {
+            maxSmartDriversDelayMs.set(ssd.getMaxDelayMs());
+            LOG.log(Level.FINE, "smartDriverHasFinished() - Quedan {0} restantes. Máximo retraso detectado hasta ahora: {0}", new Object[]{threadPool.getQueue().size(), maxSmartDriversDelayMs.get()});
         }
     }
 
@@ -953,10 +955,10 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 surroundingVehiclesConsumer.stopConsumer();
                 String simulationSummary;
                 if (interrupted || ERRORS.get() > 0 || NOT_OK.get() > 0) {
-                    simulationSummary = MessageFormat.format("RESULTADO DE LA SIMULACION:\n\n-> Servidor de tramas={0}\n\n-> Tramas generadas={1}\n-> Envíos realizados={2}\n-> Oks={3}\n-> NoOks={4}\n-> Errores={5}\n-> Recuperados={6}\n-> No reenviados finalmente={7}\n-> Hilos restantes={8}\n-> Trayectos={9}\n-> Distancia={10}\n-> Instancias SmartDriver por trayecto={11}\n-> Reintentar fallidos={12}\n-> Segundos entre reintentos={13}\n-> Máximo retraso temporal={14}s\n\n", new Object[]{Stream_Server.values()[streamServer.ordinal() % 2].name(), GENERATED, SENT, OK, NOT_OK, ERRORS, RECOVERED, FINALLY_PENDING, threadPool.getQueue().size(), locationLogList.size(), distance, simulatedSmartDrivers, retryOnFail, secondsBetweenRetries, Constants.df2Decimals.format(maxSmartDriversDelay.get() / 1000.0d)});
+                    simulationSummary = MessageFormat.format("RESULTADO DE LA SIMULACION:\n\n-> Servidor de tramas={0}\n\n-> Tramas generadas={1}\n-> Envíos realizados={2}\n-> Oks={3}\n-> NoOks={4}\n-> Errores={5}\n-> Recuperados={6}\n-> No reenviados finalmente={7}\n-> Hilos restantes={8}\n-> Trayectos={9}\n-> Distancia={10}\n-> Instancias SmartDriver por trayecto={11}\n-> Reintentar fallidos={12}\n-> Segundos entre reintentos={13}\n-> Máximo retraso temporal={14}s\n\n", new Object[]{Stream_Server.values()[streamServer.ordinal() % 2].name(), GENERATED, SENT, OK, NOT_OK, ERRORS, RECOVERED, FINALLY_PENDING, threadPool.getQueue().size(), locationLogList.size(), distance, simulatedSmartDrivers, retryOnFail, secondsBetweenRetries, Constants.df2Decimals.format(maxSmartDriversDelayMs.get() / 1000.0d)});
                     LOG.log(Level.SEVERE, "finishSimulation() - {0}", simulationSummary);
                 } else {
-                    simulationSummary = MessageFormat.format("RESULTADO DE LA SIMULACION:\n\nLos envíos se han realizado correctamente:\n\n-> Servidor de tramas={0}\n\n-> Tramas generadas={1}\n-> Oks={2}\n-> Hilos restantes={3}\n-> Trayectos={4}\n-> Distancia={5}\n-> Instancias SmartDriver por trayecto={6}\n-> Reintentar fallidos={7}\n-> Segundos entre reintentos={8}\n-> Máximo retraso temporal={9}s\n\n", new Object[]{Stream_Server.values()[streamServer.ordinal() % 2].name(), GENERATED, OK, threadPool.getQueue().size(), locationLogList.size(), distance, simulatedSmartDrivers, retryOnFail, secondsBetweenRetries, Constants.df2Decimals.format(maxSmartDriversDelay.get() / 1000.0d)});
+                    simulationSummary = MessageFormat.format("RESULTADO DE LA SIMULACION:\n\nLos envíos se han realizado correctamente:\n\n-> Servidor de tramas={0}\n\n-> Tramas generadas={1}\n-> Oks={2}\n-> Hilos restantes={3}\n-> Trayectos={4}\n-> Distancia={5}\n-> Instancias SmartDriver por trayecto={6}\n-> Reintentar fallidos={7}\n-> Segundos entre reintentos={8}\n-> Máximo retraso temporal={9}s\n\n", new Object[]{Stream_Server.values()[streamServer.ordinal() % 2].name(), GENERATED, OK, threadPool.getQueue().size(), locationLogList.size(), distance, simulatedSmartDrivers, retryOnFail, secondsBetweenRetries, Constants.df2Decimals.format(maxSmartDriversDelayMs.get() / 1000.0d)});
                     LOG.log(Level.INFO, "finishSimulation() - {0}", simulationSummary);
                 }
 
@@ -1036,7 +1038,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     }
 
     public static void logCurrentStatus() {
-        LOG.log(Level.SEVERE, "logCurrentStatus() - ESTADO ACTUAL: Tramas generadas={0}|Envíos realizados={1}|Oks={2}|NoOks={3}|Errores={4}|Recuperados={5}|No reenviados finalmente={6}|Hilos restantes={7}|Máximo retraso temporal total={8}ms|Retraso temporal actual={9}ms", new Object[]{GENERATED.get(), SENT.get(), OK.get(), NOT_OK.get(), ERRORS.get(), RECOVERED.get(), FINALLY_PENDING.get(), threadPool.getQueue().size(), maxSmartDriversDelay.get(), currentSmartDriversDelay.get()});
+        LOG.log(Level.SEVERE, "logCurrentStatus() - ESTADO ACTUAL: Tramas generadas={0}|Envíos realizados={1}|Oks={2}|NoOks={3}|Errores={4}|Recuperados={5}|No reenviados finalmente={6}|Hilos restantes={7}|Máximo retraso temporal total={8}ms|Retraso temporal actual={9}ms", new Object[]{GENERATED.get(), SENT.get(), OK.get(), NOT_OK.get(), ERRORS.get(), RECOVERED.get(), FINALLY_PENDING.get(), threadPool.getQueue().size(), maxSmartDriversDelayMs.get(), currentMeanSmartDriversDelayMs.get()});
     }
 
     public String getEmail() {
@@ -1219,8 +1221,8 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     }
 
     public static void setCurrentSmartDriversDelay(long c) {
-        if (c > currentSmartDriversDelay.get()) {
-            currentSmartDriversDelay.set(c);
+        if (c > currentMeanSmartDriversDelayMs.get()) {
+            currentMeanSmartDriversDelayMs.set(c);
         }
     }
 
@@ -1238,6 +1240,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
     public static synchronized KafkaProducer<Long, String> getKafkaProducer() {
         return kafkaProducer;
+
     }
 
     class EmergencyShutdown implements Runnable {

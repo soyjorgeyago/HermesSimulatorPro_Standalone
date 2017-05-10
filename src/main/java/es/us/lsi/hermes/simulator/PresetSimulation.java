@@ -9,11 +9,11 @@ import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-public class NoGuiScheduledSimulation {
+public class PresetSimulation {
 
-    private static final Logger LOG = Logger.getLogger(NoGuiScheduledSimulation.class.getName());
+    private static final Logger LOG = Logger.getLogger(PresetSimulation.class.getName());
 
-    private static Properties noGuiScheduledSimulationProperties;
+    private static final Properties PRESET_SIMULATION_PROPERTIES;
 
     private static Integer distanceFromCenter;
     private static Integer maxPathDistance;
@@ -33,9 +33,9 @@ public class NoGuiScheduledSimulation {
     static {
         LOG.log(Level.INFO, "init() - Se comprueba si existe un archivo de configuración de una simulación sin interfaz gráfica");
 
-        noGuiScheduledSimulationProperties = Util.initProperties("NoGuiScheduledSimulation.properties", LOG);
+        PRESET_SIMULATION_PROPERTIES = Util.initProperties("PresetSimulation.properties");
 
-        if(noGuiScheduledSimulationProperties != null)
+        if(PRESET_SIMULATION_PROPERTIES != null)
             validate();
     }
 
@@ -48,7 +48,7 @@ public class NoGuiScheduledSimulation {
 
         String property;
 
-        property = noGuiScheduledSimulationProperties.getProperty("distance.from.center");
+        property = PRESET_SIMULATION_PROPERTIES.getProperty("distance.from.center");
         if (property != null) {
             distanceFromCenter = Integer.parseInt(property);
             if (distanceFromCenter < 1 || distanceFromCenter > 100) {
@@ -57,7 +57,7 @@ public class NoGuiScheduledSimulation {
             }
         }
 
-        property = noGuiScheduledSimulationProperties.getProperty("max.path.distance");
+        property = PRESET_SIMULATION_PROPERTIES.getProperty("max.path.distance");
         if (property != null) {
             maxPathDistance = Integer.parseInt(property);
             if (maxPathDistance < 1 || maxPathDistance > 100) {
@@ -66,7 +66,7 @@ public class NoGuiScheduledSimulation {
             }
         }
 
-        property = noGuiScheduledSimulationProperties.getProperty("paths.amount");
+        property = PRESET_SIMULATION_PROPERTIES.getProperty("paths.amount");
         if (property != null) {
             pathsAmount = Integer.parseInt(property);
             if (pathsAmount < 1 || pathsAmount > 10) {
@@ -75,7 +75,7 @@ public class NoGuiScheduledSimulation {
             }
         }
 
-        property = noGuiScheduledSimulationProperties.getProperty("drivers.by.path");
+        property = PRESET_SIMULATION_PROPERTIES.getProperty("drivers.by.path");
         if (property != null) {
             driversByPath = Integer.parseInt(property);
             if (driversByPath < 1 || driversByPath > 3000) {
@@ -84,7 +84,7 @@ public class NoGuiScheduledSimulation {
             }
         }
 
-        property = noGuiScheduledSimulationProperties.getProperty("paths.generation.method");
+        property = PRESET_SIMULATION_PROPERTIES.getProperty("paths.generation.method");
         if (property != null) {
             pathsGenerationMethod = Integer.parseInt(property);
             if (pathsGenerationMethod < 0 || pathsGenerationMethod > 1) {
@@ -93,7 +93,7 @@ public class NoGuiScheduledSimulation {
             }
         }
 
-        property = noGuiScheduledSimulationProperties.getProperty("stream.server");
+        property = PRESET_SIMULATION_PROPERTIES.getProperty("stream.server");
         if (property != null) {
             streamServer = Integer.parseInt(property);
             if (streamServer < 0 || streamServer > 1) {
@@ -102,7 +102,7 @@ public class NoGuiScheduledSimulation {
             }
         }
 
-        property = noGuiScheduledSimulationProperties.getProperty("starting.mode");
+        property = PRESET_SIMULATION_PROPERTIES.getProperty("starting.mode");
         if (property != null) {
             startingMode = Integer.parseInt(property);
             if (startingMode < 0 || startingMode > 2) {
@@ -111,12 +111,12 @@ public class NoGuiScheduledSimulation {
             }
         }
 
-        property = noGuiScheduledSimulationProperties.getProperty("retry.on.fail");
+        property = PRESET_SIMULATION_PROPERTIES.getProperty("retry.on.fail");
         if (property != null) {
             retryOnFail = Boolean.parseBoolean(property);
         }
 
-        property = noGuiScheduledSimulationProperties.getProperty("interval.between.retries.s");
+        property = PRESET_SIMULATION_PROPERTIES.getProperty("interval.between.retries.s");
         if (property != null) {
             intervalBetweenRetriesInSeconds = Integer.parseInt(property);
             if (intervalBetweenRetriesInSeconds < 1 || intervalBetweenRetriesInSeconds > 60) {
@@ -125,7 +125,7 @@ public class NoGuiScheduledSimulation {
             }
         }
 
-        property = noGuiScheduledSimulationProperties.getProperty("scheduled.simulation");
+        property = PRESET_SIMULATION_PROPERTIES.getProperty("scheduled.simulation");
         if (property != null) {
             try {
                 scheduledSimulation = Constants.dfFile.parse(property);
@@ -135,23 +135,23 @@ public class NoGuiScheduledSimulation {
             }
         }
 
-        sendResultsToEmail = noGuiScheduledSimulationProperties.getProperty("send.results.to.email");
+        sendResultsToEmail = PRESET_SIMULATION_PROPERTIES.getProperty("send.results.to.email");
         if (!Util.isValidEmail(sendResultsToEmail)) {
             sendResultsToEmail = null;
             LOG.log(Level.SEVERE, "validate() - Valor no válido para 'sendResultsToEmail'. Debe indicarse un e-mail válido");
         }
 
-        property = noGuiScheduledSimulationProperties.getProperty("randomize.behaviour");
+        property = PRESET_SIMULATION_PROPERTIES.getProperty("randomize.behaviour");
         if (property != null) {
             randomizeEachSmartDriverBehaviour = Boolean.parseBoolean(property);
         }
 
-        property = noGuiScheduledSimulationProperties.getProperty("monitor.each.driver");
+        property = PRESET_SIMULATION_PROPERTIES.getProperty("monitor.each.driver");
         if (property != null) {
             monitorEachSmartDriver = Boolean.parseBoolean(property);
         }
         
-        property = noGuiScheduledSimulationProperties.getProperty("retries");
+        property = PRESET_SIMULATION_PROPERTIES.getProperty("retries");
         if (property != null) {
             retries = Integer.parseInt(property);
             if (retries < -1 || retries > 5) {
