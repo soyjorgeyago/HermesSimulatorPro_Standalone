@@ -22,7 +22,5 @@ scheduled.simulation=2017-01-16_09.00.00
 send.results.to.email=jorgeyago.ingeniero@gmail.com
 # Indicates if the behaviour of each SmartDriver is randomized.
 randomize.behaviour=true
-# Indicates if is monitorized each SmartDriver, creating individual CSVs.
-monitor.each.driver=false
 # Number of retries sending an event before being discarded from -1 (means infinite retries) to 5
 retries = 1

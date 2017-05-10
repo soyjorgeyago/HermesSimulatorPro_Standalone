@@ -27,7 +27,6 @@ public class PresetSimulation {
     private static Date scheduledSimulation;
     private static String sendResultsToEmail;
     private static Boolean randomizeEachSmartDriverBehaviour;
-    private static Boolean monitorEachSmartDriver;
     private static Integer retries;
     private static Boolean useRoutesFromHdd;
 
@@ -151,11 +150,6 @@ public class PresetSimulation {
             randomizeEachSmartDriverBehaviour = Boolean.parseBoolean(property);
         }
 
-        property = PRESET_SIMULATION_PROPERTIES.getProperty("monitor.each.driver");
-        if (property != null) {
-            monitorEachSmartDriver = Boolean.parseBoolean(property);
-        }
-
         property = PRESET_SIMULATION_PROPERTIES.getProperty("retries");
         if (property != null) {
             retries = Integer.parseInt(property);
@@ -221,10 +215,6 @@ public class PresetSimulation {
 
     public static Boolean isRandomizeEachSmartDriverBehaviour() {
         return randomizeEachSmartDriverBehaviour;
-    }
-
-    public static Boolean isMonitorEachSmartDriver() {
-        return monitorEachSmartDriver;
     }
 
     public static Integer getRetries() {

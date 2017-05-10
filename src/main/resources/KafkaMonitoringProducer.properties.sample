@@ -1,0 +1,9 @@
+bootstrap.servers=your_Kafka_server_IP:Port
+
+# Producer
+client.id=your_client_producer_id
+key.serializer=key_serializer
+value.serializer=value_serializer
+max.block.ms=blocking_timeout_in_milliseconds
+compression.type=type_of_compression
+max.request.size=maximum_request_size_in_bytes

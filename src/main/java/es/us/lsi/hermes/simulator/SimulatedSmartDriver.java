@@ -2,7 +2,7 @@ package es.us.lsi.hermes.simulator;
 
 import com.google.gson.Gson;
 import es.us.lsi.hermes.csv.CSVEvent;
-import es.us.lsi.hermes.csv.CSVSmartDriverStatus;
+import es.us.lsi.hermes.smartDriver.SmartDriverStatus;
 import es.us.lsi.hermes.location.LocationLog;
 import es.us.lsi.hermes.location.detail.LocationLogDetail;
 import es.us.lsi.hermes.simulator.kafka.Kafka;
@@ -96,11 +96,8 @@ public class SimulatedSmartDriver implements Runnable {
     private final List<ExtendedEvent> pendingVehicleLocations;
     private final List<ExtendedEvent> pendingDataSections;
 
-    // Conjunto de eventos enviados con su marca de tiempo del SmartDriver, para el envío del CSV adjunto al terminar la simulación.
-    private final List<CSVEvent> csvEventList;
-
     // Identificador del 'FutureTask' correspondiente al hilo del SmartDriver.
-    private final int id;
+    private final long id;
     // Identificador único del SmartDriver.
     private final String sha;
 
@@ -111,13 +108,9 @@ public class SimulatedSmartDriver implements Runnable {
     private long maxDelay_ms;
     // Current streaming server response delay in milliseconds.
     private long currentDelay_ms;
-    
-    private boolean monitorize;
+
     private boolean infiniteSimulation;
     private final int retries;
-
-    // Información de monitorización del SmartDriver, para poder generar un CSV y enviarlo por e-mail.
-    private List<CSVSmartDriverStatus> csvStatusList;
 
     /**
      * Constructor para cada instancia de 'SmartDriver'.
@@ -125,8 +118,6 @@ public class SimulatedSmartDriver implements Runnable {
      * @param ll Contendrá los datos de la ruta que debe seguir.
      * @param randomBehaviour Indicará si tendrá una componente aleatoria en su
      * comportamiento. no.
-     * @param monitorize Indicará si se generará un archivo CSV con la
-     * información detallada de cada SmartDriver dureante la simulación.
      * @param infiniteSimulation Indicará si se debe parar la simulación o
      * volver de vuelta cada SmartDriver, cuando llegue a su destino.
      * @param streamServer Indicará el servidor de tramas que recibirá la
@@ -137,7 +128,7 @@ public class SimulatedSmartDriver implements Runnable {
      * @throws MalformedURLException
      * @throws HermesException
      */
-    public SimulatedSmartDriver(int id, LocationLog ll, boolean randomBehaviour, boolean monitorize, boolean infiniteSimulation, int streamServer, int retries) throws MalformedURLException, HermesException {
+    public SimulatedSmartDriver(long id, LocationLog ll, boolean randomBehaviour, boolean infiniteSimulation, int streamServer, int retries) throws MalformedURLException, HermesException {
         this.id = id;
         this.ll = ll;
         this.elapsedSeconds = 0;
@@ -155,7 +146,6 @@ public class SimulatedSmartDriver implements Runnable {
         this.sha = new String(Hex.encodeHex(DigestUtils.sha256(System.currentTimeMillis() + ll.getPerson().getEmail())));
         this.maxDelay_ms = 0l;
         this.currentDelay_ms = 0l;
-        this.monitorize = monitorize;
         this.infiniteSimulation = infiniteSimulation;
 //        // TODO: Probar otros timeouts más altos.
 //        this.surroundingVehiclesConsumer = new SurroundingVehiclesConsumer(Long.parseLong(Kafka.getKafkaProperties().getProperty("consumer.poll.timeout.ms", "1000")), sha, this);
@@ -191,8 +181,6 @@ public class SimulatedSmartDriver implements Runnable {
                 }
             }
         }
-        this.csvEventList = new ArrayList<>();
-        this.csvStatusList = new ArrayList<>();
 //        this.kafkaRecordId = 0;
         this.streamServer = streamServer;
         switch (streamServer) {
@@ -226,19 +214,21 @@ public class SimulatedSmartDriver implements Runnable {
         decreaseEventList(pendingDataSections, "Data Section");
     }
 
-    private void decreaseEventList(List<ExtendedEvent> extendedEvents, String eventType){
+    private void decreaseEventList(List<ExtendedEvent> extendedEvents, String eventType) {
         int total = extendedEvents.size();
         for (int i = total - 1; i >= 0; i--) {
             ExtendedEvent ee = extendedEvents.get(i);
-            if (ee.getRetries() > 0)
+            if (ee.getRetries() > 0) {
                 ee.decreaseRetries();
-            else
+            } else {
                 extendedEvents.remove(i);
             }
+        }
         int discardedEvents = total - extendedEvents.size();
-        if (discardedEvents > 0)
+        if (discardedEvents > 0) {
             LOG.log(Level.INFO, "Se han descartado: {0} '" + eventType + "' por alcanzar el máximo número de reintentos de envío", discardedEvents);
         }
+    }
 
 //    public void startConsumer() {
 //        surroundingVehiclesConsumer.start();
@@ -274,9 +264,6 @@ public class SimulatedSmartDriver implements Runnable {
 
                         LOG.log(Level.FINE, "SimulatedSmartDriver.run() - El usuario ha llegado a su destino en: {0}", DurationFormatUtils.formatDuration(elapsedSeconds * 1000l, "HH:mm:ss", true));
                         SimulatorController.addFinallyPending(pendingVehicleLocations.size() + pendingDataSections.size());
-                        if (monitorize) {
-                            SimulatorController.addCSVEvents(csvEventList);
-                        }
                         finish();
                     } else {
                         // Hemos llegado al final, pero es una simulación infinita. Le damos la vuelta al recorrido y seguimos.
@@ -640,9 +627,6 @@ public class SimulatedSmartDriver implements Runnable {
                 } finally {
                     // Iniciamos el contador de tiempo para el siguiente envío.
                     ztreamySecondsCount = 0;
-                    if (monitorize) {
-                        csvEventList.add(new CSVEvent(event.getEventId(), event.getTimestamp()));
-                    }
                 }
                 break;
             case 1:
@@ -765,7 +749,6 @@ public class SimulatedSmartDriver implements Runnable {
         SimulatorController.increaseGenerated();
 
         ExtendedEvent event = new ExtendedEvent(sha, "application/json", Constants.SIMULATOR_APPLICATION_ID, DATA_SECTION, bodyObject, retries);
-        csvEventList.add(new CSVEvent(event.getEventId(), event.getTimestamp()));
 
         SimulatorController.increaseSends();
         switch (streamServer) {
@@ -901,15 +884,6 @@ public class SimulatedSmartDriver implements Runnable {
                 publisher.close();
             }
         } catch (Exception ex) {
-        } finally {
-            if (monitorize) {
-                // Creamos un archivo temporal para el CSV con la información del SmartDriver.
-                String statusFileName = Constants.dfFile.format(System.currentTimeMillis());
-                String statusFileNameCSV = statusFileName + "_smartDriver_status.csv";
-                LOG.log(Level.INFO, "generateZippedCSV() - Generando archivo CSV con la información del SmartDriver: {0}", statusFileNameCSV);
-                File statusFile = new File(SimulatorController.getTempFolder().toUri().getPath(), statusFileNameCSV);
-                createStatusDataFile(CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, false, statusFile);
-            }
         }
     }
 
@@ -919,49 +893,6 @@ public class SimulatedSmartDriver implements Runnable {
 
     public long getCurrentDelayMs() {
         return currentDelay_ms;
-    }
-
-    private void createStatusDataFile(CsvPreference csvPreference, boolean ignoreHeaders, File file) {
-        ICsvBeanWriter beanWriter = null;
-
-        if (csvStatusList != null && !csvStatusList.isEmpty()) {
-            try {
-
-                beanWriter = new CsvBeanWriter(new FileWriter(file), csvPreference);
-
-                CSVSmartDriverStatus bean = csvStatusList.get(0);
-                // Seleccionamos los atributos que vamos a exportar.
-                final String[] fields = bean.getFields();
-
-                // Aplicamos las características de los campos.
-                final CellProcessor[] processors = bean.getProcessors();
-
-                if (!ignoreHeaders) {
-                    // Ponemos la cabecera con los nombres de los atributos.
-                    if (bean.getHeaders() != null) {
-                        beanWriter.writeHeader(bean.getHeaders());
-                    } else {
-                        beanWriter.writeHeader(fields);
-                    }
-                }
-
-                // Procesamos los elementos.
-                for (final CSVSmartDriverStatus element : csvStatusList) {
-                    beanWriter.write(element, fields, processors);
-                }
-            } catch (IOException ex) {
-                LOG.log(Level.SEVERE, "createStatusDataFile() - Error al exportar a CSV la información de los estados del SmartDriver", ex);
-            } finally {
-                // Cerramos.
-                if (beanWriter != null) {
-                    try {
-                        beanWriter.close();
-                    } catch (IOException ex) {
-                        LOG.log(Level.SEVERE, "createStatusDataFile() - Error al cerrar el 'writer'", ex);
-                    }
-                }
-            }
-        }
     }
 
     class KafkaCallBack implements Callback {
@@ -1000,10 +931,9 @@ public class SimulatedSmartDriver implements Runnable {
                     maxDelay_ms = currentDelay_ms;
                 }
 
-                if (monitorize) {
-                    // Register SmartDriver current status.
-                    csvStatusList.add(new CSVSmartDriverStatus(id, System.currentTimeMillis(), currentDelay_ms, metadata.serializedValueSize()));
-                }
+                // Send SmartDriver current status.
+                String json = new Gson().toJson(new SmartDriverStatus(id, System.currentTimeMillis(), currentDelay_ms, metadata.serializedValueSize()));
+                SimulatorController.getKafkaMonitoringProducer().send(new ProducerRecord<>(Kafka.TOPIC_SMARTDRIVER_STATUS, id, json));
 
                 LOG.log(Level.FINE, "onCompletion() - Message received in Kafka\n - Key: {0}\n - Events: {1}\n - Partition: {2}\n - Offset: {3}\n - Elapsed time: {4} ms", new Object[]{key, events.length, metadata.partition(), metadata.offset(), currentDelay_ms});
                 switch (type) {
