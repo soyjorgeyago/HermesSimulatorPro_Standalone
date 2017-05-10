@@ -29,14 +29,18 @@ public class PresetSimulation {
     private static Boolean randomizeEachSmartDriverBehaviour;
     private static Boolean monitorEachSmartDriver;
     private static Integer retries;
+    private static Boolean useRoutesFromHdd;
 
     static {
-        LOG.log(Level.INFO, "init() - Se comprueba si existe un archivo de configuración de una simulación sin interfaz gráfica");
+        LOG.log(Level.INFO, "PresetSimulation() - Preset configuration init.");
 
         PRESET_SIMULATION_PROPERTIES = Util.initProperties("PresetSimulation.properties");
 
-        if(PRESET_SIMULATION_PROPERTIES != null)
+        if (PRESET_SIMULATION_PROPERTIES != null) {
             validate();
+        } else {
+            LOG.log(Level.SEVERE, "PresetSimulation() - PresetSimulation.properties not found");
+        }
     }
 
     /**
@@ -46,6 +50,7 @@ public class PresetSimulation {
      */
     private static void validate() {
 
+        LOG.log(Level.INFO, "Validating NoGuiScheduledSimulation properties");
         String property;
 
         property = PRESET_SIMULATION_PROPERTIES.getProperty("distance.from.center");
@@ -150,7 +155,7 @@ public class PresetSimulation {
         if (property != null) {
             monitorEachSmartDriver = Boolean.parseBoolean(property);
         }
-        
+
         property = PRESET_SIMULATION_PROPERTIES.getProperty("retries");
         if (property != null) {
             retries = Integer.parseInt(property);
@@ -159,6 +164,15 @@ public class PresetSimulation {
                 LOG.log(Level.SEVERE, "validate() - Valor no válido para 'retries' [-1 a 5]");
             }
         }
+
+        property = PRESET_SIMULATION_PROPERTIES.getProperty("use.routes.from.hdd");
+        if (property != null) {
+            useRoutesFromHdd = Boolean.parseBoolean(property);
+        } else {
+            LOG.log(Level.SEVERE, "use.routes.from.hdd property not found");
+        }
+
+        LOG.log(Level.INFO, "Validation of NoGuiScheduledSimulation properties completed");
     }
 
     public static Integer getDistanceFromCenter() {
@@ -215,5 +229,9 @@ public class PresetSimulation {
 
     public static Integer getRetries() {
         return retries;
+    }
+
+    public static Boolean getUseRoutesFromHdd() {
+        return useRoutesFromHdd;
     }
 }

@@ -206,7 +206,7 @@ public class SimulatedSmartDriver implements Runnable {
                 break;
             case 1:
                 // Inicializamos el 'publisher' de Ztreamy.
-                this.publisher = new PublisherHC(new URL(SimulatorController.ZTREAMY_URL), new JSONSerializer());
+                this.publisher = new PublisherHC(new URL(Constants.ZTREAMY_URL), new JSONSerializer());
                 break;
             default:
                 throw new IllegalArgumentException("Invalid Stream Server option");
@@ -875,7 +875,7 @@ public class SimulatedSmartDriver implements Runnable {
     private void reconnectPublisher() {
         publisher.close();
         try {
-            this.publisher = new PublisherHC(new URL(SimulatorController.ZTREAMY_URL), new JSONSerializer());
+            this.publisher = new PublisherHC(new URL(Constants.ZTREAMY_URL), new JSONSerializer());
         } catch (MalformedURLException e) {
             // No puede pasar, porque habría pasado también en el constructor
             // y no lo ha hecho.
