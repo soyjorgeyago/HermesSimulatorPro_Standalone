@@ -1,8 +1,8 @@
 package es.us.lsi.hermes.simulator;
 
 import es.us.lsi.hermes.util.Constants;
+import es.us.lsi.hermes.util.StorageUtils;
 import es.us.lsi.hermes.util.Util;
-
 import java.text.ParseException;
 import java.util.Date;
 import java.util.Properties;
@@ -29,6 +29,7 @@ public class PresetSimulation {
     private static Boolean randomizeEachSmartDriverBehaviour;
     private static Integer retries;
     private static Boolean useRoutesFromHdd;
+    private static String pathForCsvStorage;
 
     static {
         LOG.log(Level.INFO, "PresetSimulation() - Preset configuration init.");
@@ -166,7 +167,15 @@ public class PresetSimulation {
             LOG.log(Level.SEVERE, "use.routes.from.hdd property not found");
         }
 
-        LOG.log(Level.INFO, "Validation of NoGuiScheduledSimulation properties completed");
+        pathForCsvStorage = PRESET_SIMULATION_PROPERTIES.getProperty("path.csv.storage");
+        if (!StorageUtils.canWrite(pathForCsvStorage)) {
+            pathForCsvStorage = "CSV_storage";
+            LOG.log(Level.SEVERE, "path.csv.storage property not declared or not writable, using default: {0}", pathForCsvStorage);
+        } else {
+            LOG.log(Level.INFO, "path.csv.storage set to: {0}", pathForCsvStorage);
+        }
+
+        LOG.log(Level.INFO, "Validation of PresetSimulation properties completed");
     }
 
     public static Integer getDistanceFromCenter() {
@@ -223,5 +232,9 @@ public class PresetSimulation {
 
     public static Boolean getUseRoutesFromHdd() {
         return useRoutesFromHdd;
+    }
+
+    public static String getPathForCsvStorage() {
+        return pathForCsvStorage;
     }
 }

@@ -28,20 +28,20 @@ public class CSVUtils {
 
     private static final Logger LOG = Logger.getLogger(SimulatorController.class.getName());
 
-    public static final Path PERMANENT_FOLDER = Util.getOrCreateCsvFolder();
+    public static final Path PERMANENT_FOLDER = StorageUtils.getOrCreateCsvFolder();
 
     public static void createRouteDataFile(String fileNameHeader, List<ICSVBean> locationList) {
-        File routeFile = generateFile(fileNameHeader, "_path.csv", true);
+        File routeFile = StorageUtils.generateCsvFile(fileNameHeader, "_path.csv", true);
         exportToCSV(CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, false, routeFile, locationList);
     }
 
     private static void createStatusDataFile(String formattedCurrentTime, List<ICSVBean> statusList) {
-        File statusFile = generateFile(formattedCurrentTime, "_status.csv", false);
+        File statusFile = StorageUtils.generateCsvFile(formattedCurrentTime, "_status.csv", false);
         exportToCSV(CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, false, statusFile, statusList);
     }
 
     private static void createEventsDataFile(String formattedCurrentTime, List<ICSVBean> eventList) {
-        File eventsFile = generateFile(formattedCurrentTime, "_events.csv", false);
+        File eventsFile = StorageUtils.generateCsvFile(formattedCurrentTime, "_events.csv", false);
         exportToCSV(CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, false, eventsFile, eventList);
     }
 
@@ -90,14 +90,6 @@ public class CSVUtils {
         }
     }
 
-    private static File generateFile(String fileNameHeader, String fileNameWithExtension, boolean permanent) {
-        Path tempFolder = permanent ? PERMANENT_FOLDER : SimulatorController.getTempFolder();
-        String eventsFileNameCSV = fileNameHeader + fileNameWithExtension;
-
-        LOG.log(Level.INFO, "generateZippedCSV() - Generando archivo CSV: {0}", eventsFileNameCSV);
-        return new File(tempFolder.toUri().getPath(), eventsFileNameCSV);
-    }
-
     public static List<String> generateZippedCSV(List<ICSVBean> csvEventList, List<ICSVBean> csvStatusList) {
         List<String> zipFilesPathsList = new ArrayList<>();
 
@@ -143,11 +135,18 @@ public class CSVUtils {
 
         List<List<ICSVBean>> extractedRoutes = new ArrayList<>();
 
+        int csvCounter = 0;
         if (temporalFolderFiles != null) {
             for (File aux : temporalFolderFiles) {
-                System.out.println(aux);
-                extractedRoutes.add(extractSinglePath(aux, CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE));
+                if(aux.getName().contains(".csv")){
+                    extractedRoutes.add(extractSinglePath(aux, CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE));
+                    csvCounter++;
+                }
             }
+        }
+
+        if(csvCounter == 0) {
+            LOG.log(Level.SEVERE, "No CSV files found under the directory: {0}", PERMANENT_FOLDER);
         }
 
         //TODO Remove show

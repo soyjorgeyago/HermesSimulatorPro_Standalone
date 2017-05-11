@@ -375,16 +375,17 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     private void requestPaths(List<Callable<String>> pathRequestTaskSublist) {
         try {
             // Clearing directory before saving CSV files
-            Util.clearFolderContent(CSVUtils.PERMANENT_FOLDER);
+            StorageUtils.clearFolderContent(CSVUtils.PERMANENT_FOLDER);
 
             List<Future<String>> futureTaskList = PathRequestWebService.submitAllTask(pathRequestTaskSublist);
-            for (int i = 0; i < futureTaskList.size(); i++) {
+            int pathCounter = 0;
+            for (Future<String> aFutureTaskList : futureTaskList) {
                 // Creamos un objeto de localizaciones de 'SmartDriver'.
                 LocationLog ll = new LocationLog();
 
                 // Procesamos el JSON de respuesta, en función de la plataforma a la que le hayamos hecho la petición.
                 try {
-                    String json = futureTaskList.get(i).get();
+                    String json = aFutureTaskList.get();
 
                     if (pathsGenerationMethod.equals(Paths_Generation_Method.GOOGLE)) {
                         /////////////////
@@ -432,7 +433,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 locationLogList.add(ll);
 
                 // RDL: Once a full route is created, store it on routes folder
-                CSVUtils.createRouteDataFile(String.valueOf(i+1), ll.getLocationLogDetailList());
+                CSVUtils.createRouteDataFile(String.valueOf(pathCounter = pathCounter + 1), ll.getLocationLogDetailList());
             }
         } catch (InterruptedException ex) {
             LOG.log(Level.SEVERE, "Error obtaining the path's JSON", ex);
@@ -633,7 +634,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         kafkaProducer = new KafkaProducer<>(kafkaProducerProperties);
         kafkaMonitorigProducer = new KafkaProducer<>(kafkaMonitoringProducerProperties);
 //        resetSimulation();    // TODO Do we need to reset the sim??
-        tempFolder = Util.createTempFolder();
+        tempFolder = StorageUtils.createTempFolder();
         startSimulationTime = System.currentTimeMillis();
         LOG.log(Level.INFO, "executeSimulation() - Comienzo de la simulación: {0}", Constants.dfISO8601.format(startSimulationTime));
         LOG.log(Level.INFO, "executeSimulation() - Envío de tramas a: {0}", Stream_Server.values()[streamServer.ordinal() % 2].name());
