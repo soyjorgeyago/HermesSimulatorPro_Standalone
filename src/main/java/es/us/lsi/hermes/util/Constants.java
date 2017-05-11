@@ -12,7 +12,6 @@ public class Constants {
 
 //  APP RELATED
     public static final String SIMULATOR_APPLICATION_ID = "SmartDriver";
-    public static final String DEFAULT_EMAIL = "jorgeyago.ingeniero@gmail.com";
 
     public static final int ZIP_FILE_SIZE = 26214400;
 
@@ -47,4 +46,8 @@ public class Constants {
 
     public static final int MAX_ACCEPTABLE_DELAY_S = Integer.parseInt(HermesSimulatorConfig.getHermesSimulatorProperties().getProperty("max.acceptable.delay.s", "5"));
 
+    
+    public enum Paths_Generation_Method {
+        GOOGLE, OPENSTREETMAP
+    }
 }

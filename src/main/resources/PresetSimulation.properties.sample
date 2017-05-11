@@ -24,3 +24,7 @@ send.results.to.email=jorgeyago.ingeniero@gmail.com
 randomize.behaviour=true
 # Number of retries sending an event before being discarded from -1 (means infinite retries) to 5
 retries = 1
+# Indicates if the system should generate new routes or use the existing ones.
+use.routes.from.hdd=false
+# Path to store the exported CSV routes to the HDD
+path.csv.storage=CSV_storage
