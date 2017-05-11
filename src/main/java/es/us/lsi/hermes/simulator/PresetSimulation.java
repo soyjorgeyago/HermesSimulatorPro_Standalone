@@ -4,6 +4,7 @@ import es.us.lsi.hermes.util.Constants;
 import es.us.lsi.hermes.util.Util;
 
 import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Properties;
 import java.util.logging.Level;
@@ -15,20 +16,20 @@ public class PresetSimulation {
 
     private static final Properties PRESET_SIMULATION_PROPERTIES;
 
-    private static Integer distanceFromCenter;
-    private static Integer maxPathDistance;
-    private static Integer pathsAmount;
-    private static Integer driversByPath;
-    private static Integer pathsGenerationMethod;
-    private static Integer streamServer;
-    private static Integer startingMode;
-    private static Boolean retryOnFail;
-    private static Integer intervalBetweenRetriesInSeconds;
+    private static int distanceFromCenter;
+    private static int maxPathDistance;
+    private static int pathsAmount;
+    private static int driversByPath;
+    private static int pathsGenerationMethod;
+    private static int streamServer;
+    private static int startingMode;
+    private static boolean retryOnFail;
+    private static int intervalBetweenRetriesInSeconds;
     private static Date scheduledSimulation;
     private static String sendResultsToEmail;
-    private static Boolean randomizeEachSmartDriverBehaviour;
-    private static Integer retries;
-    private static Boolean useRoutesFromHdd;
+    private static boolean randomizeEachSmartDriverBehaviour;
+    private static int retries;
+    private static boolean useRoutesFromHdd;
 
     static {
         LOG.log(Level.INFO, "PresetSimulation() - Preset configuration init.");
@@ -43,165 +44,111 @@ public class PresetSimulation {
     }
 
     /**
-     * Valida el archivo de propiedades completo. Si alguna propiedad no es
-     * válida, se notifica por log. No se usará el archivo de propiedades si
-     * algún valor es incorrecto.
+     * Validates the 'PresetSimulation.properties' file. If invalid value is set
+     * in any attribute, it will be used the default configuration.
      */
     private static void validate() {
 
-        LOG.log(Level.INFO, "Validating NoGuiScheduledSimulation properties");
-        String property;
+        LOG.log(Level.INFO, "Validating 'PresetSimulation.properties'");
 
-        property = PRESET_SIMULATION_PROPERTIES.getProperty("distance.from.center");
-        if (property != null) {
-            distanceFromCenter = Integer.parseInt(property);
-            if (distanceFromCenter < 1 || distanceFromCenter > 100) {
-                distanceFromCenter = null;
-                LOG.log(Level.SEVERE, "validate() - Valor no válido para 'distanceFromCenter' [1 a 100]");
-            }
-        }
-
-        property = PRESET_SIMULATION_PROPERTIES.getProperty("max.path.distance");
-        if (property != null) {
-            maxPathDistance = Integer.parseInt(property);
-            if (maxPathDistance < 1 || maxPathDistance > 100) {
-                maxPathDistance = null;
-                LOG.log(Level.SEVERE, "validate() - Valor no válido para 'maxPathDistance' [1 a 100]");
-            }
-        }
-
-        property = PRESET_SIMULATION_PROPERTIES.getProperty("paths.amount");
-        if (property != null) {
-            pathsAmount = Integer.parseInt(property);
-            if (pathsAmount < 1 || pathsAmount > 10) {
-                pathsAmount = null;
-                LOG.log(Level.SEVERE, "validate() - Valor no válido para 'pathsAmount' [1 a 10]");
-            }
-        }
-
-        property = PRESET_SIMULATION_PROPERTIES.getProperty("drivers.by.path");
-        if (property != null) {
-            driversByPath = Integer.parseInt(property);
-            if (driversByPath < 1 || driversByPath > 3000) {
-                driversByPath = null;
-                LOG.log(Level.SEVERE, "validate() - Valor no válido para 'driversByPath' [1 a 3000]");
-            }
-        }
-
-        property = PRESET_SIMULATION_PROPERTIES.getProperty("paths.generation.method");
-        if (property != null) {
-            pathsGenerationMethod = Integer.parseInt(property);
-            if (pathsGenerationMethod < 0 || pathsGenerationMethod > 1) {
-                pathsGenerationMethod = null;
-                LOG.log(Level.SEVERE, "validate() - Valor no válido para 'pathsGenerationMethod' [0 para Google o 1 para OpenStreetMap]");
-            }
-        }
-
-        property = PRESET_SIMULATION_PROPERTIES.getProperty("stream.server");
-        if (property != null) {
-            streamServer = Integer.parseInt(property);
-            if (streamServer < 0 || streamServer > 1) {
-                streamServer = null;
-                LOG.log(Level.SEVERE, "validate() - Valor no válido para 'streamServer' [0 para Kafka o 1 para Ztreamy]");
-            }
-        }
-
-        property = PRESET_SIMULATION_PROPERTIES.getProperty("starting.mode");
-        if (property != null) {
-            startingMode = Integer.parseInt(property);
-            if (startingMode < 0 || startingMode > 2) {
-                startingMode = null;
-                LOG.log(Level.SEVERE, "validate() - Valor no válido para 'startingMode' [0 para aleatorio, 1 para lineal o 2 para todos a la vez]");
-            }
-        }
-
-        property = PRESET_SIMULATION_PROPERTIES.getProperty("retry.on.fail");
-        if (property != null) {
-            retryOnFail = Boolean.parseBoolean(property);
-        }
-
-        property = PRESET_SIMULATION_PROPERTIES.getProperty("interval.between.retries.s");
-        if (property != null) {
-            intervalBetweenRetriesInSeconds = Integer.parseInt(property);
-            if (intervalBetweenRetriesInSeconds < 1 || intervalBetweenRetriesInSeconds > 60) {
-                intervalBetweenRetriesInSeconds = null;
-                LOG.log(Level.SEVERE, "validate() - Valor no válido para 'intervalBetweenRetriesInSeconds' [1 a 60]");
-            }
-        }
-
-        property = PRESET_SIMULATION_PROPERTIES.getProperty("scheduled.simulation");
-        if (property != null) {
-            try {
-                scheduledSimulation = Constants.dfFile.parse(property);
-            } catch (ParseException ex) {
-                scheduledSimulation = null;
-                LOG.log(Level.SEVERE, "validate() - Formato de fecha no válida para 'scheduledSimulation' [yyyy-MM-dd_HH.mm.ss]");
-            }
-        }
-
-        sendResultsToEmail = PRESET_SIMULATION_PROPERTIES.getProperty("send.results.to.email");
-        if (!Util.isValidEmail(sendResultsToEmail)) {
-            sendResultsToEmail = null;
-            LOG.log(Level.SEVERE, "validate() - Valor no válido para 'sendResultsToEmail'. Debe indicarse un e-mail válido");
-        }
-
-        property = PRESET_SIMULATION_PROPERTIES.getProperty("randomize.behaviour");
-        if (property != null) {
-            randomizeEachSmartDriverBehaviour = Boolean.parseBoolean(property);
-        }
-
-        property = PRESET_SIMULATION_PROPERTIES.getProperty("retries");
-        if (property != null) {
-            retries = Integer.parseInt(property);
-            if (retries < -1 || retries > 5) {
-                retries = null;
-                LOG.log(Level.SEVERE, "validate() - Valor no válido para 'retries' [-1 a 5]");
-            }
-        }
-
-        property = PRESET_SIMULATION_PROPERTIES.getProperty("use.routes.from.hdd");
-        if (property != null) {
-            useRoutesFromHdd = Boolean.parseBoolean(property);
-        } else {
-            LOG.log(Level.SEVERE, "use.routes.from.hdd property not found");
-        }
-
-        LOG.log(Level.INFO, "Validation of NoGuiScheduledSimulation properties completed");
+        distanceFromCenter = getIntValue("distance.from.center", 1, 100, 10);
+        maxPathDistance = getIntValue("max.path.distance", 1, 100, 10);
+        pathsAmount = getIntValue("paths.amount", 1, 10, 5);
+        driversByPath = getIntValue("drivers.by.path", 1, 3000, 10);
+        pathsGenerationMethod = getIntValue("paths.generation.method", 0, 1, 0);
+        streamServer = getIntValue("stream.server", 0, 1, 0);
+        startingMode = getIntValue("starting.mode", 0, 2, 1);
+        retryOnFail = getBooleanValue("retry.on.fail", true);
+        intervalBetweenRetriesInSeconds = getIntValue("interval.between.retries.s", 1, 60, 10);
+        scheduledSimulation = getDateValue("scheduled.simulation", Constants.dfFile);
+        sendResultsToEmail = getEmailValue("send.results.to.email", "jorgeyago.ingeniero@gmail.com");
+        randomizeEachSmartDriverBehaviour = getBooleanValue("randomize.behaviour", true);
+        retries = getIntValue("retries", -1, 5, 1);
+        useRoutesFromHdd = getBooleanValue("use.routes.from.hdd", false);
     }
 
-    public static Integer getDistanceFromCenter() {
+    private static int getIntValue(String propertyName, int minimum, int maximum, int defaultValue) {
+        String property = PRESET_SIMULATION_PROPERTIES.getProperty(propertyName, String.valueOf(defaultValue));
+        int value = defaultValue;
+
+        try {
+            int v = Integer.parseInt(property);
+            if (v < minimum || v > maximum) {
+                LOG.log(Level.SEVERE, "validate() - Invalid value for {0}. Should be [{1} to {2}] - Using default value: {3}", new Object[]{propertyName, minimum, maximum, defaultValue});
+            } else {
+                value = v;
+            }
+        } catch (NumberFormatException ex) {
+            LOG.log(Level.SEVERE, "validate() - Invalid value for {0}. Should be [{1} to {2}] - Using default value: {3}", new Object[]{propertyName, minimum, maximum, defaultValue});
+        }
+
+        return value;
+    }
+
+    private static boolean getBooleanValue(String propertyName, boolean defaultValue) {
+        String property = PRESET_SIMULATION_PROPERTIES.getProperty(propertyName, String.valueOf(defaultValue));
+        return Boolean.parseBoolean(property);
+    }
+
+    private static Date getDateValue(String propertyName, SimpleDateFormat sdf) {
+        String property = PRESET_SIMULATION_PROPERTIES.getProperty(propertyName);
+        Date value = null;
+
+        if (property != null) {
+            try {
+                value = sdf.parse(property);
+            } catch (ParseException ex) {
+                LOG.log(Level.SEVERE, "validate() - Invalid date format for {0}. Should be [yyyy-MM-dd_HH.mm.ss]", propertyName);
+            }
+        }
+
+        return value;
+    }
+
+    private static String getEmailValue(String propertyName, String defaultValue) {
+        String property = PRESET_SIMULATION_PROPERTIES.getProperty(propertyName, defaultValue);
+
+        if (!Util.isValidEmail(property)) {
+            LOG.log(Level.SEVERE, "validate() - Invalid e-mail format for {0}. Should be a valid e-mail. Using default");
+            return null;
+        }
+
+        return property;
+    }
+
+    public static int getDistanceFromCenter() {
         return distanceFromCenter;
     }
 
-    public static Integer getMaxPathDistance() {
+    public static int getMaxPathDistance() {
         return maxPathDistance;
     }
 
-    public static Integer getPathsAmount() {
+    public static int getPathsAmount() {
         return pathsAmount;
     }
 
-    public static Integer getDriversByPath() {
+    public static int getDriversByPath() {
         return driversByPath;
     }
 
-    public static Integer getPathsGenerationMethod() {
+    public static int getPathsGenerationMethod() {
         return pathsGenerationMethod;
     }
 
-    public static Integer getStreamServer() {
+    public static int getStreamServer() {
         return streamServer;
     }
 
-    public static Integer getStartingMode() {
+    public static int getStartingMode() {
         return startingMode;
     }
 
-    public static Boolean isRetryOnFail() {
+    public static boolean isRetryOnFail() {
         return retryOnFail;
     }
 
-    public static Integer getIntervalBetweenRetriesInSeconds() {
+    public static int getIntervalBetweenRetriesInSeconds() {
         return intervalBetweenRetriesInSeconds;
     }
 
@@ -213,15 +160,15 @@ public class PresetSimulation {
         return sendResultsToEmail;
     }
 
-    public static Boolean isRandomizeEachSmartDriverBehaviour() {
+    public static boolean isRandomizeEachSmartDriverBehaviour() {
         return randomizeEachSmartDriverBehaviour;
     }
 
-    public static Integer getRetries() {
+    public static int getRetries() {
         return retries;
     }
 
-    public static Boolean getUseRoutesFromHdd() {
+    public static boolean isUseRoutesFromHdd() {
         return useRoutesFromHdd;
     }
 }

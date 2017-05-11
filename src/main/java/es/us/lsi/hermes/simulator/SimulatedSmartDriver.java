@@ -1,7 +1,6 @@
 package es.us.lsi.hermes.simulator;
 
 import com.google.gson.Gson;
-import es.us.lsi.hermes.csv.CSVEvent;
 import es.us.lsi.hermes.smartDriver.SmartDriverStatus;
 import es.us.lsi.hermes.location.LocationLog;
 import es.us.lsi.hermes.location.detail.LocationLogDetail;
@@ -11,8 +10,6 @@ import es.us.lsi.hermes.smartDriver.RoadSection;
 import es.us.lsi.hermes.util.Constants;
 import es.us.lsi.hermes.util.HermesException;
 import es.us.lsi.hermes.util.Util;
-import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
@@ -36,10 +33,6 @@ import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.supercsv.cellprocessor.ift.CellProcessor;
-import org.supercsv.io.CsvBeanWriter;
-import org.supercsv.io.ICsvBeanWriter;
-import org.supercsv.prefs.CsvPreference;
 import ztreamy.JSONSerializer;
 import ztreamy.PublisherHC;
 
@@ -376,7 +369,7 @@ public class SimulatedSmartDriver implements Runnable {
             if (locationChanged && isTimeToSend()) {
                 // Sólo si cambiamos de posición y han pasado más de 10 segundos, se envía información a 'Ztreamy'.
                 sendEvery10SecondsIfLocationChanged(currentLocationLogDetail);
-            } else if (SimulatorController.retryOnFail && !pendingVehicleLocations.isEmpty()) {
+            } else if (PresetSimulation.isRetryOnFail() && !pendingVehicleLocations.isEmpty()) {
 
                 // Vemos si ha pasado suficiente tiempo entre reintentos.
                 if (isTimeToRetry()) {
@@ -446,7 +439,7 @@ public class SimulatedSmartDriver implements Runnable {
             // Se enviará un resumen cada 500 metros.
             if (sectionDistance >= ZTREAMY_SEND_INTERVAL_METERS) {
                 sendDataSection();
-            } else if (SimulatorController.retryOnFail && !pendingDataSections.isEmpty()) {
+            } else if (PresetSimulation.isRetryOnFail() && !pendingDataSections.isEmpty()) {
 
                 // Vemos si ha pasado suficiente tiempo entre reintentos.
                 if (isTimeToRetry()) {
@@ -575,7 +568,7 @@ public class SimulatedSmartDriver implements Runnable {
     }
 
     private boolean isTimeToRetry() {
-        return ztreamySecondsBetweenRetries >= SimulatorController.secondsBetweenRetries;
+        return ztreamySecondsBetweenRetries >= PresetSimulation.getIntervalBetweenRetriesInSeconds();
     }
 
     private void sendEvery10SecondsIfLocationChanged(LocationLogDetail currentLocationLogDetail) {
@@ -617,7 +610,7 @@ public class SimulatedSmartDriver implements Runnable {
                 } catch (Exception ex) {
                     if (!finished) {
                         SimulatorController.increaseErrors();
-                        if (SimulatorController.retryOnFail) {
+                        if (PresetSimulation.isRetryOnFail()) {
                             // Si ha fallado, almacenamos el 'Vehicle Location' que se debería haber enviado y lo intentamos luego.
                             pendingVehicleLocations.add(event);
                         }
@@ -639,7 +632,7 @@ public class SimulatedSmartDriver implements Runnable {
                         locationChanged = false;
                     } else {
                         SimulatorController.increaseNoOkSends();
-                        if (SimulatorController.retryOnFail) {
+                        if (PresetSimulation.isRetryOnFail()) {
                             // Si ha fallado, almacenamos el 'Vehicle Location' que se debería haber enviado y lo intentamos luego.
                             pendingVehicleLocations.add(event);
                         }
@@ -652,7 +645,7 @@ public class SimulatedSmartDriver implements Runnable {
                 } catch (IOException ex) {
                     if (!finished) {
                         SimulatorController.increaseErrors();
-                        if (SimulatorController.retryOnFail) {
+                        if (PresetSimulation.isRetryOnFail()) {
                             // Si ha fallado, almacenamos el 'Vehicle Location' que se debería haber enviado y lo intentamos luego.
                             pendingVehicleLocations.add(event);
                         }
@@ -663,7 +656,7 @@ public class SimulatedSmartDriver implements Runnable {
                 } catch (Exception ex) {
                     if (!finished) {
                         SimulatorController.increaseErrors();
-                        if (SimulatorController.retryOnFail) {
+                        if (PresetSimulation.isRetryOnFail()) {
                             // Si ha fallado, almacenamos el 'Vehicle Location' que se debería haber enviado y lo intentamos luego.
                             pendingVehicleLocations.add(event);
                         }
@@ -772,7 +765,7 @@ public class SimulatedSmartDriver implements Runnable {
                 } catch (Exception ex) {
                     if (!finished) {
                         SimulatorController.increaseErrors();
-                        if (SimulatorController.retryOnFail) {
+                        if (PresetSimulation.isRetryOnFail()) {
                             // Si ha fallado, almacenamos el 'Data Section' que se debería haber enviado y lo intentamos luego.
                             pendingDataSections.add(event);
                         }
@@ -796,7 +789,7 @@ public class SimulatedSmartDriver implements Runnable {
                         LOG.log(Level.FINE, "sendDataSectionToZtreamy() - Datos de sección de trayecto simulado enviada correctamante. SmartDriver: {0}", ll.getPerson().getEmail());
                     } else {
                         SimulatorController.increaseNoOkSends();
-                        if (SimulatorController.retryOnFail) {
+                        if (PresetSimulation.isRetryOnFail()) {
                             // Si ha fallado, almacenamos el 'Data Section' que se debería haber enviado y lo intentamos luego.
                             pendingDataSections.add(event);
                         }
@@ -809,7 +802,7 @@ public class SimulatedSmartDriver implements Runnable {
                 } catch (IOException ex) {
                     if (!finished) {
                         SimulatorController.increaseErrors();
-                        if (SimulatorController.retryOnFail) {
+                        if (PresetSimulation.isRetryOnFail()) {
                             // Si ha fallado, almacenamos el 'Data Section' que se debería haber enviado y lo intentamos luego.
                             pendingDataSections.add(event);
                         }
@@ -820,7 +813,7 @@ public class SimulatedSmartDriver implements Runnable {
                 } catch (Exception ex) {
                     if (!finished) {
                         SimulatorController.increaseErrors();
-                        if (SimulatorController.retryOnFail) {
+                        if (PresetSimulation.isRetryOnFail()) {
                             // Si ha fallado, almacenamos el 'Data Section' que se debería haber enviado y lo intentamos luego.
                             pendingDataSections.add(event);
                         }
@@ -973,14 +966,14 @@ public class SimulatedSmartDriver implements Runnable {
                         break;
                     case NORMAL_VEHICLE_LOCATION:
                         SimulatorController.increaseErrors();
-                        if (SimulatorController.retryOnFail) {
+                        if (PresetSimulation.isRetryOnFail()) {
                             // If fails to send the 'Vehicle Location' stream, it is stored in order to be sent later.
                             pendingVehicleLocations.addAll(Arrays.asList(events));
                         }
                         break;
                     case NORMAL_DATA_SECTION:
                         SimulatorController.increaseErrors();
-                        if (SimulatorController.retryOnFail) {
+                        if (PresetSimulation.isRetryOnFail()) {
                             // If fails to send the 'Data Section' stream, it is stored in order to be sent later.
                             pendingDataSections.addAll(Arrays.asList(events));
                         }

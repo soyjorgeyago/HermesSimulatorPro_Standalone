@@ -85,22 +85,8 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     // Por defecto será en tiempo real.
     private static Time_Rate timeRate = Time_Rate.X1;
 
-    // Mecanismos de generación de trayectos.
-    public enum Paths_Generation_Method {
-        GOOGLE, OPENSTREETMAP
-    }
-    private static Paths_Generation_Method pathsGenerationMethod = Paths_Generation_Method.GOOGLE;
+    private static Constants.Paths_Generation_Method pathsGenerationMethod;
 
-    // Distancia del trayecto.
-    private static int distance = 10;
-    // Distancia desde el centro de Sevilla.
-    private static int distanceFromSevilleCenter = 1;
-    // Número de trayectos a generar.
-    private static int pathsAmount = 1;
-    // Indicará si se intenta reeenvíar los datos a Ztreamy.
-    static boolean retryOnFail = true;
-    // Indicará los segundos que habrá que esperar entre reintentos en caso de fallo.
-    static int secondsBetweenRetries = 10;
     // Los trayectos generados puede que no tengan la densidad de puntos necesaria para tener una posición en cada segundo de la simulación.
     // Además, cada 'SmartDriver' tendrá sus características de conducción, con lo que si fuera más rápido harían falta menos puntos y si fuera más lento
     // harían falta más puntos. Se calculará la interpolación tomando la velocidad mínima de 10Km/h.
@@ -111,9 +97,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     private static int simulatedSmartDrivers = 1;
     static long startSimulationTime = 0l;
     private static long endSimulationTime = 0l;
-
-    private static String email = Constants.DEFAULT_EMAIL;
-    private static boolean enableGUI = false;
 
     private static int maxSmartDrivers = 20000;
 
@@ -218,51 +201,18 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     }
 
     private void initPresetSimulation() {
-        LOG.log(Level.INFO, "initPresetSimulation() - Se carga la configuración del simulador indicada en el archivo de propiedades.");
-        if (PresetSimulation.getDistanceFromCenter() != null) {
-            setDistanceFromSevilleCenter(PresetSimulation.getDistanceFromCenter());
-        }
-        if (PresetSimulation.getMaxPathDistance() != null) {
-            setDistance(PresetSimulation.getMaxPathDistance());
-        }
-        if (PresetSimulation.getPathsAmount() != null) {
-            setPathsAmount(PresetSimulation.getPathsAmount());
-        }
-        if (PresetSimulation.getDriversByPath() != null) {
-            setSimulatedSmartDrivers(PresetSimulation.getDriversByPath());
-        }
+        LOG.log(Level.INFO, "initPresetSimulation() - It will be loaded the configuration set in the 'PresetSimulation.properties' file.");
+        LOG.log(Level.INFO, "initPresetSimulation() - Default rule: If the property is not set in the properties file or is not valid, it will be get the inner default behaviour.");
+        
+        // Default rule: If the property is not set in the properties file or is not valid, it will be get the inner default behaviour.
+        
+        
         // Tiene que haber una coherencia entre trayectos y conductores, para no saturar el sistema.
-        relatePathsAndSmartDrivers(pathsAmount);
-        if (PresetSimulation.getPathsGenerationMethod() != null) {
-            setPathsGenerationMethod(PresetSimulation.getPathsGenerationMethod());
-        }
-        if (PresetSimulation.getStreamServer() != null) {
-            setStreamServer(PresetSimulation.getStreamServer());
-        }
-        if (PresetSimulation.getStartingMode() != null) {
-            setStartingMode(PresetSimulation.getStartingMode());
-        }
-        if (PresetSimulation.isRetryOnFail() != null) {
-            setRetryOnFail(PresetSimulation.isRetryOnFail());
-        }
-        if (PresetSimulation.getIntervalBetweenRetriesInSeconds() != null) {
-            setSecondsBetweenRetries(PresetSimulation.getIntervalBetweenRetriesInSeconds());
-        }
-        if (PresetSimulation.getSendResultsToEmail() != null) {
-            setEmail(PresetSimulation.getSendResultsToEmail());
-        }
-        if (PresetSimulation.getScheduledSimulation() != null) {
-            setScheduledDate(PresetSimulation.getScheduledSimulation());
-        }
-        if (PresetSimulation.isRandomizeEachSmartDriverBehaviour() != null) {
-            setRandomizeEachSmartDriverBehaviour(PresetSimulation.isRandomizeEachSmartDriverBehaviour());
-        }
-        if (PresetSimulation.getRetries() != null) {
-            setRetries(PresetSimulation.getRetries());
-        }
-
+        relatePathsAndSmartDrivers(PresetSimulation.getPathsAmount());
+        setPathsGenerationMethod(PresetSimulation.getPathsGenerationMethod());
+        
         // Use pre-calculated routes or get new ones if requested
-        if (PresetSimulation.getUseRoutesFromHdd()) {
+        if (PresetSimulation.isUseRoutesFromHdd()) {
             CSVUtils.extractSimulatedPaths(); // TODO convert imported to generated
         } else {
             generateSimulatedPaths();
@@ -280,9 +230,9 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         List<Callable<String>> pathRequestTaskList = new ArrayList<>();
 
         // Crearemos tantas tareas como trayectos se quieran generar.
-        for (int i = 0; i < pathsAmount; i++) {
-            final Location destination = PathUtils.getRandomLocation(Constants.SEVILLE.getLat(), Constants.SEVILLE.getLng(), distanceFromSevilleCenter);
-            final Location origin = PathUtils.getRandomLocation(destination.getLat(), destination.getLng(), distance);
+        for (int i = 0; i < PresetSimulation.getPathsAmount(); i++) {
+            final Location destination = PathUtils.getRandomLocation(Constants.SEVILLE.getLat(), Constants.SEVILLE.getLng(), PresetSimulation.getDistanceFromCenter());
+            final Location origin = PathUtils.getRandomLocation(destination.getLat(), destination.getLng(), PresetSimulation.getMaxPathDistance());
 
             // Tarea para la petición de un trayecto.
             Callable callable = () -> {
@@ -291,13 +241,13 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 Location d = destination;
                 while (jsonPath == null) {
                     try {
-                        if (pathsGenerationMethod.equals(Paths_Generation_Method.GOOGLE)) {
+                        if (pathsGenerationMethod.equals(Constants.Paths_Generation_Method.GOOGLE)) {
                             /////////////////
                             // GOOGLE MAPS //
                             /////////////////
 
                             jsonPath = IOUtils.toString(new URL("https://maps.googleapis.com/maps/api/directions/json?origin=" + o.getLat() + "," + o.getLng() + "&destination=" + d.getLat() + "," + d.getLng()), "UTF-8");
-                        } else if (pathsGenerationMethod.equals(Paths_Generation_Method.OPENSTREETMAP)) {
+                        } else if (pathsGenerationMethod.equals(Constants.Paths_Generation_Method.OPENSTREETMAP)) {
                             ///////////////////
                             // OPENSTREETMAP //
                             ///////////////////
@@ -307,8 +257,8 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                     } catch (IOException ex) {
                         LOG.log(Level.SEVERE, "generateSimulatedPaths() - " + pathsGenerationMethod.name() + " - Error I/O: {0}", ex.getMessage());
                         // Generamos nuevos puntos aleatorios hasta que sean aceptados.
-                        o = PathUtils.getRandomLocation(Constants.SEVILLE.getLat(), Constants.SEVILLE.getLng(), distanceFromSevilleCenter);
-                        d = PathUtils.getRandomLocation(origin.getLat(), origin.getLng(), distance);
+                        o = PathUtils.getRandomLocation(Constants.SEVILLE.getLat(), Constants.SEVILLE.getLng(), PresetSimulation.getDistanceFromCenter());
+                        d = PathUtils.getRandomLocation(origin.getLat(), origin.getLng(), PresetSimulation.getMaxPathDistance());
                     }
                 }
 
@@ -348,19 +298,17 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
             requestPaths(pathRequestTaskList.subList(pathRequestTaskList.size() - remaining, pathRequestTaskList.size()));
         }
 
-        // Paramos el 'listener'
+        // Stop the listener.
         PathRequestWebService.shutdown();
-        LOG.log(Level.INFO, "generateSimulatedPaths() - Trayectos generados: {0}", locationLogList.size());
         currentState = State.READY_TO_SIMULATE;
-        if (locationLogList.size() < pathsAmount) {
-            if (pathsAmount > 0) {
-                // Asignamos la cantidad de trayectos válidos que han podido obtenerse, a pesar de que el usuario haya solicitado una cantidad mayor.
-                pathsAmount = locationLogList.size();
-                maxSmartDrivers = Constants.MAX_THREADS / pathsAmount;
+        if (locationLogList.size() < PresetSimulation.getPathsAmount()) {
+            if (PresetSimulation.getPathsAmount() > 0) {
+                // Log the generated paths, although the user requested a higher amount.
+                LOG.log(Level.SEVERE, "generateSimulatedPaths() - Only {0} paths could be generated", locationLogList.size());
+                maxSmartDrivers = Constants.MAX_THREADS / locationLogList.size();
                 if (simulatedSmartDrivers > maxSmartDrivers) {
                     simulatedSmartDrivers = maxSmartDrivers;
                 }
-                LOG.log(Level.INFO, bundle.getString("PathsAmountAvailable"));
             } else {
                 LOG.log(Level.INFO, bundle.getString("UnableToGetPathsFromService"));
             }
@@ -378,7 +326,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 try {
                     String json = futureTaskList.get(i).get();
 
-                    if (pathsGenerationMethod.equals(Paths_Generation_Method.GOOGLE)) {
+                    if (pathsGenerationMethod.equals(Constants.Paths_Generation_Method.GOOGLE)) {
                         /////////////////
                         // GOOGLE MAPS //
                         /////////////////
@@ -493,30 +441,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         return person;
     }
 
-    public int getDistance() {
-        return distance;
-    }
-
-    public void setDistance(int d) {
-        distance = d;
-    }
-
-    public int getDistanceFromSevilleCenter() {
-        return distanceFromSevilleCenter;
-    }
-
-    public void setDistanceFromSevilleCenter(int dfsc) {
-        distanceFromSevilleCenter = dfsc;
-    }
-
-    public int getPathsAmount() {
-        return pathsAmount;
-    }
-
-    public void setPathsAmount(int ta) {
-        pathsAmount = ta;
-    }
-
     private void relatePathsAndSmartDrivers(int pathAmount) {
         maxSmartDrivers = Constants.MAX_THREADS / pathAmount;
         if (simulatedSmartDrivers > maxSmartDrivers) {
@@ -528,32 +452,12 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         return maxSmartDrivers;
     }
 
-    public boolean isRetryOnFail() {
-        return retryOnFail;
-    }
-
-    public void setRetryOnFail(boolean rof) {
-        retryOnFail = rof;
-    }
-
-    public int getSecondsBetweenRetries() {
-        return secondsBetweenRetries;
-    }
-
-    public void setSecondsBetweenRetries(int sbr) {
-        secondsBetweenRetries = sbr;
-    }
-
-    public int getPathsGenerationMethod() {
-        return pathsGenerationMethod.ordinal();
-    }
-
     public void setPathsGenerationMethod(int value) {
         try {
-            pathsGenerationMethod = Paths_Generation_Method.values()[value];
+            pathsGenerationMethod = Constants.Paths_Generation_Method.values()[value];
         } catch (Exception ex) {
             // Si no fuera un valor válido, establecemos un valor por defecto.
-            pathsGenerationMethod = Paths_Generation_Method.GOOGLE;
+            pathsGenerationMethod = Constants.Paths_Generation_Method.GOOGLE;
         }
     }
 
@@ -642,7 +546,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         startSimulationTime = System.currentTimeMillis();
         LOG.log(Level.INFO, "executeSimulation() - Comienzo de la simulación: {0}", Constants.dfISO8601.format(startSimulationTime));
         LOG.log(Level.INFO, "executeSimulation() - Envío de tramas a: {0}", Stream_Server.values()[streamServer.ordinal() % 2].name());
-        LOG.log(Level.INFO, "executeSimulation() - Condiciones:\n-> Velocidad de simulación: {0}. Ejecución en tiempo real: {1}\n-> ¿Reenviar tramas fallidas?: {2}\n-> Segundos entre reintentos={3}\n-> Modo de inicio de los SmartDrivers={4}", new Object[]{timeRate.name(), timeRate.equals(Time_Rate.X1), retryOnFail, secondsBetweenRetries, startingMode.name()});
+        LOG.log(Level.INFO, "executeSimulation() - Condiciones:\n-> Velocidad de simulación: {0}. Ejecución en tiempo real: {1}\n-> ¿Reenviar tramas fallidas?: {2}\n-> Segundos entre reintentos={3}\n-> Modo de inicio de los SmartDrivers={4}", new Object[]{timeRate.name(), timeRate.equals(Time_Rate.X1), PresetSimulation.isRetryOnFail(), PresetSimulation.getIntervalBetweenRetriesInSeconds(), startingMode.name()});
         LOG.log(Level.INFO, "executeSimulation() - Se inicia el consumidor de análisis de vehículos cercanos");
         surroundingVehiclesConsumer = new SurroundingVehiclesConsumer(this);
         surroundingVehiclesConsumer.start();
@@ -773,10 +677,10 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 surroundingVehiclesConsumer.stopConsumer();
                 String simulationSummary;
                 if (interrupted || ERRORS.get() > 0 || NOT_OK.get() > 0) {
-                    simulationSummary = MessageFormat.format("RESULTADO DE LA SIMULACION:\n\n-> Servidor de tramas={0}\n\n-> Tramas generadas={1}\n-> Envíos realizados={2}\n-> Oks={3}\n-> NoOks={4}\n-> Errores={5}\n-> Recuperados={6}\n-> No reenviados finalmente={7}\n-> Hilos restantes={8}\n-> Trayectos={9}\n-> Distancia={10}\n-> Instancias SmartDriver por trayecto={11}\n-> Reintentar fallidos={12}\n-> Segundos entre reintentos={13}\n-> Máximo retraso temporal={14}s\n\n", new Object[]{Stream_Server.values()[streamServer.ordinal() % 2].name(), GENERATED, SENT, OK, NOT_OK, ERRORS, RECOVERED, FINALLY_PENDING, threadPool.getQueue().size(), locationLogList.size(), distance, simulatedSmartDrivers, retryOnFail, secondsBetweenRetries, Constants.df2Decimals.format(maxSmartDriversDelayMs.get() / 1000.0d)});
+                    simulationSummary = MessageFormat.format("RESULTADO DE LA SIMULACION:\n\n-> Servidor de tramas={0}\n\n-> Tramas generadas={1}\n-> Envíos realizados={2}\n-> Oks={3}\n-> NoOks={4}\n-> Errores={5}\n-> Recuperados={6}\n-> No reenviados finalmente={7}\n-> Hilos restantes={8}\n-> Trayectos={9}\n-> Distancia máxima={10}\n-> Instancias SmartDriver por trayecto={11}\n-> Reintentar fallidos={12}\n-> Segundos entre reintentos={13}\n-> Máximo retraso temporal={14}s\n\n", new Object[]{Stream_Server.values()[streamServer.ordinal() % 2].name(), GENERATED, SENT, OK, NOT_OK, ERRORS, RECOVERED, FINALLY_PENDING, threadPool.getQueue().size(), locationLogList.size(), PresetSimulation.getMaxPathDistance(), simulatedSmartDrivers, PresetSimulation.isRetryOnFail(), PresetSimulation.getIntervalBetweenRetriesInSeconds(), Constants.df2Decimals.format(maxSmartDriversDelayMs.get() / 1000.0d)});
                     LOG.log(Level.SEVERE, "finishSimulation() - {0}", simulationSummary);
                 } else {
-                    simulationSummary = MessageFormat.format("RESULTADO DE LA SIMULACION:\n\nLos envíos se han realizado correctamente:\n\n-> Servidor de tramas={0}\n\n-> Tramas generadas={1}\n-> Oks={2}\n-> Hilos restantes={3}\n-> Trayectos={4}\n-> Distancia={5}\n-> Instancias SmartDriver por trayecto={6}\n-> Reintentar fallidos={7}\n-> Segundos entre reintentos={8}\n-> Máximo retraso temporal={9}s\n\n", new Object[]{Stream_Server.values()[streamServer.ordinal() % 2].name(), GENERATED, OK, threadPool.getQueue().size(), locationLogList.size(), distance, simulatedSmartDrivers, retryOnFail, secondsBetweenRetries, Constants.df2Decimals.format(maxSmartDriversDelayMs.get() / 1000.0d)});
+                    simulationSummary = MessageFormat.format("RESULTADO DE LA SIMULACION:\n\nLos envíos se han realizado correctamente:\n\n-> Servidor de tramas={0}\n\n-> Tramas generadas={1}\n-> Oks={2}\n-> Hilos restantes={3}\n-> Trayectos={4}\n-> Distancia máxima={5}\n-> Instancias SmartDriver por trayecto={6}\n-> Reintentar fallidos={7}\n-> Segundos entre reintentos={8}\n-> Máximo retraso temporal={9}s\n\n", new Object[]{Stream_Server.values()[streamServer.ordinal() % 2].name(), GENERATED, OK, threadPool.getQueue().size(), locationLogList.size(), PresetSimulation.getMaxPathDistance(), simulatedSmartDrivers, PresetSimulation.isRetryOnFail(), PresetSimulation.getIntervalBetweenRetriesInSeconds(), Constants.df2Decimals.format(maxSmartDriversDelayMs.get() / 1000.0d)});
                     LOG.log(Level.INFO, "finishSimulation() - {0}", simulationSummary);
                 }
 
@@ -786,7 +690,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
                 int i = 1;
                 String body = "<html><head><title></title></head><body>" + (interrupted ? "<h1 style=\"color:red;\">SIMULACION INTERRUMPIDA</h1>" : "") + "<p>" + simulationSummary.replaceAll("\n", "<br/>") + "</p><p>" + timeSummary + "</p><p>Un saludo.</p></body></html>";
-                Email.generateAndSendEmail(email, "FIN DE SIMULACION " + getComputerName(), body);
+                Email.generateAndSendEmail(PresetSimulation.getSendResultsToEmail(), "FIN DE SIMULACION " + getComputerName(), body);
             }
         } catch (MessagingException ex) {
             LOG.log(Level.SEVERE, "finishSimulation() - No se ha podido enviar el e-mail con los resultados de la simulación", ex.getCause());
@@ -856,22 +760,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
     public static void logCurrentStatus() {
         LOG.log(Level.SEVERE, "logCurrentStatus() - ESTADO ACTUAL: Tramas generadas={0}|Envíos realizados={1}|Oks={2}|NoOks={3}|Errores={4}|Recuperados={5}|No reenviados finalmente={6}|Hilos restantes={7}|Máximo retraso temporal total={8}ms|Retraso temporal actual={9}ms", new Object[]{GENERATED.get(), SENT.get(), OK.get(), NOT_OK.get(), ERRORS.get(), RECOVERED.get(), FINALLY_PENDING.get(), threadPool.getQueue().size(), maxSmartDriversDelayMs.get(), currentMeanSmartDriversDelayMs.get()});
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public void setEmail(String e) {
-        email = e;
-    }
-
-    public boolean isEnableGUI() {
-        return enableGUI;
-    }
-
-    public void setEnableGUI(boolean e) {
-        enableGUI = e;
     }
 
     public boolean isInterpolate() {
