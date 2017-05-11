@@ -1,9 +1,13 @@
 package es.us.lsi.hermes.location.detail;
 
+import es.us.lsi.hermes.csv.ICSVBean;
 import es.us.lsi.hermes.util.Constants;
+import org.supercsv.cellprocessor.ParseDouble;
+import org.supercsv.cellprocessor.ift.CellProcessor;
+
 import java.io.Serializable;
 
-public class LocationLogDetail implements Serializable {
+public class LocationLogDetail implements Serializable, ICSVBean {
 
     private static final long serialVersionUID = 1L;
     private Integer locationLogDetailId;
@@ -21,6 +25,7 @@ public class LocationLogDetail implements Serializable {
         this.heartRate = 0;
         this.rrTime = 0;
         this.secondsToBeHere = 0;
+        init();
     }
 
     public LocationLogDetail(double lat, double lng, Double speed) {
@@ -117,4 +122,34 @@ public class LocationLogDetail implements Serializable {
 //
 //        return sb.toString();
 //    }
+
+    // ------------------------- CSV IMP/EXP -------------------------
+
+    private CellProcessor[] cellProcessors;
+    private String[] fields;
+    private String[] headers;
+
+    @Override
+    public void init() {
+        cellProcessors = new CellProcessor[]{new ParseDouble(), new ParseDouble(), new ParseDouble()};
+
+        headers = new String[]{"Latitude", "Longitude", "Speed"};
+
+        fields = new String[]{"latitude", "longitude", "speed"};
+    }
+
+    @Override
+    public CellProcessor[] getProcessors() {
+        return cellProcessors;
+    }
+
+    @Override
+    public String[] getFields() {
+        return fields;
+    }
+
+    @Override
+    public String[] getHeaders() {
+        return headers;
+    }
 }

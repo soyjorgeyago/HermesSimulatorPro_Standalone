@@ -7,7 +7,6 @@ import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
 import com.google.maps.model.LatLng;
 import es.us.lsi.hermes.analysis.Vehicle;
-import es.us.lsi.hermes.csv.CSVLocation;
 import es.us.lsi.hermes.csv.CSVSimulatorStatus;
 import es.us.lsi.hermes.csv.ICSVBean;
 import es.us.lsi.hermes.location.detail.LocationLogDetail;
@@ -106,7 +105,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     // harían falta más puntos. Se calculará la interpolación tomando la velocidad mínima de 10Km/h.
     static boolean interpolate = true;
 
-    private static ArrayList<LocationLog> locationLogList;
+    private static List<LocationLog> locationLogList;
 
     private static int simulatedSmartDrivers = 1;
     static long startSimulationTime = 0l;
@@ -140,19 +139,19 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     // Directorio temporal para almacenar los archivos generados.
     private static Path tempFolder;
 
-    private final ResourceBundle bundle;
+    private static ResourceBundle bundle;
 
-    private static enum Stream_Server {
+    private enum Stream_Server {
         KAFKA, ZTREAMY, FIRST_KAFKA_THEN_ZTREAMY, FIRST_ZTREAMY_THEN_KAFKA
-    };
+    }
     private static Stream_Server streamServer = Stream_Server.KAFKA;
 
     private static Date scheduledDate;
 
     // Mecanismos de inicio de los conductores.
-    public static enum SmartDrivers_Starting_Mode {
+    public enum SmartDrivers_Starting_Mode {
         ALEATORY, LINEAL, SAME_TIME
-    };
+    }
 
     // Por defecto, establecemos que el inicio de los usuarios siga una progresión lineal.
     private static SmartDrivers_Starting_Mode startingMode = SmartDrivers_Starting_Mode.LINEAL;
@@ -180,7 +179,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         LOG.log(Level.INFO, "init() - Inicialización del controlador del simulador");
 
         // Cargamos los recursos de internacionalización.
-        this.bundle = ResourceBundle.getBundle("Bundle");
+        bundle = ResourceBundle.getBundle("Bundle");
 
         initAttributes();
 
@@ -263,10 +262,13 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
         // Use pre-calculated routes or get new ones if requested
         if (PresetSimulation.getUseRoutesFromHdd()) {
-            CSVUtils.extractSimulatedPaths(); // TODO convert imported to generated
+            locationLogList = CSVUtils.extractSimulatedPaths();
         } else {
             generateSimulatedPaths();
         }
+
+        // Initialize path related attributes to perform the simulation
+        setupVariablesWithPaths(locationLogList.size());
 
         if (scheduledDate != null) {
             scheduledSimulation();
@@ -285,7 +287,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
             final Location origin = PathUtils.getRandomLocation(destination.getLat(), destination.getLng(), distance);
 
             // Tarea para la petición de un trayecto.
-            Callable callable = () -> {
+            Callable<String> callable = () -> {
                 String jsonPath = null;
                 Location o = origin;
                 Location d = destination;
@@ -311,7 +313,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                         d = PathUtils.getRandomLocation(origin.getLat(), origin.getLng(), distance);
                     }
                 }
-
                 return jsonPath;
             };
 
@@ -322,21 +323,21 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         // Tomamos la marca de tiempo actual. Nos servirá para espaciar las peticiones de trayectos a Google, ya que no se pueden hacer más de 10 peticiones por segundo con la cuenta gratuita.
         // Aplicamos el mismo criterio para OpenStreetMap, aunque no sea necesario en principio.
         long timeMark = System.currentTimeMillis();
+        //TODO Review changes with commit a634226 just in case
         // Ejecutamos el listado de tareas, que se dividirá en los hilos y con las condiciones que haya configurados en 'PathRequestWebService'.
-        for (int i = 0; i <= pathRequestTaskList.size(); i += Constants.REQUEST_PACK_SIZE) {
-            if (i > 0) {
-                long elapsedTime = System.currentTimeMillis() - timeMark;
-                if (elapsedTime < 1500) {
-                    try {
-                        // Antes de hacer la siguiente petición, esperamos 1,5 segundos, para cumplir las restricciones de Google.
-                        Thread.sleep(1500 - elapsedTime);
-                    } catch (InterruptedException ex) {
-                    } finally {
-                        timeMark = System.currentTimeMillis();
-                    }
+        for (int i = Constants.REQUEST_PACK_SIZE; i <= pathRequestTaskList.size(); i += Constants.REQUEST_PACK_SIZE) {
+            long elapsedTime = System.currentTimeMillis() - timeMark;
+            if (elapsedTime < 1500) {
+                try {
+                    // Antes de hacer la siguiente petición, esperamos 1,5 segundos, para cumplir las restricciones de Google.
+                    Thread.sleep(1500 - elapsedTime);
+                } catch (InterruptedException ex) {
+                    // Login not necessary
+                } finally {
+                    timeMark = System.currentTimeMillis();
                 }
-                requestPaths(pathRequestTaskList.subList(i - Constants.REQUEST_PACK_SIZE, i));
             }
+            requestPaths(pathRequestTaskList.subList(i - Constants.REQUEST_PACK_SIZE, i));
         }
         int remaining = pathRequestTaskList.size() % Constants.REQUEST_PACK_SIZE;
         if (remaining != 0) {
@@ -344,18 +345,22 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 // Antes de hacer la siguiente petición, esperamos 1 segundo, para cumplir las restricciones de Google.
                 Thread.sleep(1000);
             } catch (InterruptedException ex) {
+                // Login not necessary
             }
             requestPaths(pathRequestTaskList.subList(pathRequestTaskList.size() - remaining, pathRequestTaskList.size()));
         }
 
         // Paramos el 'listener'
         PathRequestWebService.shutdown();
-        LOG.log(Level.INFO, "generateSimulatedPaths() - Trayectos generados: {0}", locationLogList.size());
+    }
+
+    private static void setupVariablesWithPaths(int locationLogListSize){
+        LOG.log(Level.INFO, "generateSimulatedPaths() - Trayectos generados: {0}", locationLogListSize);
         currentState = State.READY_TO_SIMULATE;
-        if (locationLogList.size() < pathsAmount) {
+        if (locationLogListSize < pathsAmount) {
             if (pathsAmount > 0) {
                 // Asignamos la cantidad de trayectos válidos que han podido obtenerse, a pesar de que el usuario haya solicitado una cantidad mayor.
-                pathsAmount = locationLogList.size();
+                pathsAmount = locationLogListSize;
                 maxSmartDrivers = Constants.MAX_THREADS / pathsAmount;
                 if (simulatedSmartDrivers > maxSmartDrivers) {
                     simulatedSmartDrivers = maxSmartDrivers;
@@ -369,6 +374,9 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
     private void requestPaths(List<Callable<String>> pathRequestTaskSublist) {
         try {
+            // Clearing directory before saving CSV files
+            Util.clearFolderContent(CSVUtils.PERMANENT_FOLDER);
+
             List<Future<String>> futureTaskList = PathRequestWebService.submitAllTask(pathRequestTaskSublist);
             for (int i = 0; i < futureTaskList.size(); i++) {
                 // Creamos un objeto de localizaciones de 'SmartDriver'.
@@ -389,7 +397,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                                 .create();
                         GeocodedWaypoints gcwp = gson.fromJson(json, GeocodedWaypoints.class);
                         PathUtils.createPathGoogleMaps(gcwp, ll);
-
                     } else {
                         ///////////////////
                         // OPENSTREETMAP //
@@ -418,30 +425,27 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 }
 
                 // Creamos un usuario simulado, al que le asignaremos el trayecto.
-                Person person = createSimPerson();
+                Person person = Person.createSimimulatedPerson();
                 ll.setPerson(person);
                 ll.setFilename(person.getFullName());
 
                 locationLogList.add(ll);
 
                 // RDL: Once a full route is created, store it on routes folder
-                List<ICSVBean> locationList = new ArrayList<>();
-                for (LocationLogDetail lld : ll.getLocationLogDetailList()) {
-                    locationList.add(new CSVLocation(lld.getLatitude(), lld.getLongitude()));
-                }
-
-                CSVUtils.createRouteDataFile(String.valueOf(i + 1), locationList);
+                CSVUtils.createRouteDataFile(String.valueOf(i+1), ll.getLocationLogDetailList());
             }
         } catch (InterruptedException ex) {
-            LOG.log(Level.SEVERE, "Error al obtener el JSON de la ruta", ex);
+            LOG.log(Level.SEVERE, "Error obtaining the path's JSON", ex);
         }
     }
 
-    private List<LocationLogDetail> interpolateLocationLogDetailList(List<LocationLogDetail> lldList) {
-        List<LocationLogDetail> interpolatedLocationLogDetailList = new ArrayList<>();
+    private List<ICSVBean> interpolateLocationLogDetailList(List<ICSVBean> lldList) {
+        List<ICSVBean> interpolatedLocationLogDetailList = new ArrayList<>();
 
         for (int i = 0; i < lldList.size() - 1; i++) {
-            interpolatedLocationLogDetailList.addAll(interpolateBetween(lldList.get(i), lldList.get(i + 1)));
+            LocationLogDetail lld1 = (LocationLogDetail) lldList.get(i),
+                            lld2 = (LocationLogDetail) lldList.get(i+1);
+            interpolatedLocationLogDetailList.addAll(interpolateBetween(lld1, lld2));
         }
 
         return interpolatedLocationLogDetailList;
@@ -451,8 +455,8 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         currentState = State.CONFIG_CHANGED;
     }
 
-    private List<LocationLogDetail> interpolateBetween(LocationLogDetail lld1, LocationLogDetail lld2) {
-        List<LocationLogDetail> lldListBetween = new ArrayList<>();
+    private List<ICSVBean> interpolateBetween(LocationLogDetail lld1, LocationLogDetail lld2) {
+        List<ICSVBean> lldListBetween = new ArrayList<>();
 
         double pointsDistance = Util.distanceHaversine(lld1.getLatitude(), lld1.getLongitude(), lld2.getLatitude(), lld2.getLongitude());
 
@@ -482,15 +486,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         lldListBetween.add(lld2);
 
         return lldListBetween;
-    }
-
-    private Person createSimPerson() {
-        Person person = new Person();
-        String name = "Sim_" + System.currentTimeMillis();
-        person.setFullName(name);
-        person.setEmail(name + "@sim.com");
-
-        return person;
     }
 
     public int getDistance() {
@@ -636,8 +631,8 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         currentState = State.SIMULATING;
 
         kafkaProducer = new KafkaProducer<>(kafkaProducerProperties);
-        kafkaMonitorigProducer= new KafkaProducer<>(kafkaMonitoringProducerProperties);
-        
+        kafkaMonitorigProducer = new KafkaProducer<>(kafkaMonitoringProducerProperties);
+//        resetSimulation();    // TODO Do we need to reset the sim??
         tempFolder = Util.createTempFolder();
         startSimulationTime = System.currentTimeMillis();
         LOG.log(Level.INFO, "executeSimulation() - Comienzo de la simulación: {0}", Constants.dfISO8601.format(startSimulationTime));
@@ -656,7 +651,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
             long id = 0l;
             for (int i = 0; i < locationLogList.size(); i++) {
                 LocationLog ll = locationLogList.get(i);
-                LocationLogDetail smartDriverPosition = ll.getLocationLogDetailList().get(0);
+                LocationLogDetail smartDriverPosition = (LocationLogDetail) ll.getLocationLogDetailList().get(0);
                 LatLng latLng = new LatLng(smartDriverPosition.getLatitude(), smartDriverPosition.getLongitude());
 
                 // Para el caso del modo de inicio LINEAL, si hay más de 10 SmartDrivers, se toma el 10% para repartir su inicio durante 50 segundos.
@@ -733,7 +728,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         initAttributes();
 
         initThreadPool();
-
     }
 
     public int getSimulatedSpeed() {
@@ -815,7 +809,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 // Es un 'bug' que aún está en estado aabierto en Kafka.
                 // https://issues.streamsets.com/browse/SDC-4925
             }
-            
+
              if (kafkaMonitorigProducer != null) {
                 kafkaMonitorigProducer.flush();
                 kafkaMonitorigProducer.close();
@@ -1027,7 +1021,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     public static synchronized KafkaProducer<Long, String> getKafkaProducer() {
         return kafkaProducer;
     }
-    
+
     public static synchronized KafkaProducer<Long, String> getKafkaMonitoringProducer() {
         return kafkaMonitorigProducer;
     }

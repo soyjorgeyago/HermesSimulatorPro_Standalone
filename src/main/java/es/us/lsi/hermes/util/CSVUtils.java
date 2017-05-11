@@ -1,20 +1,21 @@
 package es.us.lsi.hermes.util;
 
-import es.us.lsi.hermes.csv.CSVLocation;
 import es.us.lsi.hermes.csv.ICSVBean;
+import es.us.lsi.hermes.location.LocationLog;
+import es.us.lsi.hermes.location.detail.LocationLogDetail;
+import es.us.lsi.hermes.person.Person;
 import es.us.lsi.hermes.simulator.SimulatorController;
 import net.lingala.zip4j.core.ZipFile;
 import net.lingala.zip4j.exception.ZipException;
 import net.lingala.zip4j.model.ZipParameters;
 import net.lingala.zip4j.util.Zip4jConstants;
-import org.supercsv.cellprocessor.constraint.NotNull;
+import org.supercsv.cellprocessor.ParseDouble;
 import org.supercsv.cellprocessor.ift.CellProcessor;
 import org.supercsv.io.CsvBeanReader;
 import org.supercsv.io.CsvBeanWriter;
 import org.supercsv.io.ICsvBeanReader;
 import org.supercsv.io.ICsvBeanWriter;
 import org.supercsv.prefs.CsvPreference;
-
 import java.io.*;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -27,21 +28,21 @@ public class CSVUtils {
 
     private static final Logger LOG = Logger.getLogger(SimulatorController.class.getName());
 
-    private static final Path PERMANENT_FOLDER = Util.getOrCreateCsvFolder();
+    public static final Path PERMANENT_FOLDER = Util.getOrCreateCsvFolder();
 
     public static void createRouteDataFile(String fileNameHeader, List<ICSVBean> locationList) {
-        File routeFile = generateFile(fileNameHeader, "_route.csv", true);
+        File routeFile = generateFile(fileNameHeader, "_path.csv", true);
         exportToCSV(CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, false, routeFile, locationList);
     }
 
-    private static void createStatusDataFile(String formattedCurrentTime, List<ICSVBean> itemList) {
+    private static void createStatusDataFile(String formattedCurrentTime, List<ICSVBean> statusList) {
         File statusFile = generateFile(formattedCurrentTime, "_status.csv", false);
-        exportToCSV(CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, false, statusFile, itemList);
+        exportToCSV(CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, false, statusFile, statusList);
     }
 
-    private static void createEventsDataFile(String formattedCurrentTime, List<ICSVBean> itemList) {
+    private static void createEventsDataFile(String formattedCurrentTime, List<ICSVBean> eventList) {
         File eventsFile = generateFile(formattedCurrentTime, "_events.csv", false);
-        exportToCSV(CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, false, eventsFile, itemList);
+        exportToCSV(CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, false, eventsFile, eventList);
     }
 
     private static void exportToCSV(CsvPreference csvPreference, boolean ignoreHeaders, File file, List<ICSVBean> itemList) {
@@ -133,9 +134,9 @@ public class CSVUtils {
         return zipFilesPathsList;
     }
 
-    public static void extractSimulatedPaths() {
+    public static List<LocationLog> extractSimulatedPaths() {
         if (PERMANENT_FOLDER == null) {
-            return;
+            return null;
         }
 
         File[] temporalFolderFiles = PERMANENT_FOLDER.toFile().listFiles();
@@ -149,10 +150,33 @@ public class CSVUtils {
             }
         }
 
+        //TODO Remove show
         // USE the extracted data
         for (List<ICSVBean> aux : extractedRoutes) {
             System.out.println(aux);
         }
+
+        // Set the extracted routes as the DataSet to use
+        List<LocationLog> locationLogList = new ArrayList<>();
+
+        for(List<ICSVBean> route : extractedRoutes){
+            LocationLog routeLog = new LocationLog();
+
+            routeLog.setLocationLogId(0);
+            routeLog.setDistance(0);
+            routeLog.setDuration(0);
+
+            // TODO LocationLogDetails has a LocationLog and vice-versa
+            routeLog.setLocationLogDetailList(route);
+
+            // Creamos un usuario simulado, al que le asignaremos el trayecto.
+            Person person = Person.createSimimulatedPerson();
+            routeLog.setPerson(person);
+            routeLog.setFilename(person.getFullName());
+
+            locationLogList.add(routeLog);
+        }
+        return locationLogList;
     }
 
     private static List<ICSVBean> extractSinglePath(File file, CsvPreference csvPreference) {
@@ -164,11 +188,11 @@ public class CSVUtils {
 
             // the header elements are used to map the values to the bean (names must match)
             final String[] header = beanReader.getHeader(true);
-            final CellProcessor[] processors = new CellProcessor[]{new NotNull(), new NotNull()};
+            final CellProcessor[] processors = new CellProcessor[]{new ParseDouble(), new ParseDouble(), new ParseDouble()};
 
             // While there are new locations, save those into the route
-            CSVLocation locationTemp;
-            while ((locationTemp = beanReader.read(CSVLocation.class, header, processors)) != null) {
+            LocationLogDetail locationTemp;
+            while ((locationTemp = beanReader.read(LocationLogDetail.class, header, processors)) != null) {
                 extractedRoute.add(locationTemp);
             }
 

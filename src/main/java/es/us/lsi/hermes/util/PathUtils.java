@@ -1,5 +1,6 @@
 package es.us.lsi.hermes.util;
 
+import es.us.lsi.hermes.csv.ICSVBean;
 import es.us.lsi.hermes.google.directions.*;
 import es.us.lsi.hermes.location.LocationLog;
 import es.us.lsi.hermes.location.detail.LocationLogDetail;
@@ -12,7 +13,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class PathUtils {
-    
+
     private static final Logger LOG = Logger.getLogger(PathUtils.class.getName());
 
     public static void createPathOpenStreetMaps(List<PositionSimulatedSpeed> pssList, LocationLog ll) {
@@ -20,7 +21,7 @@ public class PathUtils {
             return;
 
         // Listado de posiciones que componen el trayecto de SmartDriver.
-        ArrayList<LocationLogDetail> locationLogDetailList = new ArrayList<>();
+        ArrayList<ICSVBean> locationLogDetailList = new ArrayList<>();
 
         double pathDistance = 0.0d;
         int pathDurationInSeconds = 0;
@@ -64,7 +65,6 @@ public class PathUtils {
 
         ll.setDistance(pathDistance);
         ll.setDuration(pathDurationInSeconds);
-
     }
 
     public static void createPathGoogleMaps(GeocodedWaypoints gcwp, LocationLog ll) {
@@ -82,7 +82,7 @@ public class PathUtils {
         Leg l = r.getLegs().get(0);
 
         // Listado de posiciones que componen el trayecto de SmartDriver.
-        ArrayList<LocationLogDetail> locationLogDetailList = new ArrayList<>();
+        ArrayList<ICSVBean> locationLogDetailList = new ArrayList<>();
 
         double speed;
         double pathDistance = 0.0d;
@@ -121,7 +121,6 @@ public class PathUtils {
 
         // Asignamos el listado de posiciones.
         ll.setLocationLogDetailList(locationLogDetailList);
-
         ll.setDistance(pathDistance);
         ll.setDuration(pathDurationInSeconds);
     }

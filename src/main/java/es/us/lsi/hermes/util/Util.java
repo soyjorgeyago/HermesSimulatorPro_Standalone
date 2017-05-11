@@ -1,5 +1,7 @@
 package es.us.lsi.hermes.util;
 
+import jdk.nashorn.internal.ir.annotations.Ignore;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -30,11 +32,7 @@ public class Util {
     }
 
     public static boolean isValidEmail(String email) {
-        if (email == null || email.length() == 0) {
-            return false;
-        }
-
-        return email.matches(EMAIL_PATTERN);
+        return email != null && email.length() > 0 && email.matches(EMAIL_PATTERN);
     }
 
     public static boolean isAlphaNumeric(String s) {
@@ -60,9 +58,7 @@ public class Util {
                 * Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2));
         double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         // El radio de la Tierra es, aproximadamente, 6.371 Km, es decir, 6.371.000 metros.
-        double dist = 6371000.0d * c;
-
-        return dist;
+        return 6371000.0d * c;
     }
 
     /**
@@ -129,6 +125,16 @@ public class Util {
         } catch (IOException ex) {
             LOG.log(Level.SEVERE, "createFolder() - No se ha podido generar el directorio", ex);
             return null;
+        }
+    }
+
+    public static void clearFolderContent(Path folderPath){
+        try{
+            for (File pathFile : folderPath.toFile().listFiles()) {
+                pathFile.delete();
+            }
+        } catch (NullPointerException | SecurityException  ex) {
+            LOG.log(Level.SEVERE, "Error deleting the files located at path: " + folderPath, ex);
         }
     }
 
