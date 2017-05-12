@@ -29,12 +29,13 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class PathUtils {
-    
+
     private static final Logger LOG = Logger.getLogger(PathUtils.class.getName());
 
     public static void createPathOpenStreetMaps(List<PositionSimulatedSpeed> pssList, LocationLog ll) {
-        if (pssList == null || pssList.isEmpty())
+        if (pssList == null || pssList.isEmpty()) {
             return;
+        }
 
         // Listado de posiciones que componen el trayecto de SmartDriver.
         ArrayList<ICSVBean> locationLogDetailList = new ArrayList<>();
@@ -49,8 +50,9 @@ public class PathUtils {
         for (PositionSimulatedSpeed pss : pssList) {
             List<Double> currentCoordinates = pss.getPosition().getCoordinates();
             // Comprobamos que vengan las coordenadas.
-            if (currentCoordinates == null || currentCoordinates.isEmpty() || currentCoordinates.size() < 2)
+            if (currentCoordinates == null || currentCoordinates.isEmpty() || currentCoordinates.size() < 2) {
                 continue;
+            }
 
             // Creamos un nodo del trayecto, como si usásemos SmartDriver.
             LocationLogDetail lld = new LocationLogDetail(currentCoordinates.get(1), currentCoordinates.get(0), pss.getSpeed());
@@ -87,13 +89,15 @@ public class PathUtils {
 
         // Analizamos la información obtenida de la consulta a Google Directions.
         // Nuestra petición sólo devolverá una ruta.
-        if (gcwp.getRoutes() == null || gcwp.getRoutes().isEmpty())
+        if (gcwp.getRoutes() == null || gcwp.getRoutes().isEmpty()) {
             return;
+        }
 
         Route r = gcwp.getRoutes().get(0);
         // Comprobamos que traiga información de la ruta.
-        if (r.getLegs() == null)
+        if (r.getLegs() == null) {
             return;
+        }
 
         Leg l = r.getLegs().get(0);
 
@@ -169,9 +173,7 @@ public class PathUtils {
         return result;
     }
 
-    public static List<LocationLog> generateSimulatedPaths() {
-        List<LocationLog> locationLogList = new ArrayList<>();
-
+    public static void generateSimulatedPaths() {
         // Lista con las tareas de petición de rutas.
         List<Callable<String>> pathRequestTaskList = new ArrayList<>();
 
@@ -181,34 +183,37 @@ public class PathUtils {
             final Location origin = PathUtils.getRandomLocation(destination.getLat(), destination.getLng(), PresetSimulation.getMaxPathDistance());
 
             // Tarea para la petición de un trayecto.
-            Callable<String> callable = () -> {
-                String jsonPath = null;
-                Location o = origin;
-                Location d = destination;
-                while (jsonPath == null) {
-                    try {
-                        if (PresetSimulation.getPathsGenerationMethod() == Constants.Paths_Generation_Method.GOOGLE.ordinal()) {
-                            /////////////////
-                            // GOOGLE MAPS //
-                            /////////////////
+            Callable<String> callable = new Callable<String>() {
+                @Override
+                public String call() throws Exception {
+                    String jsonPath = null;
+                    Location o = origin;
+                    Location d = destination;
+                    while (jsonPath == null) {
+                        try {
+                            if (PresetSimulation.getPathsGenerationMethod() == Constants.Paths_Generation_Method.GOOGLE.ordinal()) {
+                                /////////////////
+                                // GOOGLE MAPS //
+                                /////////////////
 
-                            jsonPath = IOUtils.toString(new URL("https://maps.googleapis.com/maps/api/directions/json?origin=" + o.getLat() + "," + o.getLng() + "&destination=" + d.getLat() + "," + d.getLng()), "UTF-8");
-                        } else if (PresetSimulation.getPathsGenerationMethod() == Constants.Paths_Generation_Method.OPENSTREETMAP.ordinal()) {
-                            ///////////////////
-                            // OPENSTREETMAP //
-                            ///////////////////
+                                jsonPath = IOUtils.toString(new URL("https://maps.googleapis.com/maps/api/directions/json?origin=" + o.getLat() + "," + o.getLng() + "&destination=" + d.getLat() + "," + d.getLng()), "UTF-8");
+                            } else if (PresetSimulation.getPathsGenerationMethod() == Constants.Paths_Generation_Method.OPENSTREETMAP.ordinal()) {
+                                ///////////////////
+                                // OPENSTREETMAP //
+                                ///////////////////
 
-                            jsonPath = IOUtils.toString(new URL("http://cronos.lbd.org.es/hermes/api/smartdriver/network/simulate?fromLat=" + o.getLat() + "&fromLng=" + o.getLng() + "&toLat=" + d.getLat() + "&toLng=" + d.getLng() + "&speedFactor=1.0"), "UTF-8");
+                                jsonPath = IOUtils.toString(new URL("http://cronos.lbd.org.es/hermes/api/smartdriver/network/simulate?fromLat=" + o.getLat() + "&fromLng=" + o.getLng() + "&toLat=" + d.getLat() + "&toLng=" + d.getLng() + "&speedFactor=1.0"), "UTF-8");
+                            }
+                        } catch (IOException ex) {
+                            String method = Constants.Paths_Generation_Method.values()[PresetSimulation.getPathsGenerationMethod()].name();
+                            LOG.log(Level.SEVERE, "generateSimulatedPaths() - {1} - Error I/O: {0}", new Object[]{ex.getMessage(), method});
+                            // Generamos nuevos puntos aleatorios hasta que sean aceptados.
+                            o = PathUtils.getRandomLocation(Constants.SEVILLE.getLat(), Constants.SEVILLE.getLng(), PresetSimulation.getDistanceFromCenter());
+                            d = PathUtils.getRandomLocation(origin.getLat(), origin.getLng(), PresetSimulation.getMaxPathDistance());
                         }
-                    } catch (IOException ex) {
-                        String method = Constants.Paths_Generation_Method.values()[PresetSimulation.getPathsGenerationMethod()].name();
-                        LOG.log(Level.SEVERE, "generateSimulatedPaths() - {1} - Error I/O: {0}", new Object[]{ex.getMessage(), method});
-                        // Generamos nuevos puntos aleatorios hasta que sean aceptados.
-                        o = PathUtils.getRandomLocation(Constants.SEVILLE.getLat(), Constants.SEVILLE.getLng(), PresetSimulation.getDistanceFromCenter());
-                        d = PathUtils.getRandomLocation(origin.getLat(), origin.getLng(), PresetSimulation.getMaxPathDistance());
                     }
+                    return jsonPath;
                 }
-                return jsonPath;
             };
 
             // Añadimos la tarea al listado de peticiones.
@@ -247,8 +252,6 @@ public class PathUtils {
 
         // Paramos el 'listener'
         PathRequestWebService.shutdown();
-
-        return locationLogList;
     }
 
     private static void requestPaths(List<Callable<String>> pathRequestTaskSublist) {
@@ -309,7 +312,7 @@ public class PathUtils {
                 ll.setPerson(person);
                 ll.setFilename(person.getFullName());
 
-                SimulatorController.locationLogList.add(ll);
+                SimulatorController.getLocationLogList().add(ll);
 
                 // RDL: Once a full route is created, store it on routes folder
                 CSVUtils.createRouteDataFile(String.valueOf(pathCounter = pathCounter + 1), ll.getLocationLogDetailList());
@@ -324,7 +327,7 @@ public class PathUtils {
 
         for (int i = 0; i < lldList.size() - 1; i++) {
             LocationLogDetail lld1 = (LocationLogDetail) lldList.get(i),
-                    lld2 = (LocationLogDetail) lldList.get(i+1);
+                    lld2 = (LocationLogDetail) lldList.get(i + 1);
             interpolatedLocationLogDetailList.addAll(PathUtils.interpolateBetween(lld1, lld2));
         }
 

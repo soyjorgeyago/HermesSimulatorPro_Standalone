@@ -28,7 +28,7 @@ public class CSVUtils {
 
     private static final Logger LOG = Logger.getLogger(SimulatorController.class.getName());
 
-    public static final Path PERMANENT_FOLDER = Util.getOrCreateCsvFolder();
+    public static final Path PERMANENT_FOLDER = StorageUtils.getOrCreateCsvFolder();
 
     public static void createRouteDataFile(String fileNameHeader, List<ICSVBean> locationList) {
         File routeFile = StorageUtils.generateCsvFile(fileNameHeader, "_path.csv", true);

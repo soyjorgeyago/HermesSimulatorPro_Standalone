@@ -1,27 +1,15 @@
 package es.us.lsi.hermes.simulator;
 
-import com.google.gson.FieldNamingPolicy;
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonSyntaxException;
-import com.google.gson.reflect.TypeToken;
 import com.google.maps.model.LatLng;
 import es.us.lsi.hermes.analysis.Vehicle;
 import es.us.lsi.hermes.csv.CSVSimulatorStatus;
 import es.us.lsi.hermes.csv.ICSVBean;
 import es.us.lsi.hermes.location.detail.LocationLogDetail;
-import es.us.lsi.hermes.google.directions.GeocodedWaypoints;
-import es.us.lsi.hermes.google.directions.Location;
 import es.us.lsi.hermes.location.LocationLog;
-import es.us.lsi.hermes.openStreetMap.PositionSimulatedSpeed;
-import es.us.lsi.hermes.person.Person;
 import es.us.lsi.hermes.simulator.kafka.Kafka;
 import es.us.lsi.hermes.util.*;
-import java.io.IOException;
 import java.io.Serializable;
-import java.lang.reflect.Type;
 import java.net.MalformedURLException;
-import java.net.URL;
 import java.nio.file.Path;
 import java.text.MessageFormat;
 import java.util.ArrayList;
@@ -31,11 +19,8 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
 import java.util.ResourceBundle;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -45,7 +30,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.mail.MessagingException;
-import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.time.DurationFormatUtils;
 import org.apache.kafka.clients.producer.KafkaProducer;
 
@@ -89,9 +73,10 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     // Los trayectos generados puede que no tengan la densidad de puntos necesaria para tener una posición en cada segundo de la simulación.
     // Además, cada 'SmartDriver' tendrá sus características de conducción, con lo que si fuera más rápido harían falta menos puntos y si fuera más lento
     // harían falta más puntos. Se calculará la interpolación tomando la velocidad mínima de 10Km/h.
+    // FIXME: Transfer to properties file.
     public static boolean interpolate = true;
 
-    public static List<LocationLog> locationLogList;
+    private static List<LocationLog> locationLogList = new ArrayList();
 
     private static int simulatedSmartDrivers = 1;
     static long startSimulationTime = 0l;
@@ -212,7 +197,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         if (PresetSimulation.isUseRoutesFromHdd()) {
             locationLogList = CSVUtils.extractSimulatedPaths(); // TODO convert imported to generated
         } else {
-            locationLogList = PathUtils.generateSimulatedPaths();
+            PathUtils.generateSimulatedPaths();
         }
 
         // Initialize path related attributes to perform the simulation
@@ -721,6 +706,10 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
     public static synchronized KafkaProducer<Long, String> getKafkaMonitoringProducer() {
         return kafkaMonitorigProducer;
+    }
+
+    public static synchronized List<LocationLog> getLocationLogList() {
+        return locationLogList;
     }
 
     class EmergencyShutdown implements Runnable {
