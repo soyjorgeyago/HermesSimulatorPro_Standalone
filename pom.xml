@@ -139,16 +139,6 @@
     </repositories>
     
     <build>
-        <resources>
-            <resource>
-                <directory>src/main/resources</directory>
-                <excludes>
-                    <exclude>*.properties</exclude>
-                    <exclude>*.sample</exclude>
-                </excludes>
-                <filtering>false</filtering>
-            </resource>
-        </resources>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -184,7 +174,10 @@
                             <outputDirectory>${project.build.directory}/standalone/resources</outputDirectory>
                             <resources>
                                 <resource>
-                                    <directory>src/main/resources</directory>
+                                    <directory>src/main/resources/</directory>
+                                    <excludes>
+                                        <exclude>Bundle*</exclude>
+                                    </excludes>
                                 </resource>
                             </resources>
                         </configuration>
@@ -208,6 +201,12 @@
                             <Class-Path>resources/</Class-Path>
                         </manifestEntries>
                     </archive>
+                    <excludes>
+                        <exclude>Email*</exclude>
+                        <exclude>Hermes*</exclude>
+                        <exclude>Kafka*</exclude>
+                        <exclude>Preset*</exclude>
+                    </excludes>
                 </configuration>
             </plugin>
         </plugins>
