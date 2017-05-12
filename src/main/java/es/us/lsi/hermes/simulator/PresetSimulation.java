@@ -1,6 +1,7 @@
 package es.us.lsi.hermes.simulator;
 
 import es.us.lsi.hermes.util.Constants;
+import es.us.lsi.hermes.util.StorageUtils;
 import es.us.lsi.hermes.util.Util;
 
 import java.text.ParseException;
@@ -30,17 +31,13 @@ public class PresetSimulation {
     private static boolean randomizeEachSmartDriverBehaviour;
     private static int retries;
     private static boolean useRoutesFromHdd;
+    private static String pathForCsvStorage;
 
     static {
         LOG.log(Level.INFO, "PresetSimulation() - Preset configuration init.");
 
         PRESET_SIMULATION_PROPERTIES = Util.initProperties("PresetSimulation.properties");
-
-        if (PRESET_SIMULATION_PROPERTIES != null) {
-            validate();
-        } else {
-            LOG.log(Level.SEVERE, "PresetSimulation() - PresetSimulation.properties not found");
-        }
+        validate();
     }
 
     /**
@@ -60,11 +57,21 @@ public class PresetSimulation {
         startingMode = getIntValue("starting.mode", 0, 2, 1);
         retryOnFail = getBooleanValue("retry.on.fail", true);
         intervalBetweenRetriesInSeconds = getIntValue("interval.between.retries.s", 1, 60, 10);
+        // FIXME: Check valid future schedules. If it is before now, it will start immediately.
         scheduledSimulation = getDateValue("scheduled.simulation", Constants.dfFile);
         sendResultsToEmail = getEmailValue("send.results.to.email", "jorgeyago.ingeniero@gmail.com");
         randomizeEachSmartDriverBehaviour = getBooleanValue("randomize.behaviour", true);
         retries = getIntValue("retries", -1, 5, 1);
         useRoutesFromHdd = getBooleanValue("use.routes.from.hdd", false);
+
+        // FIXME: Create method.
+        pathForCsvStorage = PRESET_SIMULATION_PROPERTIES.getProperty("path.csv.storage");
+        if (!StorageUtils.canWrite(pathForCsvStorage)) {
+            pathForCsvStorage = "CSV_storage";
+            LOG.log(Level.SEVERE, "path.csv.storage property not declared or not writable, using default: {0}", pathForCsvStorage);
+        } else {
+            LOG.log(Level.INFO, "path.csv.storage set to: {0}", pathForCsvStorage);
+        }
     }
 
     private static int getIntValue(String propertyName, int minimum, int maximum, int defaultValue) {
@@ -170,5 +177,9 @@ public class PresetSimulation {
 
     public static boolean isUseRoutesFromHdd() {
         return useRoutesFromHdd;
+    }
+
+    public static String getPathForCsvStorage() {
+        return pathForCsvStorage;
     }
 }

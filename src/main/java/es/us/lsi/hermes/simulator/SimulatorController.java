@@ -145,7 +145,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     private static boolean randomizeEachSmartDriverBehaviour = true;
 
     private static int retries = 5;
-    private static boolean offline = false;
 
     // JYFR: PRUEBA
 //    private static boolean infiniteSimulation = false;
@@ -160,7 +159,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     private static Properties kafkaMonitoringProducerProperties;
 
     public SimulatorController() {
-        LOG.log(Level.INFO, "init() - Inicialización del controlador del simulador");
+        LOG.log(Level.INFO, "SimulatorController() - Simulator controller init.");
 
         // Cargamos los recursos de internacionalización.
         this.bundle = ResourceBundle.getBundle("Bundle");

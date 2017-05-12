@@ -11,7 +11,7 @@ public class HermesSimulatorConfig {
     private static final Properties HERMES_SIMULATOR_PROPERTIES;
 
     static {
-        LOG.log(Level.INFO, "HermesSimulatorConfig() - Hermes simulator init.");
+        LOG.log(Level.INFO, "HermesSimulatorConfig() - Hermes simulator config init.");
 
         HERMES_SIMULATOR_PROPERTIES = Util.initProperties("HermesSimulator.properties");
     }

@@ -95,15 +95,16 @@ public class Util {
      * @return Loaded properties file.
      */
     public static Properties initProperties(String propertiesFileName) {
-        Properties result = null;
+        Properties result = new Properties();
 
         try {
             ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
             InputStream input = classLoader.getResourceAsStream(propertiesFileName);
-            result = new Properties();
             result.load(input);
         } catch (IOException ex) {
             LOG.log(Level.SEVERE, "initProperties() - Error loading properties file: " + propertiesFileName, ex);
+        } catch (NullPointerException ex) {
+            LOG.log(Level.SEVERE, "initProperties() - File \'{0}\' not found", propertiesFileName);
         }
 
         return result;
@@ -115,10 +116,10 @@ public class Util {
             String folderStr;
             Path folderPath;
 
-            if(temporal) {
+            if (temporal) {
                 folderPath = Files.createTempDirectory("Hermes_Simulator");
                 folderStr = folderPath.toAbsolutePath().toString() + File.separator;
-            }else {
+            } else {
                 File directory = new File("Hermes_Simulator_CSV");
                 directory.mkdir();
                 folderPath = directory.toPath();
