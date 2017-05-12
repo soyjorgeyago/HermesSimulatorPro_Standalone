@@ -55,12 +55,15 @@ public class Person implements Serializable {
 
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder();
+        return "[" + this.getFullName() + "]";
+    }
 
-        sb.append("[");
-        sb.append(this.getFullName());
-        sb.append("]");
+    public static Person createSimimulatedPerson() {
+        Person person = new Person();
+        String name = "Sim_" + System.currentTimeMillis();
+        person.setFullName(name);
+        person.setEmail(name + "@sim.com");
 
-        return sb.toString();
+        return person;
     }
 }
