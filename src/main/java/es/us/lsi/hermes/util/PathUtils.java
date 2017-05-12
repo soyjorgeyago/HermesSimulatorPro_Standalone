@@ -1,13 +1,30 @@
 package es.us.lsi.hermes.util;
 
+import com.google.gson.FieldNamingPolicy;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonSyntaxException;
+import com.google.gson.reflect.TypeToken;
+import es.us.lsi.hermes.csv.ICSVBean;
 import es.us.lsi.hermes.google.directions.*;
 import es.us.lsi.hermes.location.LocationLog;
 import es.us.lsi.hermes.location.detail.LocationLogDetail;
 import es.us.lsi.hermes.openStreetMap.PositionSimulatedSpeed;
+import es.us.lsi.hermes.person.Person;
+import es.us.lsi.hermes.simulator.PathRequestWebService;
+import es.us.lsi.hermes.simulator.PresetSimulation;
+import es.us.lsi.hermes.simulator.SimulatorController;
+import org.apache.commons.io.IOUtils;
 
+import java.io.IOException;
+import java.lang.reflect.Type;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -20,7 +37,7 @@ public class PathUtils {
             return;
 
         // Listado de posiciones que componen el trayecto de SmartDriver.
-        ArrayList<LocationLogDetail> locationLogDetailList = new ArrayList<>();
+        ArrayList<ICSVBean> locationLogDetailList = new ArrayList<>();
 
         double pathDistance = 0.0d;
         int pathDurationInSeconds = 0;
@@ -64,7 +81,6 @@ public class PathUtils {
 
         ll.setDistance(pathDistance);
         ll.setDuration(pathDurationInSeconds);
-
     }
 
     public static void createPathGoogleMaps(GeocodedWaypoints gcwp, LocationLog ll) {
@@ -82,7 +98,7 @@ public class PathUtils {
         Leg l = r.getLegs().get(0);
 
         // Listado de posiciones que componen el trayecto de SmartDriver.
-        ArrayList<LocationLogDetail> locationLogDetailList = new ArrayList<>();
+        ArrayList<ICSVBean> locationLogDetailList = new ArrayList<>();
 
         double speed;
         double pathDistance = 0.0d;
@@ -121,7 +137,6 @@ public class PathUtils {
 
         // Asignamos el listado de posiciones.
         ll.setLocationLogDetailList(locationLogDetailList);
-
         ll.setDistance(pathDistance);
         ll.setDuration(pathDurationInSeconds);
     }
@@ -152,5 +167,200 @@ public class PathUtils {
         result.setLng(foundLongitude);
 
         return result;
+    }
+
+    public static List<LocationLog> generateSimulatedPaths() {
+        List<LocationLog> locationLogList = new ArrayList<>();
+
+        // Lista con las tareas de petición de rutas.
+        List<Callable<String>> pathRequestTaskList = new ArrayList<>();
+
+        // Crearemos tantas tareas como trayectos se quieran generar.
+        for (int i = 0; i < PresetSimulation.getPathsAmount(); i++) {
+            final Location destination = PathUtils.getRandomLocation(Constants.SEVILLE.getLat(), Constants.SEVILLE.getLng(), PresetSimulation.getDistanceFromCenter());
+            final Location origin = PathUtils.getRandomLocation(destination.getLat(), destination.getLng(), PresetSimulation.getMaxPathDistance());
+
+            // Tarea para la petición de un trayecto.
+            Callable<String> callable = () -> {
+                String jsonPath = null;
+                Location o = origin;
+                Location d = destination;
+                while (jsonPath == null) {
+                    try {
+                        if (PresetSimulation.getPathsGenerationMethod() == Constants.Paths_Generation_Method.GOOGLE.ordinal()) {
+                            /////////////////
+                            // GOOGLE MAPS //
+                            /////////////////
+
+                            jsonPath = IOUtils.toString(new URL("https://maps.googleapis.com/maps/api/directions/json?origin=" + o.getLat() + "," + o.getLng() + "&destination=" + d.getLat() + "," + d.getLng()), "UTF-8");
+                        } else if (PresetSimulation.getPathsGenerationMethod() == Constants.Paths_Generation_Method.OPENSTREETMAP.ordinal()) {
+                            ///////////////////
+                            // OPENSTREETMAP //
+                            ///////////////////
+
+                            jsonPath = IOUtils.toString(new URL("http://cronos.lbd.org.es/hermes/api/smartdriver/network/simulate?fromLat=" + o.getLat() + "&fromLng=" + o.getLng() + "&toLat=" + d.getLat() + "&toLng=" + d.getLng() + "&speedFactor=1.0"), "UTF-8");
+                        }
+                    } catch (IOException ex) {
+                        String method = Constants.Paths_Generation_Method.values()[PresetSimulation.getPathsGenerationMethod()].name();
+                        LOG.log(Level.SEVERE, "generateSimulatedPaths() - {1} - Error I/O: {0}", new Object[]{ex.getMessage(), method});
+                        // Generamos nuevos puntos aleatorios hasta que sean aceptados.
+                        o = PathUtils.getRandomLocation(Constants.SEVILLE.getLat(), Constants.SEVILLE.getLng(), PresetSimulation.getDistanceFromCenter());
+                        d = PathUtils.getRandomLocation(origin.getLat(), origin.getLng(), PresetSimulation.getMaxPathDistance());
+                    }
+                }
+                return jsonPath;
+            };
+
+            // Añadimos la tarea al listado de peticiones.
+            pathRequestTaskList.add(callable);
+        }
+
+        // Tomamos la marca de tiempo actual. Nos servirá para espaciar las peticiones de trayectos a Google, ya que no se pueden hacer más de 10 peticiones por segundo con la cuenta gratuita.
+        // Aplicamos el mismo criterio para OpenStreetMap, aunque no sea necesario en principio.
+        long timeMark = System.currentTimeMillis();
+        //TODO Review changes with commit a634226 just in case
+        // Ejecutamos el listado de tareas, que se dividirá en los hilos y con las condiciones que haya configurados en 'PathRequestWebService'.
+        for (int i = Constants.REQUEST_PACK_SIZE; i <= pathRequestTaskList.size(); i += Constants.REQUEST_PACK_SIZE) {
+            long elapsedTime = System.currentTimeMillis() - timeMark;
+            if (elapsedTime < 1500) {
+                try {
+                    // Antes de hacer la siguiente petición, esperamos 1,5 segundos, para cumplir las restricciones de Google.
+                    Thread.sleep(1500 - elapsedTime);
+                } catch (InterruptedException ex) {
+                    // Login not necessary
+                } finally {
+                    timeMark = System.currentTimeMillis();
+                }
+            }
+            requestPaths(pathRequestTaskList.subList(i - Constants.REQUEST_PACK_SIZE, i));
+        }
+        int remaining = pathRequestTaskList.size() % Constants.REQUEST_PACK_SIZE;
+        if (remaining != 0) {
+            try {
+                // Antes de hacer la siguiente petición, esperamos 1 segundo, para cumplir las restricciones de Google.
+                Thread.sleep(1000);
+            } catch (InterruptedException ex) {
+                // Login not necessary
+            }
+            requestPaths(pathRequestTaskList.subList(pathRequestTaskList.size() - remaining, pathRequestTaskList.size()));
+        }
+
+        // Paramos el 'listener'
+        PathRequestWebService.shutdown();
+
+        return locationLogList;
+    }
+
+    private static void requestPaths(List<Callable<String>> pathRequestTaskSublist) {
+        try {
+            // Clearing directory before saving CSV files
+            StorageUtils.clearFolderContent(CSVUtils.PERMANENT_FOLDER);
+
+            List<Future<String>> futureTaskList = PathRequestWebService.submitAllTask(pathRequestTaskSublist);
+            int pathCounter = 0;
+            for (Future<String> aFutureTaskList : futureTaskList) {
+                // Creamos un objeto de localizaciones de 'SmartDriver'.
+                LocationLog ll = new LocationLog();
+
+                // Procesamos el JSON de respuesta, en función de la plataforma a la que le hayamos hecho la petición.
+                try {
+                    String json = aFutureTaskList.get();
+
+                    if (PresetSimulation.getPathsGenerationMethod() == Constants.Paths_Generation_Method.GOOGLE.ordinal()) {
+                        /////////////////
+                        // GOOGLE MAPS //
+                        /////////////////
+
+                        // Procesamos el JSON obtenido de Google Maps para crear una trayectoria de SmartDriver.
+                        Gson gson = new GsonBuilder()
+                                .setFieldNamingPolicy(FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES)
+                                .create();
+                        GeocodedWaypoints gcwp = gson.fromJson(json, GeocodedWaypoints.class);
+                        PathUtils.createPathGoogleMaps(gcwp, ll);
+                    } else {
+                        ///////////////////
+                        // OPENSTREETMAP //
+                        ///////////////////
+
+                        // Procesamos el JSON obtenido de OpenStreetMap con las localizaciones y las velocidades de SmartDriver.
+                        Type listType = new TypeToken<ArrayList<PositionSimulatedSpeed>>() {
+                        }.getType();
+                        List<PositionSimulatedSpeed> pssList = new Gson().fromJson(json, listType);
+                        PathUtils.createPathOpenStreetMaps(pssList, ll);
+                    }
+                } catch (InterruptedException | ExecutionException | JsonSyntaxException ex) {
+                    LOG.log(Level.SEVERE, "Error al decodificar el JSON de la ruta", ex);
+                }
+
+                // Si no fuera un trayecto válido, lo ignoramos y pasamos al siguiente
+                if (ll.getLocationLogDetailList() == null || ll.getLocationLogDetailList().isEmpty()) {
+                    continue;
+                }
+
+                // Vemos si se quiere interpolación, para asegurar que haya una localización al menos cada 2.77m, que sería el caso de que un conductor
+                // fuera a la velocidad mínima asignada en las simulaciones (10Km/h)
+                if (SimulatorController.interpolate) {
+                    // Haremos una interpolación lineal para que haya un punto cada 2.77m.
+                    ll.setLocationLogDetailList(interpolateLocationLogDetailList(ll.getLocationLogDetailList()));
+                }
+
+                // Creamos un usuario simulado, al que le asignaremos el trayecto.
+                Person person = Person.createSimimulatedPerson();
+                ll.setPerson(person);
+                ll.setFilename(person.getFullName());
+
+                SimulatorController.locationLogList.add(ll);
+
+                // RDL: Once a full route is created, store it on routes folder
+                CSVUtils.createRouteDataFile(String.valueOf(pathCounter = pathCounter + 1), ll.getLocationLogDetailList());
+            }
+        } catch (InterruptedException ex) {
+            LOG.log(Level.SEVERE, "Error obtaining the path's JSON", ex);
+        }
+    }
+
+    private static List<ICSVBean> interpolateLocationLogDetailList(List<ICSVBean> lldList) {
+        List<ICSVBean> interpolatedLocationLogDetailList = new ArrayList<>();
+
+        for (int i = 0; i < lldList.size() - 1; i++) {
+            LocationLogDetail lld1 = (LocationLogDetail) lldList.get(i),
+                    lld2 = (LocationLogDetail) lldList.get(i+1);
+            interpolatedLocationLogDetailList.addAll(PathUtils.interpolateBetween(lld1, lld2));
+        }
+
+        return interpolatedLocationLogDetailList;
+    }
+
+    private static List<ICSVBean> interpolateBetween(LocationLogDetail lld1, LocationLogDetail lld2) {
+        List<ICSVBean> lldListBetween = new ArrayList<>();
+
+        double pointsDistance = Util.distanceHaversine(lld1.getLatitude(), lld1.getLongitude(), lld2.getLatitude(), lld2.getLongitude());
+
+        // Dividimos entre 2.5 para tener incluso más precisión.
+        int numberOfInnerLocations = (int) Math.ceil(pointsDistance / 2.5);
+
+        double latitudeFragment = (lld2.getLatitude() - lld1.getLatitude()) / numberOfInnerLocations;
+        double longitudeFragment = (lld2.getLongitude() - lld1.getLongitude()) / numberOfInnerLocations;
+        double heartRateFragment = (lld2.getHeartRate() - lld1.getHeartRate()) / numberOfInnerLocations;
+        double rrFragment = (lld2.getRrTime() - lld1.getRrTime()) / numberOfInnerLocations;
+        double speedFragment = (lld2.getSpeed() - lld1.getSpeed()) / numberOfInnerLocations;
+        double secondsToBeHereFragment = (lld2.getSecondsToBeHere() - lld1.getSecondsToBeHere()) / numberOfInnerLocations;
+
+        for (int i = 0; i < numberOfInnerLocations; i++) {
+            LocationLogDetail lld = new LocationLogDetail();
+
+            lld.setLatitude(i * latitudeFragment + lld1.getLatitude());
+            lld.setLongitude(i * longitudeFragment + lld1.getLongitude());
+            lld.setSpeed(i * speedFragment + lld1.getSpeed());
+            lld.setHeartRate((int) (i * heartRateFragment + lld1.getHeartRate()));
+            lld.setRrTime((int) (i * rrFragment + lld1.getRrTime()));
+            lld.setSecondsToBeHere((int) (i * secondsToBeHereFragment + lld1.getSecondsToBeHere()));
+
+            lldListBetween.add(lld);
+        }
+
+        lldListBetween.add(lld2);
+
+        return lldListBetween;
     }
 }

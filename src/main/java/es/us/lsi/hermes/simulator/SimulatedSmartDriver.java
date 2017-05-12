@@ -147,32 +147,28 @@ public class SimulatedSmartDriver implements Runnable {
 
         this.localLocationLogDetailList = new ArrayList<>();
 
-        // Comprobamos si se quiere un comportamiento aleatorio.
-        if (randomBehaviour) {
-            double speedRandomFactor = 0.5d + (RANDOM.nextDouble() * 1.0d);
-            double hrRandomFactor = 0.9d + (RANDOM.nextDouble() * 0.2d);
 
-            for (LocationLogDetail lld : ll.getLocationLogDetailList()) {
-                // Aplicamos la variación aleatoria de la velocidad.
-                double newSpeed = lld.getSpeed() * speedRandomFactor;
-                // Aplicamos la variación aleatoria del ritmo cardíaco.
-                int newHr = (int) (lld.getHeartRate() * hrRandomFactor);
-                // No habrá ninguna velocidad inferior a la indicada como mínimo.
-                if (newSpeed < MIN_SPEED) {
-                    localLocationLogDetailList.add(new LocationLogDetail(lld.getLatitude(), lld.getLongitude(), MIN_SPEED, newHr, lld.getRrTime(), (int) (Math.ceil(lld.getSecondsToBeHere() * (lld.getSpeed() / MIN_SPEED)))));
-                } else {
-                    localLocationLogDetailList.add(new LocationLogDetail(lld.getLatitude(), lld.getLongitude(), newSpeed, newHr, lld.getRrTime(), (int) (Math.ceil(lld.getSecondsToBeHere() / speedRandomFactor))));
-                }
+        double speedRandomFactor = 0.5d + (RANDOM.nextDouble() * 1.0d);
+        double hrRandomFactor = 0.9d + (RANDOM.nextDouble() * 0.2d);
+
+        for (int i = 0; i < ll.getLocationLogDetailList().size(); i++) {
+            LocationLogDetail lld = (LocationLogDetail) ll.getLocationLogDetailList().get(i);
+
+            // Aplicamos la variación aleatoria de la velocidad.
+            if(randomBehaviour) {
+                lld.setSpeed(lld.getSpeed() * speedRandomFactor);
+                lld.setHeartRate((int) (lld.getHeartRate() * hrRandomFactor));
             }
-        } else {
-            // No habrá ninguna velocidad inferior a la indicada como mínimo.
-            for (LocationLogDetail lld : ll.getLocationLogDetailList()) {
-                if (lld.getSpeed() < MIN_SPEED) {
-                    localLocationLogDetailList.add(new LocationLogDetail(lld.getLatitude(), lld.getLongitude(), MIN_SPEED, lld.getHeartRate(), lld.getRrTime(), (int) (Math.ceil(lld.getSecondsToBeHere() * (lld.getSpeed() / MIN_SPEED)))));
-                } else {
-                    localLocationLogDetailList.add(new LocationLogDetail(lld.getLatitude(), lld.getLongitude(), lld.getSpeed(), lld.getHeartRate(), lld.getRrTime(), lld.getSecondsToBeHere()));
-                }
-            }
+
+            // Make sure the speed is bigger or equal to MIN_SPEED.
+            if (lld.getSpeed() < MIN_SPEED) {
+                lld.setSpeed(MIN_SPEED);
+                lld.setSecondsToBeHere((int) (Math.ceil(lld.getSecondsToBeHere() * (lld.getSpeed() / MIN_SPEED))));
+            } else if (randomBehaviour)
+                lld.setSecondsToBeHere((int) (Math.ceil(lld.getSecondsToBeHere() / speedRandomFactor)));
+
+            lld = new LocationLogDetail(lld.getLatitude(), lld.getLongitude(), lld.getSpeed(), lld.getHeartRate(), lld.getRrTime(), lld.getSecondsToBeHere());
+            localLocationLogDetailList.add(lld);
         }
 //        this.kafkaRecordId = 0;
         this.streamServer = streamServer;
