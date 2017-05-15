@@ -4,6 +4,7 @@ import es.us.lsi.hermes.csv.ICSVBean;
 import es.us.lsi.hermes.location.LocationLog;
 import es.us.lsi.hermes.location.detail.LocationLogDetail;
 import es.us.lsi.hermes.person.Person;
+import es.us.lsi.hermes.simulator.PresetSimulation;
 import es.us.lsi.hermes.simulator.SimulatorController;
 import net.lingala.zip4j.core.ZipFile;
 import net.lingala.zip4j.exception.ZipException;
@@ -28,9 +29,9 @@ public class CSVUtils {
 
     private static final Logger LOG = Logger.getLogger(SimulatorController.class.getName());
 
-    public static final Path PERMANENT_FOLDER = StorageUtils.getOrCreateCsvFolder();
+    static final Path PERMANENT_FOLDER = StorageUtils.getOrCreateCsvFolder();
 
-    public static void createRouteDataFile(String fileNameHeader, List<ICSVBean> locationList) {
+    static void createRouteDataFile(String fileNameHeader, List<ICSVBean> locationList) {
         File routeFile = StorageUtils.generateCsvFile(fileNameHeader, "_path.csv", true);
         exportToCSV(CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, false, routeFile, locationList);
     }
@@ -90,8 +91,8 @@ public class CSVUtils {
         }
     }
 
-    public static List<String> generateZippedCSV(List<ICSVBean> csvEventList, List<ICSVBean> csvStatusList) {
-        List<String> zipFilesPathsList = new ArrayList<>();
+    public static ArrayList generateZippedCSV(List<ICSVBean> csvEventList, List<ICSVBean> csvStatusList) {
+        ArrayList zipFilesPathsList = new ArrayList();
 
         try {
             String formattedCurrentTime = Constants.dfFile.format(System.currentTimeMillis());
@@ -142,12 +143,19 @@ public class CSVUtils {
                     extractedRoutes.add(extractSinglePath(aux, CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE));
                     csvCounter++;
                 }
+
+                // Generate as many paths as requested
+                if(csvCounter == PresetSimulation.getPathsAmount())
+                    break;
             }
         }
 
         if(csvCounter == 0) {
             LOG.log(Level.SEVERE, "No CSV files found under the directory: {0}", PERMANENT_FOLDER);
+        } else if(csvCounter < PresetSimulation.getPathsAmount()) {
+            LOG.log(Level.SEVERE, "{0} CSV files found under the directory: {1}, {2} paths requested", new Object[]{csvCounter, PERMANENT_FOLDER, PresetSimulation.getPathsAmount()});
         }
+
 
         //TODO Remove show
         // USE the extracted data
@@ -165,16 +173,19 @@ public class CSVUtils {
             routeLog.setDistance(0);
             routeLog.setDuration(0);
 
-            // TODO LocationLogDetails has a LocationLog and vice-versa
             routeLog.setLocationLogDetailList(route);
 
-            // Creamos un usuario simulado, al que le asignaremos el trayecto.
             Person person = Person.createSimimulatedPerson();
             routeLog.setPerson(person);
             routeLog.setFilename(person.getFullName());
 
             locationLogList.add(routeLog);
         }
+
+        if(locationLogList.size() < PresetSimulation.getPathsAmount()) {
+            LOG.log(Level.SEVERE, "CSV Paths available: {0}, Paths requested: {1}", new Object[]{locationLogList.size(), PresetSimulation.getPathsAmount()});
+        }
+
         return locationLogList;
     }
 
