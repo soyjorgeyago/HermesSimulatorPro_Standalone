@@ -382,7 +382,6 @@ public class SimulatedSmartDriver implements Runnable {
                             // Kafka
                             try {
                                 String json = new Gson().toJson(events);
-                                long id = SimulatorController.getNextKafkaRecordId();
                                 if (SimulatorController.kafkaProducerPerSmartDriver) {
                                     smartDriverKafkaProducer.send(new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION,
                                             smartDriverKafkaRecordId,
@@ -390,6 +389,7 @@ public class SimulatedSmartDriver implements Runnable {
                                     ), new KafkaCallBack(System.currentTimeMillis(), smartDriverKafkaRecordId, events, Event_Type.RECOVERED_VEHICLE_LOCATION));
                                     smartDriverKafkaRecordId++;
                                 } else {
+                                    long id = SimulatorController.getNextKafkaRecordId();
                                     SimulatorController.getKafkaProducer().send(new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION,
                                             id,
                                             json
@@ -449,7 +449,6 @@ public class SimulatedSmartDriver implements Runnable {
                             // Kafka
                             try {
                                 String json = new Gson().toJson(events);
-                                long id = SimulatorController.getNextKafkaRecordId();
                                 if (SimulatorController.kafkaProducerPerSmartDriver) {
                                     smartDriverKafkaProducer.send(new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION,
                                             smartDriverKafkaRecordId,
@@ -457,6 +456,7 @@ public class SimulatedSmartDriver implements Runnable {
                                     ), new KafkaCallBack(System.currentTimeMillis(), smartDriverKafkaRecordId, events, Event_Type.RECOVERED_DATA_SECTION));
                                     smartDriverKafkaRecordId++;
                                 } else {
+                                    long id = SimulatorController.getNextKafkaRecordId();
                                     SimulatorController.getKafkaProducer().send(new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION,
                                             id,
                                             json
@@ -584,7 +584,6 @@ public class SimulatedSmartDriver implements Runnable {
                 // Kafka
                 try {
                     String json = new Gson().toJson(event);
-                    long id = SimulatorController.getNextKafkaRecordId();
                     if (SimulatorController.kafkaProducerPerSmartDriver) {
                         smartDriverKafkaProducer.send(new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION,
                                 smartDriverKafkaRecordId,
@@ -592,6 +591,7 @@ public class SimulatedSmartDriver implements Runnable {
                         ), new KafkaCallBack(System.currentTimeMillis(), smartDriverKafkaRecordId, new ExtendedEvent[]{event}, Event_Type.NORMAL_VEHICLE_LOCATION));
                         smartDriverKafkaRecordId++;
                     } else {
+                        long id = SimulatorController.getNextKafkaRecordId();
                         SimulatorController.getKafkaProducer().send(new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION,
                                 id,
                                 json
@@ -604,7 +604,7 @@ public class SimulatedSmartDriver implements Runnable {
                             // Si ha fallado, almacenamos el 'Vehicle Location' que se debería haber enviado y lo intentamos luego.
                             pendingVehicleLocations.add(event);
                         }
-                        LOG.log(Level.SEVERE, "sendEvery10SecondsIfLocationChanged() - Error desconocido: {0}", ex.getMessage());
+                        LOG.log(Level.SEVERE, "sendEvery10SecondsIfLocationChanged() - Error desconocido: {0}", ex);
                     }
                 } finally {
                     // Iniciamos el contador de tiempo para el siguiente envío.
@@ -735,7 +735,6 @@ public class SimulatedSmartDriver implements Runnable {
                 // Kafka
                 try {
                     String json = new Gson().toJson(event);
-                    long id = SimulatorController.getNextKafkaRecordId();
                     if (SimulatorController.kafkaProducerPerSmartDriver) {
                         smartDriverKafkaProducer.send(new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION,
                                 smartDriverKafkaRecordId,
@@ -743,6 +742,7 @@ public class SimulatedSmartDriver implements Runnable {
                         ), new KafkaCallBack(System.currentTimeMillis(), smartDriverKafkaRecordId, new ExtendedEvent[]{event}, Event_Type.NORMAL_DATA_SECTION));
                         smartDriverKafkaRecordId++;
                     } else {
+                        long id = SimulatorController.getNextKafkaRecordId();
                         SimulatorController.getKafkaProducer().send(new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION,
                                 id,
                                 json
@@ -889,7 +889,7 @@ public class SimulatedSmartDriver implements Runnable {
          * handling of request completion. This method will be called when the
          * record sent to the server has been acknowledged. Exactly one of the
          * arguments will be non-null.
-         *
+         
          * @param metadata The metadata for the record that was sent (i.e. the
          * partition and offset). Null if an error occurred.
          * @param exception The exception thrown during processing of this
@@ -965,10 +965,11 @@ public class SimulatedSmartDriver implements Runnable {
                 }
             }
 
-            // Finally, it is sent the SmartDriver current status to the streaming server. 
+            // Finally, it is sent the SmartDriver current status to the streaming server.
             String json = new Gson().toJson(new SmartDriverStatus(id, System.currentTimeMillis(), currentDelay_ms, metadata != null ? metadata.serializedValueSize() : 0));
             LOG.log(Level.FINE, "onCompletion() - SmartDriver status JSON: {0}", json);
-            SimulatorController.getKafkaMonitoringProducer().send(new ProducerRecord<>(Kafka.TOPIC_SMARTDRIVER_STATUS, id, json));
+            // PRUEBA
+            SimulatorController.getKafkaMonitoringProducer().send(new ProducerRecord<>(Kafka.TOPIC_SMARTDRIVER_STATUS, getSha(), json));
         }
     }
 }

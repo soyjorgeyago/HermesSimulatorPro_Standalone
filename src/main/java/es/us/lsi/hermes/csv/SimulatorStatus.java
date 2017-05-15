@@ -8,7 +8,7 @@ import org.supercsv.cellprocessor.ift.CellProcessor;
 /**
  * Clase con el estado de la simulación en cada segundo.
  */
-public class CSVSimulatorStatus implements Serializable, ICSVBean {
+public class SimulatorStatus implements Serializable, ICSVBean {
 
     private final long timestamp;
     private final int generated;
@@ -26,11 +26,11 @@ public class CSVSimulatorStatus implements Serializable, ICSVBean {
     protected String[] fields;
     protected String[] headers;
 
-    public CSVSimulatorStatus() {
+    public SimulatorStatus() {
         this(System.currentTimeMillis(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     }
 
-    public CSVSimulatorStatus(long timestamp, int generated, int sent, int ok, int notOk, int errors, int recovered, int pending, int runningThreads, long maxSmartDriversDelay, long currentSmartDriversDelay) {
+    public SimulatorStatus(long timestamp, int generated, int sent, int ok, int notOk, int errors, int recovered, int pending, int runningThreads, long maxSmartDriversDelay, long currentSmartDriversDelay) {
         this.timestamp = timestamp;
         this.generated = generated;
         this.sent = sent;

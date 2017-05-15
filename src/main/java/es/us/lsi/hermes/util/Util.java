@@ -2,6 +2,7 @@ package es.us.lsi.hermes.util;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
@@ -103,5 +104,19 @@ public class Util {
         }
 
         return result;
+    }
+
+    /**
+     * Method for getting the computer name.
+     *
+     * @return Computer name.
+     */
+    public static String getComputerName() {
+        Map<String, String> env = System.getenv();
+        if (env.containsKey("COMPUTERNAME")) {
+            return env.get("COMPUTERNAME");
+        } else {
+            return env.getOrDefault("HOSTNAME", "Unknown");
+        }
     }
 }

@@ -1,13 +1,14 @@
 package es.us.lsi.hermes.simulator;
 
+import com.google.gson.Gson;
 import com.google.maps.model.LatLng;
 import es.us.lsi.hermes.analysis.Vehicle;
-import es.us.lsi.hermes.csv.CSVSimulatorStatus;
-import es.us.lsi.hermes.csv.ICSVBean;
+import es.us.lsi.hermes.csv.SimulatorStatus;
 import es.us.lsi.hermes.location.detail.LocationLogDetail;
 import es.us.lsi.hermes.location.LocationLog;
 import es.us.lsi.hermes.simulator.kafka.Kafka;
 import es.us.lsi.hermes.util.*;
+import static es.us.lsi.hermes.util.Util.getComputerName;
 import java.io.Serializable;
 import java.net.MalformedURLException;
 import java.nio.file.Path;
@@ -15,7 +16,6 @@ import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
 import java.util.ResourceBundle;
@@ -32,6 +32,7 @@ import java.util.logging.Logger;
 import javax.mail.MessagingException;
 import org.apache.commons.lang.time.DurationFormatUtils;
 import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerRecord;
 
 public class SimulatorController implements Serializable, ISimulatorControllerObserver {
 
@@ -84,9 +85,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
     private static int maxSmartDrivers = 20000;
 
-    // Información de monitorización del simulador, para poder generar un CSV y enviarlo por e-mail.
-    private static volatile List<ICSVBean> csvStatusList;
-
     public enum State {
         CONFIG_CHANGED, READY_TO_SIMULATE, SCHEDULED_SIMULATION, SIMULATING, ENDED, INTERRUPTED
     }
@@ -138,7 +136,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     // Kafka
     private static AtomicLong kafkaRecordId;
     private static volatile KafkaProducer<Long, String> kafkaProducer;
-    private static volatile KafkaProducer<Long, String> kafkaMonitorigProducer;
+    private static volatile KafkaProducer<String, String> kafkaMonitorigProducer;
     private static Properties kafkaProducerProperties;
     private static Properties kafkaMonitoringProducerProperties;
 
@@ -173,7 +171,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         ERRORS.set(0);
         FINALLY_PENDING.set(0);
         SENT.set(0);
-        csvStatusList = new ArrayList<>();
     }
 
     private void initThreadPool() {
@@ -186,13 +183,12 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     private void initPresetSimulation() {
         LOG.log(Level.INFO, "initPresetSimulation() - It will be loaded the configuration set in the 'PresetSimulation.properties' file.");
         LOG.log(Level.INFO, "initPresetSimulation() - Default rule: If the property is not set in the properties file or is not valid, it will be get the inner default behaviour.");
-        
-        // Default rule: If the property is not set in the properties file or is not valid, it will be get the inner default behaviour.
 
+        // Default rule: If the property is not set in the properties file or is not valid, it will be get the inner default behaviour.
         // Tiene que haber una coherencia entre trayectos y conductores, para no saturar el sistema.
         relatePathsAndSmartDrivers(PresetSimulation.getPathsAmount());
         setPathsGenerationMethod(PresetSimulation.getPathsGenerationMethod());
-        
+
         // Use pre-calculated routes or get new ones if requested
         if (PresetSimulation.isUseRoutesFromHdd()) {
             locationLogList = CSVUtils.extractSimulatedPaths(); // TODO convert imported to generated
@@ -208,7 +204,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         }
     }
 
-    private void setupVariablesWithPaths(int locationLogListSize){
+    private void setupVariablesWithPaths(int locationLogListSize) {
         LOG.log(Level.INFO, "generateSimulatedPaths() - Trayectos generados: {0}", locationLogListSize);
         currentState = State.READY_TO_SIMULATE;
         if (locationLogList.size() < PresetSimulation.getPathsAmount()) {
@@ -228,7 +224,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     public void configChanged() {
         currentState = State.CONFIG_CHANGED;
     }
-
 
     private void relatePathsAndSmartDrivers(int pathAmount) {
         maxSmartDrivers = Constants.MAX_THREADS / pathAmount;
@@ -272,13 +267,11 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
     private void startStatusMonitorTimer() {
         LOG.log(Level.INFO, "statusMonitorTimer() - Starting simulator status monitor.");
+        final String computerNameWithStartTime = Util.getComputerName() + "_" + System.currentTimeMillis();
         ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
         statusMonitorScheduler = scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
             @Override
             public void run() {
-                logCurrentStatus();
-                csvStatusList.add(new CSVSimulatorStatus(System.currentTimeMillis(), GENERATED.intValue(), SENT.intValue(), OK.intValue(), NOT_OK.intValue(), ERRORS.intValue(), RECOVERED.intValue(), FINALLY_PENDING.intValue(), threadPool.getQueue().size(), maxSmartDriversDelayMs.get(), currentMeanSmartDriversDelayMs.get()));
-
                 // Evaluate the mean delay.
                 long totalDelaysMs = 0l;
                 for (SimulatedSmartDriver ssd : simulatedSmartDriverHashMap.values()) {
@@ -286,7 +279,11 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 }
 
                 currentMeanSmartDriversDelayMs.set(totalDelaysMs / simulatedSmartDriverHashMap.size());
-                LOG.log(Level.FINE, "statusMonitorTimer() - SmartDrivers communication with streaming server mean delay in milliseconds: {0}", currentMeanSmartDriversDelayMs.get());
+                logCurrentStatus();
+
+                String json = new Gson().toJson(new SimulatorStatus(System.currentTimeMillis(), GENERATED.intValue(), SENT.intValue(), OK.intValue(), NOT_OK.intValue(), ERRORS.intValue(), RECOVERED.intValue(), FINALLY_PENDING.intValue(), threadPool.getQueue().size(), maxSmartDriversDelayMs.get(), currentMeanSmartDriversDelayMs.get()));
+                LOG.log(Level.FINE, "statusMonitorTimer() - Simulation status JSON: {0}", json);
+                SimulatorController.getKafkaMonitoringProducer().send(new ProducerRecord<>(Kafka.TOPIC_SIMULATOR_STATUS, computerNameWithStartTime, json));
             }
         }, 0, Constants.STATUS_SAMPLING_INTERVAL_S, TimeUnit.SECONDS
         );
@@ -403,7 +400,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         }
         // Aplicamos un pequeño retraso más el aplicado por el modo se inicio.
         long totalDelay = 100 + id + delay;
-        LOG.log(Level.FINE, "SmartDriver {0} con inicio en {1}", new Object[]{id, totalDelay});
+        LOG.log(Level.INFO, "SmartDriver {0} con inicio en {1}", new Object[]{id, totalDelay});
         threadPool.scheduleAtFixedRate(ssd, totalDelay, timeRate.getMilliseconds(), TimeUnit.MILLISECONDS);
 //                        ssd.startConsumer();
     }
@@ -509,7 +506,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 // https://issues.streamsets.com/browse/SDC-4925
             }
 
-             if (kafkaMonitorigProducer != null) {
+            if (kafkaMonitorigProducer != null) {
                 kafkaMonitorigProducer.flush();
                 kafkaMonitorigProducer.close();
                 // FIXME: Algunas veces salta una excepción de tipo 'java.lang.InterruptedException'.
@@ -551,12 +548,8 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         LOG.log(Level.FINE, "logCurrentStatus() - ESTADO ACTUAL: Tramas generadas={0}|Envíos realizados={1}|Oks={2}|NoOks={3}|Errores={4}|Recuperados={5}|No reenviados finalmente={6}|Hilos restantes={7}|Máximo retraso temporal total={8}ms|Retraso temporal actual={9}ms", new Object[]{GENERATED.get(), SENT.get(), OK.get(), NOT_OK.get(), ERRORS.get(), RECOVERED.get(), FINALLY_PENDING.get(), threadPool.getQueue().size(), maxSmartDriversDelayMs.get(), currentMeanSmartDriversDelayMs.get()});
     }
 
-    public boolean isInterpolate() {
+    public static boolean isInterpolate() {
         return interpolate;
-    }
-
-    public void setInterpolate(boolean i) {
-        interpolate = i;
     }
 
     public static Path getTempFolder() {
@@ -635,15 +628,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         }
     }
 
-    private static String getComputerName() {
-        Map<String, String> env = System.getenv();
-        if (env.containsKey("COMPUTERNAME")) {
-            return env.get("COMPUTERNAME");
-        } else {
-            return env.getOrDefault("HOSTNAME", "Unknown");
-        }
-    }
-
     // JYFR: PRUEBA
 //    private static void stopShutdownTimer() {
 //        if (emergencyScheduler != null) {
@@ -699,7 +683,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         return kafkaProducer;
     }
 
-    public static synchronized KafkaProducer<Long, String> getKafkaMonitoringProducer() {
+    public static synchronized KafkaProducer<String, String> getKafkaMonitoringProducer() {
         return kafkaMonitorigProducer;
     }
 
