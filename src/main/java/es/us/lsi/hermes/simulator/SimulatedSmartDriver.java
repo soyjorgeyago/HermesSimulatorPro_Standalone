@@ -97,8 +97,6 @@ public class SimulatedSmartDriver implements Runnable {
     private final int streamServer;
 //    private final SurroundingVehiclesConsumer surroundingVehiclesConsumer;
 
-    // Maximum streaming server response delay in milliseconds.
-    private long maxDelay_ms;
     // Current streaming server response delay in milliseconds.
     private long currentDelay_ms;
 
@@ -137,7 +135,6 @@ public class SimulatedSmartDriver implements Runnable {
         int age = ThreadLocalRandom.current().nextInt(18, 65 + 1); // Simularemos conductores de distintas edades (entre 18 y 65 años), para establecer el ritmo cardíaco máximo en la simulación.
         this.minRrTime = (int) Math.ceil(60000.0d / (220 - age)); // Mínimo R-R, que establecerá el ritmo cardíaco máximo.
         this.sha = new String(Hex.encodeHex(DigestUtils.sha256(System.currentTimeMillis() + ll.getPerson().getEmail())));
-        this.maxDelay_ms = 0l;
         this.currentDelay_ms = 0l;
         this.infiniteSimulation = infiniteSimulation;
 //        // TODO: Probar otros timeouts más altos.
@@ -862,10 +859,6 @@ public class SimulatedSmartDriver implements Runnable {
         }
     }
 
-    public long getMaxDelayMs() {
-        return maxDelay_ms;
-    }
-
     public long getCurrentDelayMs() {
         return currentDelay_ms;
     }
@@ -900,11 +893,6 @@ public class SimulatedSmartDriver implements Runnable {
             if (metadata != null) {
                 // Register the current delay.
                 currentDelay_ms = System.currentTimeMillis() - startTime;
-
-                // It is stored the maximum delay registered by the SmartDriver.
-                if (currentDelay_ms > maxDelay_ms) {
-                    maxDelay_ms = currentDelay_ms;
-                }
                 LOG.log(Level.FINE, "onCompletion() - Message received in Kafka\n - Key: {0}\n - Events: {1}\n - Partition: {2}\n - Offset: {3}\n - Elapsed time: {4} ms", new Object[]{key, events.length, metadata.partition(), metadata.offset(), currentDelay_ms});
 
                 switch (type) {
@@ -966,9 +954,8 @@ public class SimulatedSmartDriver implements Runnable {
             }
 
             // Finally, it is sent the SmartDriver current status to the streaming server.
-            String json = new Gson().toJson(new SmartDriverStatus(id, System.currentTimeMillis(), currentDelay_ms, metadata != null ? metadata.serializedValueSize() : 0));
+            String json = new Gson().toJson(new SmartDriverStatus(getSha(), System.currentTimeMillis(), currentDelay_ms, metadata != null ? metadata.serializedValueSize() : 0));
             LOG.log(Level.FINE, "onCompletion() - SmartDriver status JSON: {0}", json);
-            // PRUEBA
             SimulatorController.getKafkaMonitoringProducer().send(new ProducerRecord<>(Kafka.TOPIC_SMARTDRIVER_STATUS, getSha(), json));
         }
     }

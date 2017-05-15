@@ -7,24 +7,25 @@ import java.io.Serializable;
  */
 public class SmartDriverStatus implements Serializable {
 
-    private long id;
+    // TODO: Is it is being sent the SHA through the key value in the Producer, remove from these attributes.
+    private String sha;
     private final long timestamp;
     private final long delay;
     private final int size;
 
     public SmartDriverStatus() {
-        this(0l, System.currentTimeMillis(), 0, 0);
+        this("", System.currentTimeMillis(), 0, 0);
     }
 
-    public SmartDriverStatus(long id, long timestamp, long delay, int size) {
-        this.id = id;
+    public SmartDriverStatus(String sha, long timestamp, long delay, int size) {
+        this.sha = sha;
         this.timestamp = timestamp;
         this.delay = delay;
         this.size = size;
     }
 
-    public long getId() {
-        return id;
+    public String getSha() {
+        return sha;
     }
 
     public long getTimestamp() {

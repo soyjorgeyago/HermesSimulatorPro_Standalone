@@ -8,7 +8,7 @@ import org.supercsv.cellprocessor.ift.CellProcessor;
 /**
  * Clase con el estado de la simulación en cada segundo.
  */
-public class SimulatorStatus implements Serializable, ICSVBean {
+public class SimulatorStatus implements Serializable{
 
     private final long timestamp;
     private final int generated;
@@ -19,18 +19,13 @@ public class SimulatorStatus implements Serializable, ICSVBean {
     private final int recovered;
     private final int pending;
     private final int runningThreads;
-    private final long maxSmartDriversDelay;
     private final long currentSmartDriversDelay;
 
-    protected CellProcessor[] cellProcessors;
-    protected String[] fields;
-    protected String[] headers;
-
     public SimulatorStatus() {
-        this(System.currentTimeMillis(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        this(System.currentTimeMillis(), 0, 0, 0, 0, 0, 0, 0, 0, 0);
     }
 
-    public SimulatorStatus(long timestamp, int generated, int sent, int ok, int notOk, int errors, int recovered, int pending, int runningThreads, long maxSmartDriversDelay, long currentSmartDriversDelay) {
+    public SimulatorStatus(long timestamp, int generated, int sent, int ok, int notOk, int errors, int recovered, int pending, int runningThreads, long currentSmartDriversDelay) {
         this.timestamp = timestamp;
         this.generated = generated;
         this.sent = sent;
@@ -40,17 +35,7 @@ public class SimulatorStatus implements Serializable, ICSVBean {
         this.recovered = recovered;
         this.pending = pending;
         this.runningThreads = runningThreads;
-        this.maxSmartDriversDelay = maxSmartDriversDelay;
         this.currentSmartDriversDelay = currentSmartDriversDelay;
-        init();
-    }
-
-    public void setFields(String[] fields) {
-        this.fields = fields;
-    }
-
-    public void setHeaders(String[] headers) {
-        this.headers = headers;
     }
 
     public long getTimestamp() {
@@ -89,72 +74,7 @@ public class SimulatorStatus implements Serializable, ICSVBean {
         return runningThreads;
     }
 
-    public long getMaxSmartDriversDelay() {
-        return maxSmartDriversDelay;
-    }
-
     public long getCurrentSmartDriversDelay() {
         return currentSmartDriversDelay;
-    }
-
-    @Override
-    public final void init() {
-
-        cellProcessors = new CellProcessor[]{null, null, null, null, null, null, null, null, null, null, null};
-
-        List<String> f = new ArrayList();
-
-        f.add("timestamp");
-        f.add("generated");
-        f.add("sent");
-        f.add("ok");
-        f.add("notOk");
-        f.add("errors");
-        f.add("recovered");
-        f.add("pending");
-        f.add("runningThreads");
-        f.add("maxSmartDriversDelay");
-        f.add("currentSmartDriversDelay");
-
-        fields = f.toArray(new String[f.size()]);
-
-        List<String> h = new ArrayList();
-
-        h.add("Timestamp");
-        h.add("Generated");
-        h.add("Sent");
-        h.add("Ok");
-        h.add("Not Ok");
-        h.add("Errors");
-        h.add("Recovered");
-        h.add("Pending");
-        h.add("Running Threads");
-        h.add("Max SmartDrivers delay");
-        h.add("Current SmartDrivers delay");
-
-        headers = h.toArray(new String[h.size()]);
-    }
-
-    public CellProcessor[] getCellProcessors() {
-        return cellProcessors;
-    }
-
-    public void setCellProcessors(CellProcessor[] cellProcessors) {
-        this.cellProcessors = cellProcessors;
-    }
-
-    @Override
-    public CellProcessor[] getProcessors() {
-        return cellProcessors;
-    }
-
-    @Override
-    public String[] getFields() {
-        return fields;
-    }
-
-    @Override
-    public String[] getHeaders() {
-        return headers;
     }
 }

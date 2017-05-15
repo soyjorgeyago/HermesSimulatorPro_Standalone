@@ -302,7 +302,7 @@ public class PathUtils {
 
                 // Vemos si se quiere interpolación, para asegurar que haya una localización al menos cada 2.77m, que sería el caso de que un conductor
                 // fuera a la velocidad mínima asignada en las simulaciones (10Km/h)
-                if (SimulatorController.interpolate) {
+                if (SimulatorController.isInterpolate()) {
                     // Haremos una interpolación lineal para que haya un punto cada 2.77m.
                     ll.setLocationLogDetailList(interpolateLocationLogDetailList(ll.getLocationLogDetailList()));
                 }

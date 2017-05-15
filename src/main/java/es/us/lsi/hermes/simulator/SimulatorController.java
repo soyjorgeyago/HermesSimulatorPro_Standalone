@@ -82,9 +82,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     private static long startSimulationTime = 0L;
     private static long endSimulationTime = 0L;
 
-    // Información de monitorización del simulador, para poder generar un CSV y enviarlo por e-mail.
-    private static volatile List<ICSVBean> csvStatusList;
-
     public enum State {
         CONFIG_CHANGED, READY_TO_SIMULATE, SCHEDULED_SIMULATION, SIMULATING, ENDED, INTERRUPTED
     }
@@ -103,6 +100,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     private static AtomicLong currentMeanSmartDriversDelayMs;
 
     // Directorio temporal para almacenar los archivos generados.
+    // TODO: Still necessary?
     private static Path tempFolder;
 
     private final ResourceBundle bundle;
@@ -259,11 +257,11 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 currentMeanSmartDriversDelayMs.set(totalDelaysMs / simulatedSmartDriverHashMap.size());
                 logCurrentStatus();
 
-                String json = new Gson().toJson(new SimulatorStatus(System.currentTimeMillis(), GENERATED.intValue(), SENT.intValue(), OK.intValue(), NOT_OK.intValue(), ERRORS.intValue(), RECOVERED.intValue(), FINALLY_PENDING.intValue(), threadPool.getQueue().size(), maxSmartDriversDelayMs.get(), currentMeanSmartDriversDelayMs.get()));
+                String json = new Gson().toJson(new SimulatorStatus(System.currentTimeMillis(), GENERATED.intValue(), SENT.intValue(), OK.intValue(), NOT_OK.intValue(), ERRORS.intValue(), RECOVERED.intValue(), FINALLY_PENDING.intValue(), threadPool.getQueue().size(), currentMeanSmartDriversDelayMs.get()));
                 LOG.log(Level.FINE, "statusMonitorTimer() - Simulation status JSON: {0}", json);
                 SimulatorController.getKafkaMonitoringProducer().send(new ProducerRecord<>(Kafka.TOPIC_SIMULATOR_STATUS, computerNameWithStartTime, json));
             }
-        }, 0, Constants.STATUS_SAMPLING_INTERVAL_S, TimeUnit.SECONDS
+        }, 1, Constants.STATUS_SAMPLING_INTERVAL_S, TimeUnit.SECONDS
         );
     }
 
@@ -440,10 +438,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     public static void smartDriverHasFinished(String id) {
         LOG.log(Level.FINE, "smartDriverHasFinished() - Ha terminado el SmartDriver con id={0}, quedan {1} restantes", new Object[]{id, threadPool.getQueue().size()});
         SimulatedSmartDriver ssd = simulatedSmartDriverHashMap.remove(id);
-        if (ssd.getMaxDelayMs() > maxSmartDriversDelayMs.get()) {
-            maxSmartDriversDelayMs.set(ssd.getMaxDelayMs());
-            LOG.log(Level.FINE, "smartDriverHasFinished() - Quedan {0} restantes. Máximo retraso detectado hasta ahora: {0}", new Object[]{threadPool.getQueue().size(), maxSmartDriversDelayMs.get()});
-        }
     }
 
     private synchronized void finishSimulation(boolean interrupted) {
