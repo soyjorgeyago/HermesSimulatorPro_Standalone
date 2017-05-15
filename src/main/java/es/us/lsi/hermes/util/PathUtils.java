@@ -32,7 +32,7 @@ public class PathUtils {
 
     private static final Logger LOG = Logger.getLogger(PathUtils.class.getName());
 
-    public static void createPathOpenStreetMaps(List<PositionSimulatedSpeed> pssList, LocationLog ll) {
+    private static void createPathOpenStreetMaps(List<PositionSimulatedSpeed> pssList, LocationLog ll) {
         if (pssList == null || pssList.isEmpty()) {
             return;
         }
@@ -85,7 +85,7 @@ public class PathUtils {
         ll.setDuration(pathDurationInSeconds);
     }
 
-    public static void createPathGoogleMaps(GeocodedWaypoints gcwp, LocationLog ll) {
+    private static void createPathGoogleMaps(GeocodedWaypoints gcwp, LocationLog ll) {
 
         // Analizamos la información obtenida de la consulta a Google Directions.
         // Nuestra petición sólo devolverá una ruta.
@@ -145,7 +145,7 @@ public class PathUtils {
         ll.setDuration(pathDurationInSeconds);
     }
 
-    public static Location getRandomLocation(double latitude, double longitude, int radius) {
+    private static Location getRandomLocation(double latitude, double longitude, int radius) {
         Random random = new Random();
 
         // TODO: Comprobar que es una localización que no sea 'unnamed'
@@ -302,7 +302,7 @@ public class PathUtils {
 
                 // Vemos si se quiere interpolación, para asegurar que haya una localización al menos cada 2.77m, que sería el caso de que un conductor
                 // fuera a la velocidad mínima asignada en las simulaciones (10Km/h)
-                if (SimulatorController.interpolate) {
+                if (SimulatorController.getInterpolate()) {
                     // Haremos una interpolación lineal para que haya un punto cada 2.77m.
                     ll.setLocationLogDetailList(interpolateLocationLogDetailList(ll.getLocationLogDetailList()));
                 }

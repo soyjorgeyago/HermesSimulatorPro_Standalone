@@ -63,15 +63,17 @@ public class PresetSimulation {
         randomizeEachSmartDriverBehaviour = getBooleanValue("randomize.behaviour", true);
         retries = getIntValue("retries", -1, 5, 1);
         useRoutesFromHdd = getBooleanValue("use.routes.from.hdd", false);
+        pathForCsvStorage = getPathValue("path.csv.storage", "CSV_storage");
+    }
 
-        // FIXME: Create method.
-        pathForCsvStorage = PRESET_SIMULATION_PROPERTIES.getProperty("path.csv.storage");
-        if (!StorageUtils.canWrite(pathForCsvStorage)) {
-            pathForCsvStorage = "CSV_storage";
-            LOG.log(Level.SEVERE, "path.csv.storage property not declared or not writable, using default: {0}", pathForCsvStorage);
-        } else {
-            LOG.log(Level.INFO, "path.csv.storage set to: {0}", pathForCsvStorage);
+    private static String getPathValue(String propertyName, String defaultValue){
+        String property = PRESET_SIMULATION_PROPERTIES.getProperty(propertyName);
+
+        if (!StorageUtils.canWrite(property)) {
+            property = defaultValue;
+            LOG.log(Level.SEVERE, "{0} property not declared or not writable, using default: {1}", new Object[]{propertyName, property});
         }
+        return property;
     }
 
     private static int getIntValue(String propertyName, int minimum, int maximum, int defaultValue) {

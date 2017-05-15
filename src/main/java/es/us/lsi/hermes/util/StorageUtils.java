@@ -38,7 +38,8 @@ public class StorageUtils {
         }
     }
 
-    public static void clearFolderContent(Path folderPath){
+    @SuppressWarnings("all")
+    static void clearFolderContent(Path folderPath){
         try{
             for (File pathFile : folderPath.toFile().listFiles()) {
                 pathFile.delete();
@@ -62,7 +63,7 @@ public class StorageUtils {
         }
     }
 
-    public static Path getOrCreateCsvFolder() {
+    static Path getOrCreateCsvFolder() {
         String formattedPath = PresetSimulation.getPathForCsvStorage();
 
 //        TODO Review if is necessary to adapt Linux urls to Windows and vice-versa.
