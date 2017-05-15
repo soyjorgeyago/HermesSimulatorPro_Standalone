@@ -74,12 +74,12 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     // Además, cada 'SmartDriver' tendrá sus características de conducción, con lo que si fuera más rápido harían falta menos puntos y si fuera más lento
     // harían falta más puntos. Se calculará la interpolación tomando la velocidad mínima de 10Km/h.
     // FIXME: Transfer to properties file.
-    public static boolean interpolate = true;
+    private static boolean interpolate = true;
 
     private static List<LocationLog> locationLogList = new ArrayList();
 
     private static int simulatedSmartDrivers = 1;
-    static long startSimulationTime = 0l;
+    private static long startSimulationTime = 0l;
     private static long endSimulationTime = 0l;
 
     private static int maxSmartDrivers = 20000;
@@ -276,6 +276,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         statusMonitorScheduler = scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
             @Override
             public void run() {
+                logCurrentStatus();
                 csvStatusList.add(new CSVSimulatorStatus(System.currentTimeMillis(), GENERATED.intValue(), SENT.intValue(), OK.intValue(), NOT_OK.intValue(), ERRORS.intValue(), RECOVERED.intValue(), FINALLY_PENDING.intValue(), threadPool.getQueue().size(), maxSmartDriversDelayMs.get(), currentMeanSmartDriversDelayMs.get()));
 
                 // Evaluate the mean delay.
@@ -546,8 +547,8 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         SENT.incrementAndGet();
     }
 
-    public static void logCurrentStatus() {
-        LOG.log(Level.SEVERE, "logCurrentStatus() - ESTADO ACTUAL: Tramas generadas={0}|Envíos realizados={1}|Oks={2}|NoOks={3}|Errores={4}|Recuperados={5}|No reenviados finalmente={6}|Hilos restantes={7}|Máximo retraso temporal total={8}ms|Retraso temporal actual={9}ms", new Object[]{GENERATED.get(), SENT.get(), OK.get(), NOT_OK.get(), ERRORS.get(), RECOVERED.get(), FINALLY_PENDING.get(), threadPool.getQueue().size(), maxSmartDriversDelayMs.get(), currentMeanSmartDriversDelayMs.get()});
+    private void logCurrentStatus() {
+        LOG.log(Level.FINE, "logCurrentStatus() - ESTADO ACTUAL: Tramas generadas={0}|Envíos realizados={1}|Oks={2}|NoOks={3}|Errores={4}|Recuperados={5}|No reenviados finalmente={6}|Hilos restantes={7}|Máximo retraso temporal total={8}ms|Retraso temporal actual={9}ms", new Object[]{GENERATED.get(), SENT.get(), OK.get(), NOT_OK.get(), ERRORS.get(), RECOVERED.get(), FINALLY_PENDING.get(), threadPool.getQueue().size(), maxSmartDriversDelayMs.get(), currentMeanSmartDriversDelayMs.get()});
     }
 
     public boolean isInterpolate() {
@@ -680,12 +681,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
     public void setRandomizeEachSmartDriverBehaviour(boolean r) {
         randomizeEachSmartDriverBehaviour = r;
-    }
-
-    public static void setCurrentSmartDriversDelay(long c) {
-        if (c > currentMeanSmartDriversDelayMs.get()) {
-            currentMeanSmartDriversDelayMs.set(c);
-        }
     }
 
     public int getRetries() {

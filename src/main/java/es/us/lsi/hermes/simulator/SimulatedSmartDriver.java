@@ -147,7 +147,6 @@ public class SimulatedSmartDriver implements Runnable {
 
         this.localLocationLogDetailList = new ArrayList<>();
 
-
         double speedRandomFactor = 0.5d + (RANDOM.nextDouble() * 1.0d);
         double hrRandomFactor = 0.9d + (RANDOM.nextDouble() * 0.2d);
 
@@ -155,7 +154,7 @@ public class SimulatedSmartDriver implements Runnable {
             LocationLogDetail lld = (LocationLogDetail) ll.getLocationLogDetailList().get(i);
 
             // Aplicamos la variación aleatoria de la velocidad.
-            if(randomBehaviour) {
+            if (randomBehaviour) {
                 lld.setSpeed(lld.getSpeed() * speedRandomFactor);
                 lld.setHeartRate((int) (lld.getHeartRate() * hrRandomFactor));
             }
@@ -164,8 +163,9 @@ public class SimulatedSmartDriver implements Runnable {
             if (lld.getSpeed() < MIN_SPEED) {
                 lld.setSpeed(MIN_SPEED);
                 lld.setSecondsToBeHere((int) (Math.ceil(lld.getSecondsToBeHere() * (lld.getSpeed() / MIN_SPEED))));
-            } else if (randomBehaviour)
+            } else if (randomBehaviour) {
                 lld.setSecondsToBeHere((int) (Math.ceil(lld.getSecondsToBeHere() / speedRandomFactor)));
+            }
 
             lld = new LocationLogDetail(lld.getLatitude(), lld.getLongitude(), lld.getSpeed(), lld.getHeartRate(), lld.getRrTime(), lld.getSecondsToBeHere());
             localLocationLogDetailList.add(lld);
@@ -397,7 +397,6 @@ public class SimulatedSmartDriver implements Runnable {
                                 }
                             } catch (Exception ex) {
                                 LOG.log(Level.SEVERE, "*Reintento* - Error: {0} - No se han podido reenviar los {1} 'Vehicle Location' pendientes", new Object[]{ex.getMessage(), pendingVehicleLocations.size()});
-                                SimulatorController.logCurrentStatus();
                             } finally {
                                 ztreamySecondsBetweenRetries = 0;
                             }
@@ -412,7 +411,6 @@ public class SimulatedSmartDriver implements Runnable {
                                     pendingVehicleLocations.clear();
                                 } else {
                                     LOG.log(Level.SEVERE, "*Reintento* - Error SEND (Not OK): No se han podido reenviar los {0} 'Vehicle Location' pendientes", events.length);
-                                    SimulatorController.logCurrentStatus();
                                     if (retries != -1) {
                                         decreasePendingVehicleLocationsRetries();
                                     }
@@ -420,7 +418,6 @@ public class SimulatedSmartDriver implements Runnable {
                                 }
                             } catch (IOException ex) {
                                 LOG.log(Level.SEVERE, "*Reintento* - Error: {0} - No se han podido reenviar los {1} 'Vehicle Location' pendientes", new Object[]{ex.getMessage(), pendingVehicleLocations.size()});
-                                SimulatorController.logCurrentStatus();
                                 reconnectPublisher();
                             } finally {
                                 ztreamySecondsBetweenRetries = 0;
@@ -467,7 +464,6 @@ public class SimulatedSmartDriver implements Runnable {
                                 }
                             } catch (Exception ex) {
                                 LOG.log(Level.SEVERE, "*Reintento* - Error: {0} - No se han podido reenviar los {1} 'Data Section' pendientes", new Object[]{ex.getMessage(), pendingDataSections.size()});
-                                SimulatorController.logCurrentStatus();
                             } finally {
                                 ztreamySecondsBetweenRetries = 0;
                             }
@@ -482,7 +478,6 @@ public class SimulatedSmartDriver implements Runnable {
                                     pendingDataSections.clear();
                                 } else {
                                     LOG.log(Level.SEVERE, "*Reintento* - Error SEND (Not OK): No se han podido reenviar los {0} 'Data Section' pendientes", events.length);
-                                    SimulatorController.logCurrentStatus();
                                     if (retries != -1) {
                                         decreasePendingDataSectionsRetries();
                                     }
@@ -490,7 +485,6 @@ public class SimulatedSmartDriver implements Runnable {
                                 }
                             } catch (IOException ex) {
                                 LOG.log(Level.SEVERE, "*Reintento* - Error: {0} - No se han podido reenviar los {1} 'Data Section' pendientes", new Object[]{ex.getMessage(), pendingDataSections.size()});
-                                SimulatorController.logCurrentStatus();
                                 reconnectPublisher();
                             } finally {
                                 ztreamySecondsBetweenRetries = 0;
@@ -611,7 +605,6 @@ public class SimulatedSmartDriver implements Runnable {
                             pendingVehicleLocations.add(event);
                         }
                         LOG.log(Level.SEVERE, "sendEvery10SecondsIfLocationChanged() - Error desconocido: {0}", ex.getMessage());
-                        SimulatorController.logCurrentStatus();
                     }
                 } finally {
                     // Iniciamos el contador de tiempo para el siguiente envío.
@@ -633,7 +626,6 @@ public class SimulatedSmartDriver implements Runnable {
                             pendingVehicleLocations.add(event);
                         }
                         LOG.log(Level.SEVERE, "sendEvery10SecondsIfLocationChanged() - Error SEND (Not OK)");
-                        SimulatorController.logCurrentStatus();
                         reconnectPublisher();
                     }
                 } catch (MalformedURLException ex) {
@@ -646,7 +638,6 @@ public class SimulatedSmartDriver implements Runnable {
                             pendingVehicleLocations.add(event);
                         }
                         LOG.log(Level.SEVERE, "sendEvery10SecondsIfLocationChanged() - Error I/O: {0}", ex.getMessage());
-                        SimulatorController.logCurrentStatus();
                         reconnectPublisher();
                     }
                 } catch (Exception ex) {
@@ -657,7 +648,6 @@ public class SimulatedSmartDriver implements Runnable {
                             pendingVehicleLocations.add(event);
                         }
                         LOG.log(Level.SEVERE, "sendEvery10SecondsIfLocationChanged() - Error desconocido: {0}", ex.getMessage());
-                        SimulatorController.logCurrentStatus();
                         reconnectPublisher();
                     }
                 } finally {
@@ -766,7 +756,6 @@ public class SimulatedSmartDriver implements Runnable {
                             pendingDataSections.add(event);
                         }
                         LOG.log(Level.SEVERE, "sendDataSectionToZtreamy() - Error desconocido: {0} - Primera trama de la sección: {1} - Enviada a las: {2}", new Object[]{ex.getMessage(), dataSection.getRoadSection().get(0).getTimeStamp(), Constants.dfISO8601.format(System.currentTimeMillis())});
-                        SimulatorController.logCurrentStatus();
                     }
                 } finally {
                     // Reiniciamos los acumulados.
@@ -790,7 +779,6 @@ public class SimulatedSmartDriver implements Runnable {
                             pendingDataSections.add(event);
                         }
                         LOG.log(Level.SEVERE, "sendDataSectionToZtreamy() - Error SEND (Not OK): Primera trama de la sección: {0} - Enviada a las: {1}", new Object[]{dataSection.getRoadSection().get(0).getTimeStamp(), Constants.dfISO8601.format(System.currentTimeMillis())});
-                        SimulatorController.logCurrentStatus();
                         reconnectPublisher();
                     }
                 } catch (MalformedURLException ex) {
@@ -803,7 +791,6 @@ public class SimulatedSmartDriver implements Runnable {
                             pendingDataSections.add(event);
                         }
                         LOG.log(Level.SEVERE, "sendDataSectionToZtreamy() - Error I/O: {0} - Primera trama de la sección: {1} - Enviada a las: {2}", new Object[]{ex.getMessage(), dataSection.getRoadSection().get(0).getTimeStamp(), Constants.dfISO8601.format(System.currentTimeMillis())});
-                        SimulatorController.logCurrentStatus();
                         reconnectPublisher();
                     }
                 } catch (Exception ex) {
@@ -814,7 +801,6 @@ public class SimulatedSmartDriver implements Runnable {
                             pendingDataSections.add(event);
                         }
                         LOG.log(Level.SEVERE, "sendDataSectionToZtreamy() - Error desconocido: {0} - Primera trama de la sección: {1} - Enviada a las: {2}", new Object[]{ex.getMessage(), dataSection.getRoadSection().get(0).getTimeStamp(), Constants.dfISO8601.format(System.currentTimeMillis())});
-                        SimulatorController.logCurrentStatus();
                         reconnectPublisher();
                     }
                 } finally {
@@ -912,41 +898,41 @@ public class SimulatedSmartDriver implements Runnable {
         @Override
         public void onCompletion(RecordMetadata metadata, Exception exception) {
             if (metadata != null) {
+                // Register the current delay.
                 currentDelay_ms = System.currentTimeMillis() - startTime;
-                SimulatorController.setCurrentSmartDriversDelay(currentDelay_ms);
 
-                // Register the maximum delay.
+                // It is stored the maximum delay registered by the SmartDriver.
                 if (currentDelay_ms > maxDelay_ms) {
                     maxDelay_ms = currentDelay_ms;
                 }
-
-                // Send SmartDriver current status.
-                String json = new Gson().toJson(new SmartDriverStatus(id, System.currentTimeMillis(), currentDelay_ms, metadata.serializedValueSize()));
-                SimulatorController.getKafkaMonitoringProducer().send(new ProducerRecord<>(Kafka.TOPIC_SMARTDRIVER_STATUS, id, json));
-
                 LOG.log(Level.FINE, "onCompletion() - Message received in Kafka\n - Key: {0}\n - Events: {1}\n - Partition: {2}\n - Offset: {3}\n - Elapsed time: {4} ms", new Object[]{key, events.length, metadata.partition(), metadata.offset(), currentDelay_ms});
+
                 switch (type) {
                     case RECOVERED_VEHICLE_LOCATION:
+                        SimulatorController.addRecovered(events.length);
+                        LOG.log(Level.INFO, "*Retry* - {0} Pending 'Vehicle Location' events {1} successfully received. SmartDriver: {2}", new Object[]{events.length, type.name(), ll.getPerson().getEmail()});
+                        pendingVehicleLocations.clear();
+                        break;
                     case RECOVERED_DATA_SECTION:
                         SimulatorController.addRecovered(events.length);
-                        LOG.log(Level.INFO, "*Retry* - {0} Pending events {1} successfully received. SmartDriver: {2}", new Object[]{events.length, type.name(), ll.getPerson().getEmail()});
-                        pendingVehicleLocations.clear();
+                        LOG.log(Level.INFO, "*Retry* - {0} Pending 'Data Section' events {1} successfully received. SmartDriver: {2}", new Object[]{events.length, type.name(), ll.getPerson().getEmail()});
+                        pendingDataSections.clear();
                         break;
                     case NORMAL_VEHICLE_LOCATION:
                         SimulatorController.increaseOkSends();
-                        LOG.log(Level.FINE, "onCompletion() - Vehicle location successfully received. SmartDriver: {0}", ll.getPerson().getEmail());
+                        LOG.log(Level.FINE, "onCompletion() - 'Vehicle Location' successfully received. SmartDriver: {0}", ll.getPerson().getEmail());
                         locationChanged = false;
                         break;
                     case NORMAL_DATA_SECTION:
                         SimulatorController.increaseOkSends();
-                        LOG.log(Level.FINE, "onCompletion() - Data section successfully received. SmartDriver: {0}", ll.getPerson().getEmail());
+                        LOG.log(Level.FINE, "onCompletion() - 'Data Section' successfully received. SmartDriver: {0}", ll.getPerson().getEmail());
                         break;
                     default:
                         break;
                 }
             } else {
                 LOG.log(Level.SEVERE, "onCompletion() - Unable to send message to Kafka", exception);
-                SimulatorController.logCurrentStatus();
+
                 switch (type) {
                     case RECOVERED_VEHICLE_LOCATION:
                         if (retries != -1) {
@@ -978,6 +964,11 @@ public class SimulatedSmartDriver implements Runnable {
                         break;
                 }
             }
+
+            // Finally, it is sent the SmartDriver current status to the streaming server. 
+            String json = new Gson().toJson(new SmartDriverStatus(id, System.currentTimeMillis(), currentDelay_ms, metadata != null ? metadata.serializedValueSize() : 0));
+            LOG.log(Level.FINE, "onCompletion() - SmartDriver status JSON: {0}", json);
+            SimulatorController.getKafkaMonitoringProducer().send(new ProducerRecord<>(Kafka.TOPIC_SMARTDRIVER_STATUS, id, json));
         }
     }
 }
