@@ -1,4 +1,4 @@
-package es.us.lsi.hermes.simulator.kafka;
+package es.us.lsi.hermes.kafka;
 
 import es.us.lsi.hermes.util.Util;
 import java.util.Properties;

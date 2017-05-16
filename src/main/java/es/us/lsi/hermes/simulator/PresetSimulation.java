@@ -3,6 +3,7 @@ package es.us.lsi.hermes.simulator;
 import es.us.lsi.hermes.util.Constants;
 import es.us.lsi.hermes.util.StorageUtils;
 import es.us.lsi.hermes.util.Util;
+import java.text.MessageFormat;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -10,6 +11,7 @@ import java.util.Date;
 import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.apache.commons.lang.time.DurationFormatUtils;
 
 public class PresetSimulation {
 
@@ -32,6 +34,10 @@ public class PresetSimulation {
     private static int retries;
     private static boolean useRoutesFromHdd;
     private static String pathForCsvStorage;
+    private static int maxResponseDelayMs;
+    private static int maxSimulationTimeInSeconds;
+    private static String maxSimulationTimeStringFormatted;
+    private static int statusSamplingIntervalInSeconds;
 
     static {
         LOG.log(Level.INFO, "PresetSimulation() - Preset configuration init.");
@@ -57,16 +63,24 @@ public class PresetSimulation {
         startingMode = getIntValue("starting.mode", 0, 2, 1);
         retryOnFail = getBooleanValue("retry.on.fail", true);
         intervalBetweenRetriesInSeconds = getIntValue("interval.between.retries.s", 1, 60, 10);
-        // FIXME: Check valid future schedules. If it is before now, it will start immediately.
         scheduledSimulation = getDateValue("scheduled.simulation", Constants.dfFile);
         sendResultsToEmail = getEmailValue("send.results.to.email", "jorgeyago.ingeniero@gmail.com");
         randomizeEachSmartDriverBehaviour = getBooleanValue("randomize.behaviour", true);
         retries = getIntValue("retries", -1, 5, 1);
         useRoutesFromHdd = getBooleanValue("use.routes.from.hdd", false);
         pathForCsvStorage = getPathValue("path.csv.storage", "CSV_storage");
+        maxResponseDelayMs = getIntValue("max.response.delay.ms", 1000, 10000, 5000);
+        maxSimulationTimeInSeconds = getIntValue("max.simulation.time.s", 0);
+        if (maxSimulationTimeInSeconds > 0) {
+            String pattern = Constants.getBundleValue("LimitedSimulationTime");
+            maxSimulationTimeStringFormatted = MessageFormat.format(pattern, DurationFormatUtils.formatDuration(PresetSimulation.getMaxSimulationTimeMs(), "HH:mm:ss", true));
+        } else {
+            maxSimulationTimeStringFormatted = Constants.getBundleValue("Infinite");
+        }
+        statusSamplingIntervalInSeconds = getIntValue("status.sampling.interval.s", 1, 30, 1);
     }
 
-    private static String getPathValue(String propertyName, String defaultValue){
+    private static String getPathValue(String propertyName, String defaultValue) {
         String property = PRESET_SIMULATION_PROPERTIES.getProperty(propertyName);
 
         if (!StorageUtils.canWrite(property)) {
@@ -74,6 +88,19 @@ public class PresetSimulation {
             LOG.log(Level.SEVERE, "{0} property not declared or not writable, using default: {1}", new Object[]{propertyName, property});
         }
         return property;
+    }
+
+    private static int getIntValue(String propertyName, int defaultValue) {
+        String property = PRESET_SIMULATION_PROPERTIES.getProperty(propertyName, String.valueOf(defaultValue));
+        int value = defaultValue;
+
+        try {
+            value = Integer.parseInt(property);
+        } catch (NumberFormatException ex) {
+            LOG.log(Level.SEVERE, "validate() - Invalid value for {0}. Using default value: {1}", new Object[]{propertyName, defaultValue});
+        }
+
+        return value;
     }
 
     private static int getIntValue(String propertyName, int minimum, int maximum, int defaultValue) {
@@ -183,5 +210,21 @@ public class PresetSimulation {
 
     public static String getPathForCsvStorage() {
         return pathForCsvStorage;
+    }
+
+    public static int getMaxResponseDelayMs() {
+        return maxResponseDelayMs;
+    }
+
+    public static int getMaxSimulationTimeMs() {
+        return maxSimulationTimeInSeconds * 1000;
+    }
+
+    public static String getMaxSimulationTimeStringFormatted() {
+        return maxSimulationTimeStringFormatted;
+    }
+
+    public static int getStatusSamplingIntervalInSeconds() {
+        return statusSamplingIntervalInSeconds;
     }
 }

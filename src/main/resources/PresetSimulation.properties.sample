@@ -16,15 +16,21 @@ starting.mode=1
 retry.on.fail=true
 # Interval of seconds between retries, in case of retrying on fail.
 interval.between.retries.s=10
-# Scheduled date and time to do the simulation. Format: yyyy-MM-dd_HH.mm.ss
+# Scheduled date and time to do the simulation. If this attribute is commented out, it will start with the execution of the application. Format: yyyy-MM-dd_HH.mm.ss
 scheduled.simulation=2017-01-16_09.00.00
 # Email where to send results of simulation.
 send.results.to.email=jorgeyago.ingeniero@gmail.com
 # Indicates if the behaviour of each SmartDriver is randomized.
 randomize.behaviour=true
-# Number of retries sending an event before being discarded from -1 (means infinite retries) to 5
+# Number of retries sending an event before being discarded from -1 (means infinite retries) to 5.
 retries = 1
 # Indicates if the system should generate new routes or use the existing ones.
 use.routes.from.hdd=false
 # Path to store the exported CSV routes to the HDD
-path.csv.storage=CSV_storage
+path.csv.storage=CSV_storage.
+# Maximum allowed streaming server response delay from 1000 to 10000 milliseconds.
+max.response.delay.ms=5000
+# Maximum simulation time in seconds. If this attribute is commented out, it will simulate until the user exits the application.
+max.simulation.time.s=0
+# Simulator status sampling interval from 1 to 30 seconds.
+status.sampling.interval.s=1

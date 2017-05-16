@@ -6,7 +6,7 @@ import es.us.lsi.hermes.analysis.Vehicle;
 import es.us.lsi.hermes.csv.SimulatorStatus;
 import es.us.lsi.hermes.location.detail.LocationLogDetail;
 import es.us.lsi.hermes.location.LocationLog;
-import es.us.lsi.hermes.simulator.kafka.Kafka;
+import es.us.lsi.hermes.kafka.Kafka;
 import es.us.lsi.hermes.util.*;
 import static es.us.lsi.hermes.util.Util.getComputerName;
 import java.io.Serializable;
@@ -18,7 +18,6 @@ import java.util.Date;
 import java.util.List;
 import java.util.Properties;
 import java.util.Random;
-import java.util.ResourceBundle;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -89,8 +88,8 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
     private static volatile SurroundingVehiclesConsumer surroundingVehiclesConsumer;
     private static ConcurrentHashMap<String, SimulatedSmartDriver> simulatedSmartDriverHashMap = new ConcurrentHashMap<>();
-    // JYFR: PRUEBA
-//    private static ScheduledFuture emergencyScheduler;
+
+    private static ScheduledFuture emergencyScheduler;
     private static ScheduledFuture simulationScheduler;
     private static ScheduledFuture statusMonitorScheduler;
 
@@ -102,8 +101,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     // Directorio temporal para almacenar los archivos generados.
     // TODO: Still necessary?
     private static Path tempFolder;
-
-    private final ResourceBundle bundle;
 
     private enum Stream_Server {
         KAFKA, ZTREAMY, FIRST_KAFKA_THEN_ZTREAMY, FIRST_ZTREAMY_THEN_KAFKA
@@ -126,9 +123,8 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
     private static int retries = 5;
 
-    // JYFR: PRUEBA
-//    private static boolean infiniteSimulation = false;
-    private static boolean infiniteSimulation = true;
+    // TODO: Relocate in PresetSimulation.properties
+    private static boolean loopingSimulation = true;
     static boolean kafkaProducerPerSmartDriver = true;
 
     // Kafka
@@ -141,18 +137,16 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     public SimulatorController() {
         LOG.log(Level.INFO, "SimulatorController() - Simulator controller init.");
 
-        // Cargamos los recursos de internacionalización.
-        bundle = ResourceBundle.getBundle("Bundle");
-
+        // Attribute initialization.
         initAttributes();
 
-        // Iniciamos el 'pool' de hilos de ejecución para los SmartDrivers.
+        // Thread pool for simulated SmartDrivers initialization.
         initThreadPool();
 
         maxSmartDriversDelayMs = new AtomicLong(0);
         currentMeanSmartDriversDelayMs = new AtomicLong(0);
 
-        // Comprobamos si existe una configuración asignada en el archivo de propiedades y generamos la simulación.
+        // Set the simulation configuration values from the PresetSimulation.properties files.
         initPresetSimulation();
 
         kafkaRecordId = new AtomicLong(0);
@@ -195,10 +189,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
         // Initialize path related attributes to perform the simulation
         setupVariablesWithPaths(locationLogList.size());
-
-        if (scheduledDate != null) {
-            scheduledSimulation();
-        }
     }
 
     private void setupVariablesWithPaths(int locationLogListSize) {
@@ -209,7 +199,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 // Log the generated paths, although the user requested a higher amount.
                 LOG.log(Level.SEVERE, "generateSimulatedPaths() - Only {0} paths could be generated", locationLogList.size());
             } else {
-                LOG.log(Level.INFO, bundle.getString("UnableToGetPathsFromService"));
+                LOG.log(Level.INFO, Constants.getBundleValue("UnableToGetPathsFromService"));
             }
         }
     }
@@ -217,8 +207,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     public void configChanged() {
         currentState = State.CONFIG_CHANGED;
     }
-
-
 
     public void setPathsGenerationMethod(int value) {
         try {
@@ -261,25 +249,14 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 LOG.log(Level.FINE, "statusMonitorTimer() - Simulation status JSON: {0}", json);
                 SimulatorController.getKafkaMonitoringProducer().send(new ProducerRecord<>(Kafka.TOPIC_SIMULATOR_STATUS, computerNameWithStartTime, json));
             }
-        }, 1, Constants.STATUS_SAMPLING_INTERVAL_S, TimeUnit.SECONDS
+        }, 1, PresetSimulation.getStatusSamplingIntervalInSeconds(), TimeUnit.SECONDS
         );
     }
 
     public void simulate() {
-        // JYFR: PRUEBA
-//            String pattern = bundle.getString("LimitedSimulationTime");
-//            JsfUtil.addInfoMessage(MessageFormat.format(pattern, DurationFormatUtils.formatDuration(MAX_SIMULATION_TIME, "HH:mm:ss", true)));
         if (scheduledDate != null) {
-            if (simulationScheduler != null) {
-                // Había programada una simulación y ha sido cancelada.
-                simulationScheduler.cancel(true);
-                simulationScheduler = null;
-                currentState = State.READY_TO_SIMULATE;
-            } else {
-                scheduledSimulation();
-            }
+            scheduledSimulation();
         } else {
-            // Es una simulación sin programar.
             executeSimulation();
         }
     }
@@ -297,6 +274,12 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         }, delay, TimeUnit.MILLISECONDS
         );
         currentState = State.SCHEDULED_SIMULATION;
+    }
+    
+    private static void cancelScheduledSimulation() {
+        if (simulationScheduler != null) {
+            simulationScheduler.cancel(true);
+        }
     }
 
     private void executeSimulation() {
@@ -320,14 +303,15 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
         // Creation of simulated Smart Drivers.
         String simulationSummary = MessageFormat.format(
-                "\n-> Simulation speed: {0}." +
-                "\n-> Real time execution: {1}" +
-                "\n-> ¿Retry failed messages?: {2}" +
-                "\n-> Seconds between retries: {3}" +
-                "\n-> SmartDrivers start mode: {4}" +
-                "\n-> Paths requested: {6}" + (pathNumberWarnings ? " Path generated {7} - WARNING" : "") +
-                "\n-> Drivers per paths requested: {8}" +
-                "\n-> Number of threads that will be created: {5}",
+                "\n-> Simulation speed: {0}."
+                + "\n-> Real time execution: {1}"
+                + "\n-> ¿Retry failed messages?: {2}"
+                + "\n-> Seconds between retries: {3}"
+                + "\n-> SmartDrivers start mode: {4}"
+                + "\n-> Paths requested: {6}" + (pathNumberWarnings ? " Path generated {7} - WARNING" : "")
+                + "\n-> Drivers per paths requested: {8}"
+                + "\n-> Number of threads that will be created: {5}"
+                + "\n-> Maximum simulation time: {9}",
                 timeRate.name(),
                 timeRate.equals(Time_Rate.X1),
                 PresetSimulation.isRetryOnFail(),
@@ -336,7 +320,8 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 PresetSimulation.getDriversByPath() * locationLogList.size(),
                 PresetSimulation.getPathsAmount(),
                 locationLogList.size(),
-                PresetSimulation.getDriversByPath());
+                PresetSimulation.getDriversByPath(),
+                PresetSimulation.getMaxSimulationTimeStringFormatted());
         LOG.log(Level.INFO, "SimulatorController - executeSimulation() - FINAL CONDITIONS: {0}", simulationSummary);
 
         try {
@@ -359,9 +344,10 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 }
             }
 
-            // JYFR: PRUEBA
-//            LOG.log(Level.INFO, "executeSimulation() - Se activa el sistema de parada de emergencia, si la duración es mayor a: {0}", DurationFormatUtils.formatDuration(MAX_SIMULATION_TIME, "HH:mm:ss", true));
-//            startShutdownTimer();
+            if (PresetSimulation.getMaxSimulationTimeMs() > 0) {
+                LOG.log(Level.INFO, "simulate() {0}", PresetSimulation.getMaxSimulationTimeStringFormatted());
+                startShutdownTimer();
+            }
         } catch (Exception ex) {
             LOG.log(Level.SEVERE, "executeSimulation() - Ha ocurrido un problema al crear los hilos de ejecución. Se cancela la simulación", ex);
             // Cancelamos las simulaciones.
@@ -371,7 +357,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
     private void initSimulatedSmartDriver(long id, LocationLog ll, LatLng latLng, int smartDriversBunch) throws MalformedURLException, HermesException {
 
-        SimulatedSmartDriver ssd = new SimulatedSmartDriver(id, ll, randomizeEachSmartDriverBehaviour, infiniteSimulation, streamServer.ordinal() % 2, retries);
+        SimulatedSmartDriver ssd = new SimulatedSmartDriver(id, ll, randomizeEachSmartDriverBehaviour, loopingSimulation, streamServer.ordinal() % 2, retries);
         simulatedSmartDriverHashMap.put(ssd.getSha(), ssd);
 
         long delay = 0;
@@ -398,6 +384,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         long totalDelay = 100 + id + delay;
         LOG.log(Level.FINE, "SmartDriver {0} con inicio en {1}", new Object[]{id, totalDelay});
         threadPool.scheduleAtFixedRate(ssd, totalDelay, timeRate.getMilliseconds(), TimeUnit.MILLISECONDS);
+        // TODO: Consumer
 //                        ssd.startConsumer();
     }
 
@@ -442,8 +429,8 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
     private synchronized void finishSimulation(boolean interrupted) {
         try {
-            // JYFR: PRUEBA
-//            stopShutdownTimer();
+            cancelScheduledSimulation();
+            stopShutdownTimer();
             stopStatusMonitorTimer();
 
             if (currentState.equals(State.SIMULATING)) {
@@ -568,7 +555,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         try {
             streamServer = Stream_Server.values()[value];
             if (streamServer.ordinal() > 1) {
-                infiniteSimulation = false;
+                loopingSimulation = false;
             }
             if (streamServer.ordinal() % 2 != 0) {
                 kafkaProducerPerSmartDriver = false;
@@ -620,27 +607,23 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         }
     }
 
-    // JYFR: PRUEBA
-//    private static void stopShutdownTimer() {
-//        if (emergencyScheduler != null) {
-//            emergencyScheduler.cancel(true);
-//        }
-//    }
-    // JYFR: PRUEBA
-//    private void startShutdownTimer() {
-//        if (emergencyScheduler != null) {
-//            emergencyScheduler.cancel(true);
-//        }
-//        ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
-//        // Por seguridad, se establece un tiempo máximo de simulación (más un minuto extra de margen). Cumplido este tiempo se llamará a la finalización de emergencia.
-//        emergencyScheduler = scheduledExecutorService.scheduleAtFixedRate(new EmergencyShutdown(startSimulationTime, MAX_SIMULATION_TIME + 60000), 0, 5, TimeUnit.SECONDS);
-//    }
-    public boolean isInfiniteSimulation() {
-        return infiniteSimulation;
+    private static void stopShutdownTimer() {
+        if (emergencyScheduler != null) {
+            emergencyScheduler.cancel(true);
+        }
+    }
+    
+    private void startShutdownTimer() {
+        if (emergencyScheduler != null) {
+            emergencyScheduler.cancel(true);
+        }
+        // Shutdown timer to set a limited simulation time. Once it reaches the set duration, it will finish the execution.
+        ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
+        emergencyScheduler = scheduledExecutorService.scheduleAtFixedRate(new EmergencyShutdown(startSimulationTime, PresetSimulation.getMaxSimulationTimeMs() + 60000), 0, 5, TimeUnit.SECONDS);
     }
 
-    public void setInfiniteSimulation(boolean is) {
-        infiniteSimulation = is;
+    public boolean isLoopingSimulation() {
+        return loopingSimulation;
     }
 
     public boolean isKafkaProducerPerSmartDriver() {
@@ -681,6 +664,10 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
     public static synchronized List<LocationLog> getLocationLogList() {
         return locationLogList;
+    }
+
+    public static long getStartSimulationTime() {
+        return startSimulationTime;
     }
 
     class EmergencyShutdown implements Runnable {

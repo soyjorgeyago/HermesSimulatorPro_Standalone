@@ -2,7 +2,7 @@ package es.us.lsi.hermes.simulator;
 
 import com.google.gson.Gson;
 import es.us.lsi.hermes.analysis.Vehicle;
-import es.us.lsi.hermes.simulator.kafka.Kafka;
+import es.us.lsi.hermes.kafka.Kafka;
 import es.us.lsi.hermes.util.Constants;
 import java.util.Collections;
 import java.util.logging.Level;
