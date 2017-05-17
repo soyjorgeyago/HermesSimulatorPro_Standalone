@@ -7,7 +7,6 @@ import es.us.lsi.hermes.csv.SimulatorStatus;
 import es.us.lsi.hermes.location.LocationLog;
 import es.us.lsi.hermes.kafka.Kafka;
 import es.us.lsi.hermes.util.*;
-import static es.us.lsi.hermes.util.Util.getComputerName;
 import java.io.Serializable;
 import java.net.MalformedURLException;
 import java.nio.file.Path;
@@ -237,16 +236,48 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
             public void run() {
                 // Evaluate the mean delay.
                 long totalDelaysMs = 0L;
+                java.util.Map.Entry entry = simulatedSmartDriverHashMap.entrySet().iterator().next();
+                SimulatedSmartDriver mostRecentSmartDriver = (SimulatedSmartDriver) entry.getValue();
+                ArrayList<SimulatedSmartDriver> pausedSimulatedSmartDrivers = new ArrayList<>();
+
                 for (SimulatedSmartDriver ssd : simulatedSmartDriverHashMap.values()) {
-                    totalDelaysMs += ssd.getCurrentDelayMs();
+                    if (!ssd.isPaused()) {
+                        totalDelaysMs += ssd.getCurrentDelayMs();
+                        if (ssd.getElapsedSeconds() < mostRecentSmartDriver.getElapsedSeconds()) {
+                            mostRecentSmartDriver = ssd;
+                        }
+                    } else {
+                        pausedSimulatedSmartDrivers.add(ssd);
+                    }
                 }
 
-                currentMeanSmartDriversDelayMs.set(totalDelaysMs / simulatedSmartDriverHashMap.size());
+                int activeSmartDrivers = simulatedSmartDriverHashMap.size() - pausedSimulatedSmartDrivers.size();
+                if (activeSmartDrivers > 0)
+                    currentMeanSmartDriversDelayMs.set(totalDelaysMs / activeSmartDrivers);
+                else
+                    currentMeanSmartDriversDelayMs.set(-1);
                 logCurrentStatus();
 
-                String json = new Gson().toJson(new SimulatorStatus(System.currentTimeMillis(), GENERATED.intValue(), SENT.intValue(), OK.intValue(), NOT_OK.intValue(), ERRORS.intValue(), RECOVERED.intValue(), FINALLY_PENDING.intValue(), threadPool.getQueue().size(), currentMeanSmartDriversDelayMs.get()));
+                String json = new Gson().toJson(new SimulatorStatus(System.currentTimeMillis(), GENERATED.intValue(), SENT.intValue(), OK.intValue(), NOT_OK.intValue(), ERRORS.intValue(), RECOVERED.intValue(), FINALLY_PENDING.intValue(), threadPool.getQueue().size(), currentMeanSmartDriversDelayMs.get(), pausedSimulatedSmartDrivers.size()));
                 LOG.log(Level.FINE, "statusMonitorTimer() - Simulation status JSON: {0}", json);
                 SimulatorController.getKafkaMonitoringProducer().send(new ProducerRecord<>(Kafka.TOPIC_SIMULATOR_STATUS, computerNameWithStartTime, json));
+
+                // If the current mean delay exceeds the threshold value, the most recent SmartDriver thread will be paused in order to improve the delay.
+                if (currentMeanSmartDriversDelayMs.get() > PresetSimulation.getMaxResponseDelayMs()) {
+                    try {
+                        mostRecentSmartDriver.pauseSmartDriver();
+                    } catch (InterruptedException ex) {
+                        LOG.log(Level.SEVERE, "statusMonitorTimer() - Can't pause SimulatedSmartDriver {0}", mostRecentSmartDriver.getSha());
+                    }
+                } else {
+                    if (!pausedSimulatedSmartDrivers.isEmpty()) {
+                        try {
+                            pausedSimulatedSmartDrivers.get(0).resumeSmartDriver();
+                        } catch (InterruptedException ex) {
+                            LOG.log(Level.SEVERE, "statusMonitorTimer() - Can't resume SimulatedSmartDriver {0}", mostRecentSmartDriver.getSha());
+                        }
+                    }
+                }
             }
         }, 1, PresetSimulation.getStatusSamplingIntervalInSeconds(), TimeUnit.SECONDS
         );
@@ -295,7 +326,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         surroundingVehiclesConsumer = new SurroundingVehiclesConsumer(this);
         surroundingVehiclesConsumer.start();
 
-        // Simulator status monitor init.
+        // Simulator status monitor initCSV.
         startStatusMonitorTimer();
 
         boolean pathNumberWarnings = PresetSimulation.getPathsAmount() != locationLogList.size();
@@ -324,7 +355,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         LOG.log(Level.INFO, "SimulatorController - executeSimulation() - FINAL CONDITIONS: {0}", simulationSummary);
 
         List<List<ICSVBean>> extractedDrivers = null;
-        if(PresetSimulation.isUseRoutesFromHdd()){
+        if (PresetSimulation.isUseRoutesFromHdd()) {
             extractedDrivers = CSVUtils.extractSimulatedDriverForPath();
         }
 
@@ -342,7 +373,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 for (int j = 0; j < PresetSimulation.getDriversByPath(); j++) {
 
                     double rSpeed = -1, rHeartRate = -1;
-                    if(PresetSimulation.isUseRoutesFromHdd() && extractedDrivers != null) {
+                    if (PresetSimulation.isUseRoutesFromHdd() && extractedDrivers != null) {
                         SimulatedSmartDriver exSSD = (SimulatedSmartDriver) extractedDrivers.get(i).get(j);
                         rSpeed = exSSD.getSpeedRandomFactor();
                         rHeartRate = exSSD.getHrRandomFactor();
@@ -469,7 +500,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
                 int i = 1;
                 String body = "<html><head><title></title></head><body>" + (interrupted ? "<h1 style=\"color:red;\">SIMULACION INTERRUMPIDA</h1>" : "") + "<p>" + simulationSummary.replaceAll("\n", "<br/>") + "</p><p>" + timeSummary + "</p><p>Un saludo.</p></body></html>";
-                Email.generateAndSendEmail(PresetSimulation.getSendResultsToEmail(), "FIN DE SIMULACION " + getComputerName(), body);
+                Email.generateAndSendEmail(PresetSimulation.getSendResultsToEmail(), "FIN DE SIMULACION " + Util.getComputerName(), body);
             }
         } catch (MessagingException ex) {
             LOG.log(Level.SEVERE, "finishSimulation() - No se ha podido enviar el e-mail con los resultados de la simulación", ex.getCause());

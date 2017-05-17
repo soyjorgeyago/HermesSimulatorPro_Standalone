@@ -5,7 +5,7 @@ import org.supercsv.cellprocessor.ift.CellProcessor;
 
 public interface ICSVBean {
     
-    void init();
+    void initCSV();
 
     CellProcessor[] getProcessors();
 

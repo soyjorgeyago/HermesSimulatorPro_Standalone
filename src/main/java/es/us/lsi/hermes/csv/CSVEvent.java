@@ -24,7 +24,7 @@ public class CSVEvent implements Serializable, ICSVBean {
     public CSVEvent(String eventId, String timestamp) {
         this.eventId = eventId;
         this.timestamp = timestamp;
-        init();
+        initCSV();
     }
 
     public void setFields(String[] fields) {
@@ -44,7 +44,7 @@ public class CSVEvent implements Serializable, ICSVBean {
     }
 
     @Override
-    public final void init() {
+    public final void initCSV() {
         List<CellProcessor> cpl = new ArrayList<>();
 
         cpl.add(new org.supercsv.cellprocessor.constraint.NotNull()); // Timestamp del evento.

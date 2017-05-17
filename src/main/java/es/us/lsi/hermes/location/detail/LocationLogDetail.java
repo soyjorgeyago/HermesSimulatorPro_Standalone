@@ -25,7 +25,7 @@ public class LocationLogDetail implements Serializable, ICSVBean {
         this.heartRate = 0;
         this.rrTime = 0;
         this.secondsToBeHere = 0;
-        init();
+        initCSV();
     }
 
     public LocationLogDetail(double lat, double lng, Double speed) {
@@ -118,7 +118,7 @@ public class LocationLogDetail implements Serializable, ICSVBean {
     private String[] headers;
 
     @Override
-    public void init() {
+    public void initCSV() {
         cellProcessors = new CellProcessor[]{new ParseDouble(), new ParseDouble(), new ParseDouble(), new ParseInt(), new ParseInt()};
 
         headers = new String[]{"Latitude", "Longitude", "Speed", "SecondsToBeHere", "RrTime"};

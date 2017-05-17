@@ -28,7 +28,7 @@ retries = 1
 use.routes.from.hdd=false
 # Path to store the exported CSV routes to the HDD
 path.csv.storage=CSV_storage.
-# Maximum allowed streaming server response delay from 1000 to 10000 milliseconds.
+# Maximum allowed streaming server response delay from 10 to 10000 milliseconds.
 max.response.delay.ms=5000
 # Maximum simulation time in seconds. If this attribute is commented out, it will simulate until the user exits the application.
 max.simulation.time.s=0

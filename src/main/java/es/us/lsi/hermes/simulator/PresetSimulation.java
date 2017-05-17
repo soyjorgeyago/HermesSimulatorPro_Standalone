@@ -69,7 +69,7 @@ public class PresetSimulation {
         retries = getIntValue("retries", -1, 5, 1);
         useRoutesFromHdd = getBooleanValue("use.routes.from.hdd", false);
         pathForCsvStorage = getPathValue("path.csv.storage", "CSV_storage");
-        maxResponseDelayMs = getIntValue("max.response.delay.ms", 1000, 10000, 5000);
+        maxResponseDelayMs = getIntValue("max.response.delay.ms", 10, 10000, 5000);
         maxSimulationTimeInSeconds = getIntValue("max.simulation.time.s", 0);
         if (maxSimulationTimeInSeconds > 0) {
             String pattern = Constants.getBundleValue("LimitedSimulationTime");

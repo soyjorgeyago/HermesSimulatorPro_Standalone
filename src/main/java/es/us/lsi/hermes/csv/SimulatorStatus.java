@@ -1,9 +1,6 @@
 package es.us.lsi.hermes.csv;
 
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.List;
-import org.supercsv.cellprocessor.ift.CellProcessor;
 
 /**
  * Clase con el estado de la simulación en cada segundo.
@@ -20,12 +17,13 @@ public class SimulatorStatus implements Serializable{
     private final int pending;
     private final int runningThreads;
     private final long currentSmartDriversDelay;
+    private final int pausedSmartDrivers;
 
     public SimulatorStatus() {
-        this(System.currentTimeMillis(), 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        this(System.currentTimeMillis(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     }
 
-    public SimulatorStatus(long timestamp, int generated, int sent, int ok, int notOk, int errors, int recovered, int pending, int runningThreads, long currentSmartDriversDelay) {
+    public SimulatorStatus(long timestamp, int generated, int sent, int ok, int notOk, int errors, int recovered, int pending, int runningThreads, long currentSmartDriversDelay, int pausedSmartDrivers) {
         this.timestamp = timestamp;
         this.generated = generated;
         this.sent = sent;
@@ -36,6 +34,7 @@ public class SimulatorStatus implements Serializable{
         this.pending = pending;
         this.runningThreads = runningThreads;
         this.currentSmartDriversDelay = currentSmartDriversDelay;
+        this.pausedSmartDrivers = pausedSmartDrivers;
     }
 
     public long getTimestamp() {
@@ -76,5 +75,9 @@ public class SimulatorStatus implements Serializable{
 
     public long getCurrentSmartDriversDelay() {
         return currentSmartDriversDelay;
+    }
+
+    public int getPausedSmartDrivers() {
+        return pausedSmartDrivers;
     }
 }
