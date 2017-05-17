@@ -1,6 +1,7 @@
 package es.us.lsi.hermes.simulator;
 
 import com.google.gson.Gson;
+import es.us.lsi.hermes.csv.ICSVBean;
 import es.us.lsi.hermes.smartDriver.SmartDriverStatus;
 import es.us.lsi.hermes.location.LocationLog;
 import es.us.lsi.hermes.location.detail.LocationLogDetail;
@@ -14,7 +15,6 @@ import es.us.lsi.hermes.ztreamy.Ztreamy;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
-import java.net.URL;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -34,10 +34,12 @@ import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.supercsv.cellprocessor.ParseDouble;
+import org.supercsv.cellprocessor.ift.CellProcessor;
 import ztreamy.JSONSerializer;
 import ztreamy.PublisherHC;
 
-public class SimulatedSmartDriver implements Runnable {
+public class SimulatedSmartDriver implements Runnable, ICSVBean {
 
     private static final Logger LOG = Logger.getLogger(SimulatedSmartDriver.class.getName());
 
@@ -51,15 +53,14 @@ public class SimulatedSmartDriver implements Runnable {
     private static final String VEHICLE_LOCATION = "Vehicle Location";
 
     // Parámetros para la simulación.
-    private static final SecureRandom RANDOM = new SecureRandom();
     private int stressLoad; // Indicará el nivel de carga de estrés.
     private boolean relaxing; // Indicará si el usuario está relajándose tras una carga de estrés.
     private static final double MIN_SPEED = 10.0d; // Velocidad mínima de los SmartDrivers.
 
     // Aunque sólo tengamos 2 tipos de eventos, 'Vehicle Location' y 'Data Section', internamente distinguimos entre cuando es un envío normal o cuando es una repetición de un envío previo.
-    public static enum Event_Type {
+    public enum Event_Type {
         NORMAL_VEHICLE_LOCATION, RECOVERED_VEHICLE_LOCATION, NORMAL_DATA_SECTION, RECOVERED_DATA_SECTION
-    };
+    }
 
     // Tiempo de simulación transcurrido en segundos del SmartDriver.
     private int elapsedSeconds;
@@ -86,6 +87,9 @@ public class SimulatedSmartDriver implements Runnable {
     private int secondsBetweenRetries;
     private final int minRrTime;
 
+    private double speedRandomFactor;
+    private double hrRandomFactor;
+
     // Listas con los 'Vehicle Location' y 'Data Section' que han fallado en su envío correspondiente, para poder reintentar su envío.
     private final List<ExtendedEvent> pendingVehicleLocations;
     private final List<ExtendedEvent> pendingDataSections;
@@ -104,6 +108,39 @@ public class SimulatedSmartDriver implements Runnable {
     private boolean infiniteSimulation;
     private final int retries;
 
+    public SimulatedSmartDriver() {
+        this.id = 0;
+        this.ll = null;
+        this.elapsedSeconds = 0;
+        this.locationChanged = false;
+        this.currentPosition = 0;
+        this.finished = false;
+        this.sectionDistance = 0.0d;
+        this.roadSectionList = new ArrayList<>();
+        this.cummulativePositiveSpeeds = 0.0d;
+        this.ztreamySecondsCount = 0;
+        this.stressLoad = 0;
+        int age = 0;
+        this.minRrTime = 0;
+        this.sha = "";
+        this.currentDelay_ms = 0L;
+        this.infiniteSimulation = infiniteSimulation;
+        this.pendingVehicleLocations = new ArrayList<>();
+        this.pendingDataSections = new ArrayList<>();
+        this.localLocationLogDetailList = new ArrayList<>();
+
+        this.speedRandomFactor = 0;
+        this.hrRandomFactor = 0;
+
+        this.smartDriverKafkaProducer = null;
+        this.publisher = null;
+        this.retries = 0;
+
+        this.streamServer = 0;
+
+        init();
+    }
+
     /**
      * Constructor para cada instancia de 'SmartDriver'.
      *
@@ -120,7 +157,7 @@ public class SimulatedSmartDriver implements Runnable {
      * @throws MalformedURLException
      * @throws HermesException
      */
-    public SimulatedSmartDriver(long id, LocationLog ll, boolean randomBehaviour, boolean infiniteSimulation, int streamServer, int retries) throws MalformedURLException, HermesException {
+    public SimulatedSmartDriver(long id, LocationLog ll, boolean randomBehaviour, boolean infiniteSimulation, int streamServer, int retries, double speedRandomFactor , double hrRandomFactor) throws MalformedURLException, HermesException {
         this.id = id;
         this.ll = ll;
         this.elapsedSeconds = 0;
@@ -128,7 +165,7 @@ public class SimulatedSmartDriver implements Runnable {
         this.currentPosition = 0;
         this.finished = false;
         this.sectionDistance = 0.0d;
-        this.roadSectionList = new ArrayList();
+        this.roadSectionList = new ArrayList<>();
         this.cummulativePositiveSpeeds = 0.0d;
         this.ztreamySecondsCount = 0;
         this.secondsBetweenRetries = 0;
@@ -136,17 +173,23 @@ public class SimulatedSmartDriver implements Runnable {
         int age = ThreadLocalRandom.current().nextInt(18, 65 + 1); // Simularemos conductores de distintas edades (entre 18 y 65 años), para establecer el ritmo cardíaco máximo en la simulación.
         this.minRrTime = (int) Math.ceil(60000.0d / (220 - age)); // Mínimo R-R, que establecerá el ritmo cardíaco máximo.
         this.sha = new String(Hex.encodeHex(DigestUtils.sha256(System.currentTimeMillis() + ll.getPerson().getEmail())));
-        this.currentDelay_ms = 0l;
+        this.currentDelay_ms = 0L;
         this.infiniteSimulation = infiniteSimulation;
 //        // TODO: Probar otros timeouts más altos.
 //        this.surroundingVehiclesConsumer = new SurroundingVehiclesConsumer(Long.parseLong(Kafka.getKafkaProperties().getProperty("consumer.poll.timeout.ms", "1000")), sha, this);
         this.pendingVehicleLocations = new ArrayList<>();
         this.pendingDataSections = new ArrayList<>();
-
         this.localLocationLogDetailList = new ArrayList<>();
 
-        double speedRandomFactor = 0.5d + (RANDOM.nextDouble() * 1.0d);
-        double hrRandomFactor = 0.9d + (RANDOM.nextDouble() * 0.2d);
+        if (speedRandomFactor == -1 && hrRandomFactor == -1) {
+            final SecureRandom RANDOM = new SecureRandom();
+
+            this.speedRandomFactor = 0.5d + (RANDOM.nextDouble() * 1.0d);
+            this.hrRandomFactor = 0.9d + (RANDOM.nextDouble() * 0.2d);
+        } else {
+            this.speedRandomFactor = speedRandomFactor;
+            this.hrRandomFactor = hrRandomFactor;
+        }
 
         for (int i = 0; i < ll.getLocationLogDetailList().size(); i++) {
             LocationLogDetail lld = (LocationLogDetail) ll.getLocationLogDetailList().get(i);
@@ -187,6 +230,8 @@ public class SimulatedSmartDriver implements Runnable {
                 throw new IllegalArgumentException("Invalid Stream Server option");
         }
         this.retries = retries;
+
+        init();
     }
 
     public String getSha() {
@@ -222,288 +267,293 @@ public class SimulatedSmartDriver implements Runnable {
 //    }
     @Override
     public void run() {
-        if (!finished) {
-            // If there is a limited simulation time, it will be controlled the elapsed simulation time.
-            // On the other hand, each simulated SmartDriver monitorizes its own simulation time.
-            if ((PresetSimulation.getMaxSimulationTimeMs() > 0)
-                    && ((System.currentTimeMillis() - SimulatorController.getStartSimulationTime()) >= PresetSimulation.getMaxSimulationTimeMs())) {
-                // It has been reached the simulation time.
-                finish();
-            } else {
-
-                LocationLogDetail currentLocationLogDetail = localLocationLogDetailList.get(currentPosition);
-
-                double distance;
-                double bearing;
-                // Por defecto, en la simulación se tiende al estado relajado.
-                relaxing = true;
-
-                LOG.log(Level.FINE, "SimulatedSmartDriver.run() - El usuario de SmartDriver se encuentra en: ({0}, {1})", new Object[]{currentLocationLogDetail.getLatitude(), currentLocationLogDetail.getLongitude()});
-                LOG.log(Level.FINE, "SimulatedSmartDriver.run() - Elemento actual: {0} de {1}", new Object[]{currentPosition, localLocationLogDetailList.size()});
-
-                // Comprobamos si ha pasado suficiente tiempo como para pasar a la siguiente localización.
-                if (elapsedSeconds >= currentLocationLogDetail.getSecondsToBeHere()) {
-                    // Comprobamos si hemos llegado al destino.
-                    if (currentPosition == localLocationLogDetailList.size() - 1) {
-                        if (!infiniteSimulation) {
-                            // Notificamos que ha terminado el SmartDriver actual.
-                            SimulatorController.smartDriverHasFinished(this.getSha());
-
-                            LOG.log(Level.FINE, "SimulatedSmartDriver.run() - El usuario ha llegado a su destino en: {0}", DurationFormatUtils.formatDuration(elapsedSeconds * 1000l, "HH:mm:ss", true));
-                            SimulatorController.addFinallyPending(pendingVehicleLocations.size() + pendingDataSections.size());
-                            finish();
-                        } else {
-                            // Hemos llegado al final, pero es una simulación infinita. Le damos la vuelta al recorrido y seguimos.
-                            Collections.reverse(localLocationLogDetailList);
-                            int size = localLocationLogDetailList.size();
-                            for (int i = 0; i < size / 2; i++) {
-                                LocationLogDetail lld1 = localLocationLogDetailList.get(i);
-                                LocationLogDetail lld2 = localLocationLogDetailList.get(size - 1 - i);
-                                int stbh1 = lld1.getSecondsToBeHere();
-                                lld1.setSecondsToBeHere(lld2.getSecondsToBeHere());
-                                lld2.setSecondsToBeHere(stbh1);
-                            }
-                            currentPosition = 0;
-                            elapsedSeconds = 0;
-                        }
-                    } else {
-                        // No hemos llegado al destino, avanzamos de posición.
-                        int previousPosition = currentPosition;
-                        for (int i = currentPosition; i < localLocationLogDetailList.size(); i++) {
-                            currentPosition = i;
-                            if (localLocationLogDetailList.get(i).getSecondsToBeHere() > elapsedSeconds) {
-                                break;
-                            }
-                        }
-
-                        LOG.log(Level.FINE, "SimulatedSmartDriver.run() - Avanzamos de posición: {0}", currentPosition);
-                        currentLocationLogDetail = localLocationLogDetailList.get(currentPosition);
-                        LOG.log(Level.FINE, "SimulatedSmartDriver.run() - El usuario de SmartDriver se encuentra en: ({0}, {1})", new Object[]{currentLocationLogDetail.getLatitude(), currentLocationLogDetail.getLongitude()});
-
-                        LocationLogDetail previousLocationLogDetail = localLocationLogDetailList.get(previousPosition);
-
-                        // Calculamos la distancia recorrida.
-                        distance = Util.distanceHaversine(previousLocationLogDetail.getLatitude(), previousLocationLogDetail.getLongitude(), currentLocationLogDetail.getLatitude(), currentLocationLogDetail.getLongitude());
-
-                        // Calculamos la orientación para simular estrés al entrar en una curva.
-                        bearing = Util.bearing(previousLocationLogDetail.getLatitude(), previousLocationLogDetail.getLongitude(), currentLocationLogDetail.getLatitude(), currentLocationLogDetail.getLongitude());
-
-                        // TODO: ¿Criterios que puedan alterar el estrés? 
-                        if (previousPosition > 1) {
-                            LocationLogDetail antePreviousLocationLogDetail = localLocationLogDetailList.get(previousPosition - 1);
-                            double previousBearing = Util.bearing(antePreviousLocationLogDetail.getLatitude(), antePreviousLocationLogDetail.getLongitude(), previousLocationLogDetail.getLatitude(), previousLocationLogDetail.getLongitude());
-                            double bearingDiff = Math.abs(bearing - previousBearing);
-
-                            // Si hay una desviación brusca de la trayectoria, suponemos una componente de estrés.
-                            stressForDeviation(bearingDiff);
-
-                        }
-
-                        double speedDiff = Math.abs(currentLocationLogDetail.getSpeed() - previousLocationLogDetail.getSpeed());
-
-                        // Si hay un salto grande de velocidad, suponemos una componente de estrés.
-                        stressForSpeed(speedDiff);
-
-                        // Analizamos el ritmo cardíaco, 
-                        // Medimos las unidades de estrés y dibujamos el marker del color correspondiente (verde -> sin estrés, amarillo -> ligeramente estresado, rojo -> estresado)
-                        if (stressLoad == 0) {
-                            // No hay estrés.
-                        } else {
-                            // Si se está calmando, le subimos el intervalo RR y si se está estresando, le bajamos el intervalo RR.
-                            if (relaxing) {
-                                if (stressLoad > 0) {
-                                    currentLocationLogDetail.setRrTime(previousLocationLogDetail.getRrTime() - ((previousLocationLogDetail.getRrTime() - currentLocationLogDetail.getRrTime()) / stressLoad));
-                                }
-                            } else if (stressLoad < 5) {
-                                currentLocationLogDetail.setRrTime(previousLocationLogDetail.getRrTime() - (minRrTime / stressLoad));
-                            } else {
-                                // Establecemos un mínimo R-R en función de la edad del conductor.
-                                currentLocationLogDetail.setRrTime(minRrTime);
-                            }
-
-                            if (stressLoad < 5) {
-                                // Existe una situación de estrés 'ligero'.
-                                // Para que Víctor pueda detectar una situación de estrés, debe haber una diferencia de 50ms en el RR.
-                            } else {
-                                //  Estrés elevado.
-                            }
-                        }
-
-                        // Calculamos el ritmo cardíaco a partir del intervalo RR.
-                        currentLocationLogDetail.setHeartRate((int) Math.ceil(60.0d / (currentLocationLogDetail.getRrTime() / 1000.0d)));
-
-                        // Acumulamos la distancia recorrida.
-                        sectionDistance += distance;
-
-                        // Hacemos el análisis del PKE (Positive Kinetic Energy)
-                        cummulativePositiveSpeeds += analyzePKE(currentLocationLogDetail, previousLocationLogDetail);
-
-                        // Creamos un elementos de tipo 'RoadSection', para añadirlo al 'DataSection' que se envía a 'Ztreamy' cada 500 metros.
-                        RoadSection rs = new RoadSection();
-                        rs.setTime(System.currentTimeMillis());
-                        rs.setLatitude(currentLocationLogDetail.getLatitude());
-                        rs.setLongitude(currentLocationLogDetail.getLongitude());
-                        int tDiff = (currentLocationLogDetail.getSecondsToBeHere() - previousLocationLogDetail.getSecondsToBeHere());
-                        if (tDiff > 0) {
-                            rs.setSpeed(distance * 3.6 / tDiff);
-                        } else {
-                            rs.setSpeed(previousLocationLogDetail.getSpeed());
-                        }
-                        rs.setHeartRate(currentLocationLogDetail.getHeartRate());
-                        rs.setRrTime(currentLocationLogDetail.getRrTime());
-                        rs.setAccuracy(0);
-
-                        roadSectionList.add(rs);
-
-                        // Hemos cambiado de localización.
-                        locationChanged = true;
-                    }
-                }
-
-                if (locationChanged && isTimeToSend()) {
-                    // Sólo si cambiamos de posición y han pasado más de 10 segundos, se envía información a 'Ztreamy'.
-                    sendEvery10SecondsIfLocationChanged(currentLocationLogDetail);
-                } else if (PresetSimulation.isRetryOnFail() && !pendingVehicleLocations.isEmpty()) {
-
-                    // Vemos si ha pasado suficiente tiempo entre reintentos.
-                    if (isTimeToRetry()) {
-                        /////////////////////////////////////////////////////
-                        // REINTENTO DE ENVÍO DE VEHICLE LOCATION FALLIDOS //
-                        /////////////////////////////////////////////////////
-
-                        // Aprovechamos que no toca envío de 'Vehicle Location' para probar a enviar los que hubieran fallado.
-                        SimulatorController.increaseSends();
-                        ExtendedEvent[] events = new ExtendedEvent[pendingVehicleLocations.size()];
-
-                        switch (streamServer) {
-                            case 0:
-                                // Kafka
-                                try {
-                                    String json = new Gson().toJson(events);
-                                    if (SimulatorController.kafkaProducerPerSmartDriver) {
-                                        smartDriverKafkaProducer.send(new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION,
-                                                smartDriverKafkaRecordId,
-                                                json
-                                        ), new KafkaCallBack(System.currentTimeMillis(), smartDriverKafkaRecordId, events, Event_Type.RECOVERED_VEHICLE_LOCATION));
-                                        smartDriverKafkaRecordId++;
-                                    } else {
-                                        long id = SimulatorController.getNextKafkaRecordId();
-                                        SimulatorController.getKafkaProducer().send(new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION,
-                                                id,
-                                                json
-                                        ), new KafkaCallBack(System.currentTimeMillis(), id, events, Event_Type.RECOVERED_VEHICLE_LOCATION));
-                                    }
-                                } catch (Exception ex) {
-                                    LOG.log(Level.SEVERE, "*Reintento* - Error: {0} - No se han podido reenviar los {1} 'Vehicle Location' pendientes", new Object[]{ex.getMessage(), pendingVehicleLocations.size()});
-                                } finally {
-                                    secondsBetweenRetries = 0;
-                                }
-                                break;
-                            case 1:
-                                // Ztreamy
-                                try {
-                                    int result = publisher.publish(pendingVehicleLocations.toArray(events), true);
-                                    if (result == HttpURLConnection.HTTP_OK) {
-                                        SimulatorController.addRecovered(events.length);
-                                        LOG.log(Level.INFO, "*Reintento* - {0} 'Vehicle Location' pendientes enviadas correctamante. SmartDriver: {1}", new Object[]{events.length, ll.getPerson().getEmail()});
-                                        pendingVehicleLocations.clear();
-                                    } else {
-                                        LOG.log(Level.SEVERE, "*Reintento* - Error SEND (Not OK): No se han podido reenviar los {0} 'Vehicle Location' pendientes", events.length);
-                                        if (retries != -1) {
-                                            decreasePendingVehicleLocationsRetries();
-                                        }
-                                        reconnectPublisher();
-                                    }
-                                } catch (IOException ex) {
-                                    LOG.log(Level.SEVERE, "*Reintento* - Error: {0} - No se han podido reenviar los {1} 'Vehicle Location' pendientes", new Object[]{ex.getMessage(), pendingVehicleLocations.size()});
-                                    reconnectPublisher();
-                                } finally {
-                                    secondsBetweenRetries = 0;
-                                }
-                                break;
-                            default:
-                                throw new IllegalArgumentException("Invalid Stream Server option");
-                        }
-                    }
-                }
-
-                // Se enviará un resumen cada 500 metros.
-                if (sectionDistance >= SEND_INTERVAL_METERS) {
-                    sendDataSection();
-                } else if (PresetSimulation.isRetryOnFail() && !pendingDataSections.isEmpty()) {
-
-                    // Vemos si ha pasado suficiente tiempo entre reintentos.
-                    if (isTimeToRetry()) {
-                        /////////////////////////////////////////////////
-                        // REINTENTO DE ENVÍO DE DATA SECTION FALLIDOS //
-                        /////////////////////////////////////////////////
-
-                        // Aprovechamos que no toca envío de 'Data Section' para probar a enviar los que hubieran fallado.
-                        SimulatorController.increaseSends();
-                        ExtendedEvent[] events = new ExtendedEvent[pendingDataSections.size()];
-
-                        switch (streamServer) {
-                            case 0:
-                                // Kafka
-                                try {
-                                    String json = new Gson().toJson(events);
-                                    if (SimulatorController.kafkaProducerPerSmartDriver) {
-                                        smartDriverKafkaProducer.send(new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION,
-                                                smartDriverKafkaRecordId,
-                                                json
-                                        ), new KafkaCallBack(System.currentTimeMillis(), smartDriverKafkaRecordId, events, Event_Type.RECOVERED_DATA_SECTION));
-                                        smartDriverKafkaRecordId++;
-                                    } else {
-                                        long id = SimulatorController.getNextKafkaRecordId();
-                                        SimulatorController.getKafkaProducer().send(new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION,
-                                                id,
-                                                json
-                                        ), new KafkaCallBack(System.currentTimeMillis(), id, events, Event_Type.RECOVERED_DATA_SECTION));
-                                    }
-                                } catch (Exception ex) {
-                                    LOG.log(Level.SEVERE, "*Reintento* - Error: {0} - No se han podido reenviar los {1} 'Data Section' pendientes", new Object[]{ex.getMessage(), pendingDataSections.size()});
-                                } finally {
-                                    secondsBetweenRetries = 0;
-                                }
-                                break;
-                            case 1:
-                                // ZTreamy
-                                try {
-                                    int result = publisher.publish(pendingDataSections.toArray(events), true);
-                                    if (result == HttpURLConnection.HTTP_OK) {
-                                        SimulatorController.addRecovered(events.length);
-                                        LOG.log(Level.INFO, "*Reintento* - {0} 'Data Section' pendientes enviados correctamante. SmartDriver: {1}", new Object[]{events.length, ll.getPerson().getEmail()});
-                                        pendingDataSections.clear();
-                                    } else {
-                                        LOG.log(Level.SEVERE, "*Reintento* - Error SEND (Not OK): No se han podido reenviar los {0} 'Data Section' pendientes", events.length);
-                                        if (retries != -1) {
-                                            decreasePendingDataSectionsRetries();
-                                        }
-                                        reconnectPublisher();
-                                    }
-                                } catch (IOException ex) {
-                                    LOG.log(Level.SEVERE, "*Reintento* - Error: {0} - No se han podido reenviar los {1} 'Data Section' pendientes", new Object[]{ex.getMessage(), pendingDataSections.size()});
-                                    reconnectPublisher();
-                                } finally {
-                                    secondsBetweenRetries = 0;
-                                }
-                                break;
-                            default:
-                                throw new IllegalArgumentException("Invalid Stream Server option");
-                        }
-                    }
-                }
-
-                elapsedSeconds++;
-                ztreamySecondsCount++;
-                if (!pendingVehicleLocations.isEmpty() || !pendingDataSections.isEmpty()) {
-                    secondsBetweenRetries++;
-                }
-                LOG.log(Level.FINE, "SimulatedSmartDriver.run() - Tiempo de simulación transcurrido: {0}", DurationFormatUtils.formatDuration(elapsedSeconds * 1000l, "HH:mm:ss", true));
-            }
-        } else {
+        if (finished) {
             throw new RuntimeException("Finished SmartDriver");
         }
+
+        if ((PresetSimulation.getMaxSimulationTimeMs() > 0)
+                && ((System.currentTimeMillis() - SimulatorController.getStartSimulationTime()) >= PresetSimulation.getMaxSimulationTimeMs())) {
+            // It has been reached the simulation time.
+            finish();
+            return;
+        }
+
+        // Lo primero que comprobamos es si se ha cumplido el tiempo máximo de simulación.
+        // Cada hilo comprobará el tiempo que lleva ejecutándose.
+        // JYFR: PRUEBA
+//            if ((System.currentTimeMillis() - SimulatorController.startSimulationTime) >= SimulatorController.MAX_SIMULATION_TIME) {
+//                // Se ha cumplido el tiempo, paramos la ejecución.
+//                finish();
+//            } else {
+
+        LocationLogDetail currentLocationLogDetail = localLocationLogDetailList.get(currentPosition);
+
+        double distance;
+        double bearing;
+        // Por defecto, en la simulación se tiende al estado relajado.
+        relaxing = true;
+
+        LOG.log(Level.INFO, "SimulatedSmartDriver.run() - El usuario de SmartDriver se encuentra en: ({0}, {1})", new Object[]{currentLocationLogDetail.getLatitude(), currentLocationLogDetail.getLongitude()});
+        LOG.log(Level.FINE, "SimulatedSmartDriver.run() - Elemento actual: {0} de {1}", new Object[]{currentPosition, localLocationLogDetailList.size()});
+
+        // Comprobamos si ha pasado suficiente tiempo como para pasar a la siguiente localización.
+        if (elapsedSeconds >= currentLocationLogDetail.getSecondsToBeHere()) {
+            // Comprobamos si hemos llegado al destino.
+            if (currentPosition == localLocationLogDetailList.size() - 1) {
+                if (!infiniteSimulation) {
+                    // Notificamos que ha terminado el SmartDriver actual.
+                    SimulatorController.smartDriverHasFinished(this.getSha());
+
+                    LOG.log(Level.FINE, "SimulatedSmartDriver.run() - El usuario ha llegado a su destino en: {0}", DurationFormatUtils.formatDuration(elapsedSeconds * 1000L, "HH:mm:ss", true));
+                    SimulatorController.addFinallyPending(pendingVehicleLocations.size() + pendingDataSections.size());
+                    finish();
+                } else {
+                    // Hemos llegado al final, pero es una simulación infinita. Le damos la vuelta al recorrido y seguimos.
+                    Collections.reverse(localLocationLogDetailList);
+                    int size = localLocationLogDetailList.size();
+                    for (int i = 0; i < size / 2; i++) {
+                        LocationLogDetail lld1 = localLocationLogDetailList.get(i);
+                        LocationLogDetail lld2 = localLocationLogDetailList.get(size - 1 - i);
+                        int stbh1 = lld1.getSecondsToBeHere();
+                        lld1.setSecondsToBeHere(lld2.getSecondsToBeHere());
+                        lld2.setSecondsToBeHere(stbh1);
+                    }
+                    currentPosition = 0;
+                    elapsedSeconds = 0;
+                }
+            } else {
+                // No hemos llegado al destino, avanzamos de posición.
+                int previousPosition = currentPosition;
+                for (int i = currentPosition; i < localLocationLogDetailList.size(); i++) {
+                    currentPosition = i;
+                    if (localLocationLogDetailList.get(i).getSecondsToBeHere() > elapsedSeconds) {
+                        break;
+                    }
+                }
+
+                LOG.log(Level.FINE, "SimulatedSmartDriver.run() - Avanzamos de posición: {0}", currentPosition);
+                currentLocationLogDetail = localLocationLogDetailList.get(currentPosition);
+                LOG.log(Level.FINE, "SimulatedSmartDriver.run() - El usuario de SmartDriver se encuentra en: ({0}, {1})", new Object[]{currentLocationLogDetail.getLatitude(), currentLocationLogDetail.getLongitude()});
+
+                LocationLogDetail previousLocationLogDetail = localLocationLogDetailList.get(previousPosition);
+
+                // Calculamos la distancia recorrida.
+                distance = Util.distanceHaversine(previousLocationLogDetail.getLatitude(), previousLocationLogDetail.getLongitude(), currentLocationLogDetail.getLatitude(), currentLocationLogDetail.getLongitude());
+
+                // Calculamos la orientación para simular estrés al entrar en una curva.
+                bearing = Util.bearing(previousLocationLogDetail.getLatitude(), previousLocationLogDetail.getLongitude(), currentLocationLogDetail.getLatitude(), currentLocationLogDetail.getLongitude());
+
+                // TODO: ¿Criterios que puedan alterar el estrés?
+                if (previousPosition > 1) {
+                    LocationLogDetail antePreviousLocationLogDetail = localLocationLogDetailList.get(previousPosition - 1);
+                    double previousBearing = Util.bearing(antePreviousLocationLogDetail.getLatitude(), antePreviousLocationLogDetail.getLongitude(), previousLocationLogDetail.getLatitude(), previousLocationLogDetail.getLongitude());
+                    double bearingDiff = Math.abs(bearing - previousBearing);
+
+                    // Si hay una desviación brusca de la trayectoria, suponemos una componente de estrés.
+                    stressForDeviation(bearingDiff);
+
+                }
+
+                double speedDiff = Math.abs(currentLocationLogDetail.getSpeed() - previousLocationLogDetail.getSpeed());
+
+                // Si hay un salto grande de velocidad, suponemos una componente de estrés.
+                stressForSpeed(speedDiff);
+
+                // Analizamos el ritmo cardíaco,
+                // Medimos las unidades de estrés y dibujamos el marker del color correspondiente (verde -> sin estrés, amarillo -> ligeramente estresado, rojo -> estresado)
+                if (stressLoad == 0) {
+                    // No hay estrés.
+                } else {
+                    // Si se está calmando, le subimos el intervalo RR y si se está estresando, le bajamos el intervalo RR.
+                    if (relaxing) {
+                        if (stressLoad > 0) {
+                            currentLocationLogDetail.setRrTime(previousLocationLogDetail.getRrTime() - ((previousLocationLogDetail.getRrTime() - currentLocationLogDetail.getRrTime()) / stressLoad));
+                        }
+                    } else if (stressLoad < 5) {
+                        currentLocationLogDetail.setRrTime(previousLocationLogDetail.getRrTime() - (minRrTime / stressLoad));
+                    } else {
+                        // Establecemos un mínimo R-R en función de la edad del conductor.
+                        currentLocationLogDetail.setRrTime(minRrTime);
+                    }
+
+                    if (stressLoad < 5) {
+                        // Existe una situación de estrés 'ligero'.
+                        // Para que Víctor pueda detectar una situación de estrés, debe haber una diferencia de 50ms en el RR.
+                    } else {
+                        //  Estrés elevado.
+                    }
+                }
+
+                // Calculamos el ritmo cardíaco a partir del intervalo RR.
+                currentLocationLogDetail.setHeartRate((int) Math.ceil(60.0d / (currentLocationLogDetail.getRrTime() / 1000.0d)));
+
+                // Acumulamos la distancia recorrida.
+                sectionDistance += distance;
+
+                // Hacemos el análisis del PKE (Positive Kinetic Energy)
+                cummulativePositiveSpeeds += analyzePKE(currentLocationLogDetail, previousLocationLogDetail);
+
+                // Creamos un elementos de tipo 'RoadSection', para añadirlo al 'DataSection' que se envía a 'Ztreamy' cada 500 metros.
+                RoadSection rs = new RoadSection();
+                rs.setTime(System.currentTimeMillis());
+                rs.setLatitude(currentLocationLogDetail.getLatitude());
+                rs.setLongitude(currentLocationLogDetail.getLongitude());
+                int tDiff = (currentLocationLogDetail.getSecondsToBeHere() - previousLocationLogDetail.getSecondsToBeHere());
+                rs.setSpeed(tDiff > 0 ? distance * 3.6 / tDiff : previousLocationLogDetail.getSpeed());
+                rs.setHeartRate(currentLocationLogDetail.getHeartRate());
+                rs.setRrTime(currentLocationLogDetail.getRrTime());
+                rs.setAccuracy(0);
+
+                roadSectionList.add(rs);
+
+                // Hemos cambiado de localización.
+                locationChanged = true;
+            }
+        }
+
+        if (locationChanged && isTimeToSend()) {
+            // Sólo si cambiamos de posición y han pasado más de 10 segundos, se envía información a 'Ztreamy'.
+            sendEvery10SecondsIfLocationChanged(currentLocationLogDetail);
+        } else if (PresetSimulation.isRetryOnFail() && !pendingVehicleLocations.isEmpty()) {
+
+            // Vemos si ha pasado suficiente tiempo entre reintentos.
+            if (isTimeToRetry()) {
+                /////////////////////////////////////////////////////
+                // REINTENTO DE ENVÍO DE VEHICLE LOCATION FALLIDOS //
+                /////////////////////////////////////////////////////
+
+                // Aprovechamos que no toca envío de 'Vehicle Location' para probar a enviar los que hubieran fallado.
+                SimulatorController.increaseSends();
+                ExtendedEvent[] events = new ExtendedEvent[pendingVehicleLocations.size()];
+
+                switch (streamServer) {
+                    case 0:
+                        // Kafka
+                        try {
+                            String json = new Gson().toJson(events);
+                            if (SimulatorController.kafkaProducerPerSmartDriver) {
+                                smartDriverKafkaProducer.send(new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION,
+                                        smartDriverKafkaRecordId,
+                                        json
+                                ), new KafkaCallBack(System.currentTimeMillis(), smartDriverKafkaRecordId, events, Event_Type.RECOVERED_VEHICLE_LOCATION));
+                                smartDriverKafkaRecordId++;
+                            } else {
+                                long id = SimulatorController.getNextKafkaRecordId();
+                                SimulatorController.getKafkaProducer().send(new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION,
+                                        id,
+                                        json
+                                ), new KafkaCallBack(System.currentTimeMillis(), id, events, Event_Type.RECOVERED_VEHICLE_LOCATION));
+                            }
+                        } catch (Exception ex) {
+                            LOG.log(Level.SEVERE, "*Reintento* - Error: {0} - No se han podido reenviar los {1} 'Vehicle Location' pendientes", new Object[]{ex.getMessage(), pendingVehicleLocations.size()});
+                        } finally {
+                            secondsBetweenRetries = 0;
+                        }
+                        break;
+                    case 1:
+                        // Ztreamy
+                        try {
+                            int result = publisher.publish(pendingVehicleLocations.toArray(events), true);
+                            if (result == HttpURLConnection.HTTP_OK) {
+                                SimulatorController.addRecovered(events.length);
+                                LOG.log(Level.INFO, "*Reintento* - {0} 'Vehicle Location' pendientes enviadas correctamante. SmartDriver: {1}", new Object[]{events.length, ll.getPerson().getEmail()});
+                                pendingVehicleLocations.clear();
+                            } else {
+                                LOG.log(Level.SEVERE, "*Reintento* - Error SEND (Not OK): No se han podido reenviar los {0} 'Vehicle Location' pendientes", events.length);
+                                if (retries != -1) {
+                                    decreasePendingVehicleLocationsRetries();
+                                }
+                                reconnectPublisher();
+                            }
+                        } catch (IOException ex) {
+                            LOG.log(Level.SEVERE, "*Reintento* - Error: {0} - No se han podido reenviar los {1} 'Vehicle Location' pendientes", new Object[]{ex.getMessage(), pendingVehicleLocations.size()});
+                            reconnectPublisher();
+                        } finally {
+                            secondsBetweenRetries = 0;
+                        }
+                        break;
+                    default:
+                        throw new IllegalArgumentException("Invalid Stream Server option");
+                }
+            }
+        }
+
+        // Se enviará un resumen cada 500 metros.
+        if (sectionDistance >= SEND_INTERVAL_METERS) {
+            sendDataSection();
+        } else if (PresetSimulation.isRetryOnFail() && !pendingDataSections.isEmpty()) {
+
+            // Vemos si ha pasado suficiente tiempo entre reintentos.
+            if (isTimeToRetry()) {
+                /////////////////////////////////////////////////
+                // REINTENTO DE ENVÍO DE DATA SECTION FALLIDOS //
+                /////////////////////////////////////////////////
+
+                // Aprovechamos que no toca envío de 'Data Section' para probar a enviar los que hubieran fallado.
+                SimulatorController.increaseSends();
+                ExtendedEvent[] events = new ExtendedEvent[pendingDataSections.size()];
+
+                switch (streamServer) {
+                    case 0:
+                        // Kafka
+                        try {
+                            String json = new Gson().toJson(events);
+                            if (SimulatorController.kafkaProducerPerSmartDriver) {
+                                smartDriverKafkaProducer.send(new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION,
+                                        smartDriverKafkaRecordId,
+                                        json
+                                ), new KafkaCallBack(System.currentTimeMillis(), smartDriverKafkaRecordId, events, Event_Type.RECOVERED_DATA_SECTION));
+                                smartDriverKafkaRecordId++;
+                            } else {
+                                long id = SimulatorController.getNextKafkaRecordId();
+                                SimulatorController.getKafkaProducer().send(new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION,
+                                        id,
+                                        json
+                                ), new KafkaCallBack(System.currentTimeMillis(), id, events, Event_Type.RECOVERED_DATA_SECTION));
+                            }
+                        } catch (Exception ex) {
+                            LOG.log(Level.SEVERE, "*Reintento* - Error: {0} - No se han podido reenviar los {1} 'Data Section' pendientes", new Object[]{ex.getMessage(), pendingDataSections.size()});
+                        } finally {
+                            secondsBetweenRetries = 0;
+                        }
+                        break;
+                    case 1:
+                        // ZTreamy
+                        try {
+                            int result = publisher.publish(pendingDataSections.toArray(events), true);
+                            if (result == HttpURLConnection.HTTP_OK) {
+                                SimulatorController.addRecovered(events.length);
+                                LOG.log(Level.INFO, "*Reintento* - {0} 'Data Section' pendientes enviados correctamante. SmartDriver: {1}", new Object[]{events.length, ll.getPerson().getEmail()});
+                                pendingDataSections.clear();
+                            } else {
+                                LOG.log(Level.SEVERE, "*Reintento* - Error SEND (Not OK): No se han podido reenviar los {0} 'Data Section' pendientes", events.length);
+                                if (retries != -1) {
+                                    decreasePendingDataSectionsRetries();
+                                }
+                                reconnectPublisher();
+                            }
+                        } catch (IOException ex) {
+                            LOG.log(Level.SEVERE, "*Reintento* - Error: {0} - No se han podido reenviar los {1} 'Data Section' pendientes", new Object[]{ex.getMessage(), pendingDataSections.size()});
+                            reconnectPublisher();
+                        } finally {
+                            secondsBetweenRetries = 0;
+                        }
+                        break;
+                    default:
+                        throw new IllegalArgumentException("Invalid Stream Server option");
+                }
+            }
+        }
+
+        elapsedSeconds++;
+        ztreamySecondsCount++;
+        if (!pendingVehicleLocations.isEmpty() || !pendingDataSections.isEmpty()) {
+            secondsBetweenRetries++;
+        }
+        LOG.log(Level.FINE, "SimulatedSmartDriver.run() - Tiempo de simulación transcurrido: {0}", DurationFormatUtils.formatDuration(elapsedSeconds * 1000l, "HH:mm:ss", true));
+        // JYFR: PRUEBA
+//            }
+
     }
 
     private void stressForDeviation(double bearingDiff) {
@@ -859,6 +909,22 @@ public class SimulatedSmartDriver implements Runnable {
         return currentDelay_ms;
     }
 
+    public double getSpeedRandomFactor() {
+        return speedRandomFactor;
+    }
+
+    public double getHrRandomFactor() {
+        return hrRandomFactor;
+    }
+
+    public void setSpeedRandomFactor(double speedRandomFactor) {
+        this.speedRandomFactor = speedRandomFactor;
+    }
+
+    public void setHrRandomFactor(double hrRandomFactor) {
+        this.hrRandomFactor = hrRandomFactor;
+    }
+
     class KafkaCallBack implements Callback {
 
         private final long startTime;
@@ -955,4 +1021,35 @@ public class SimulatedSmartDriver implements Runnable {
             SimulatorController.getKafkaMonitoringProducer().send(new ProducerRecord<>(Kafka.TOPIC_SMARTDRIVER_STATUS, getSha(), json));
         }
     }
+
+    // ------------------------- CSV IMP/EXP -------------------------
+
+    private CellProcessor[] cellProcessors;
+    private String[] fields;
+    private String[] headers;
+
+    @Override
+    public void init() {
+        cellProcessors = new CellProcessor[]{new ParseDouble(), new ParseDouble()};
+
+        headers = new String[]{"SpeedRandomFactor", "HrRandomFactor"};
+
+        fields = new String[]{"speedRandomFactor", "hrRandomFactor"};
+    }
+
+    @Override
+    public CellProcessor[] getProcessors() {
+        return cellProcessors;
+    }
+
+    @Override
+    public String[] getFields() {
+        return fields;
+    }
+
+    @Override
+    public String[] getHeaders() {
+        return headers;
+    }
+
 }

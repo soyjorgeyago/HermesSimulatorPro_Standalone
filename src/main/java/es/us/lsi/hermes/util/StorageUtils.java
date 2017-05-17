@@ -3,7 +3,6 @@ package es.us.lsi.hermes.util;
 import es.us.lsi.hermes.simulator.PresetSimulation;
 import es.us.lsi.hermes.simulator.SimulatorController;
 import joptsimple.internal.Strings;
-
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -63,7 +62,7 @@ public class StorageUtils {
         }
     }
 
-    static Path getOrCreateCsvFolder() {
+    static Path createCsvFolders(String subFolder) {
         String formattedPath = PresetSimulation.getPathForCsvStorage();
 
 //        TODO Review if is necessary to adapt Linux urls to Windows and vice-versa.
@@ -75,7 +74,7 @@ public class StorageUtils {
 
         try {
             // Creamos un directorio para contener los CSV generados.
-            File directory = new File(formattedPath);
+            File directory = new File(formattedPath + "\\" + subFolder);
             String tempFolderPath = directory.toPath().toString() + File.separator;
             directory.mkdir();
 
@@ -87,12 +86,22 @@ public class StorageUtils {
         }
     }
 
-    static File generateCsvFile(String fileNameHeader, String fileNameWithExtension, boolean permanent) {
-        Path tempFolder = permanent ? CSVUtils.PERMANENT_FOLDER : SimulatorController.getTempFolder();
+    static File generateCsvFile(String fileNameHeader, String fileNameWithExtension, String subfolder) {
+        Path folder;
+        switch(subfolder){
+            case "drivers":
+                folder = CSVUtils.PERMANENT_FOLDER_DRIVERS;
+                break;
+            case "paths":
+                folder = CSVUtils.PERMANENT_FOLDER_PATHS;
+                break;
+            default:
+                folder = SimulatorController.getTempFolder();
+        }
         String eventsFileNameCSV = fileNameHeader + fileNameWithExtension;
 
-        LOG.log(Level.INFO, "generateZippedCSV() - Generando archivo CSV: {0}", eventsFileNameCSV);
-        return new File(tempFolder.toUri().getPath(), eventsFileNameCSV);
+        LOG.log(Level.INFO, "generateCsvFile() - Generando archivo CSV: {0}", eventsFileNameCSV);
+        return new File(folder.toUri().getPath(), eventsFileNameCSV);
     }
 
     public static boolean canWrite(String path){

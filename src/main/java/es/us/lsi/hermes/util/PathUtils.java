@@ -257,7 +257,9 @@ public class PathUtils {
     private static void requestPaths(List<Callable<String>> pathRequestTaskSublist) {
         try {
             // Clearing directory before saving CSV files
-            StorageUtils.clearFolderContent(CSVUtils.PERMANENT_FOLDER);
+            StorageUtils.clearFolderContent(CSVUtils.PERMANENT_FOLDER_DRIVERS);
+            StorageUtils.clearFolderContent(CSVUtils.PERMANENT_FOLDER_PATHS);
+
 
             List<Future<String>> futureTaskList = PathRequestWebService.submitAllTask(pathRequestTaskSublist);
             int pathCounter = 0;

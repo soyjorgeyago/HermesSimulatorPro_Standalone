@@ -3,6 +3,7 @@ package es.us.lsi.hermes.location.detail;
 import es.us.lsi.hermes.csv.ICSVBean;
 import es.us.lsi.hermes.util.Constants;
 import org.supercsv.cellprocessor.ParseDouble;
+import org.supercsv.cellprocessor.ParseInt;
 import org.supercsv.cellprocessor.ift.CellProcessor;
 
 import java.io.Serializable;
@@ -10,7 +11,6 @@ import java.io.Serializable;
 public class LocationLogDetail implements Serializable, ICSVBean {
 
     private static final long serialVersionUID = 1L;
-    private Integer locationLogDetailId;
     private double latitude;
     private double longitude;
     private double speed;
@@ -37,10 +37,6 @@ public class LocationLogDetail implements Serializable, ICSVBean {
             this.speed = speed;
     }
 
-    public LocationLogDetail(Integer locationLogDetailId) {
-        this.locationLogDetailId = locationLogDetailId;
-    }
-
     public LocationLogDetail(double latitude, double longitude, double speed, int heartRate, int rrTime, int secondsToBeHere) {
         this.latitude = latitude;
         this.longitude = longitude;
@@ -48,14 +44,6 @@ public class LocationLogDetail implements Serializable, ICSVBean {
         this.heartRate = heartRate;
         this.rrTime = rrTime;
         this.secondsToBeHere = secondsToBeHere;
-    }
-
-    public Integer getLocationLogDetailId() {
-        return locationLogDetailId;
-    }
-
-    public void setLocationLogDetailId(Integer locationLogDetailId) {
-        this.locationLogDetailId = locationLogDetailId;
     }
 
     public double getLatitude() {
@@ -131,11 +119,11 @@ public class LocationLogDetail implements Serializable, ICSVBean {
 
     @Override
     public void init() {
-        cellProcessors = new CellProcessor[]{new ParseDouble(), new ParseDouble(), new ParseDouble()};
+        cellProcessors = new CellProcessor[]{new ParseDouble(), new ParseDouble(), new ParseDouble(), new ParseInt(), new ParseInt()};
 
-        headers = new String[]{"Latitude", "Longitude", "Speed"};
+        headers = new String[]{"Latitude", "Longitude", "Speed", "SecondsToBeHere", "RrTime"};
 
-        fields = new String[]{"latitude", "longitude", "speed"};
+        fields = new String[]{"latitude", "longitude", "speed", "secondsToBeHere", "rrTime"};
     }
 
     @Override
