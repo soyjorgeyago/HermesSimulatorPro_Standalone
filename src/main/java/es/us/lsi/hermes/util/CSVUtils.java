@@ -141,28 +141,19 @@ public class CSVUtils {
         }
 
         List<List<ICSVBean>> extractedRoutes = extractFromFolder(PERMANENT_FOLDER_PATHS,
-                CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, PresetSimulation.getPathsAmount(),  new CellProcessor[]{
-                new ParseDouble(), new ParseDouble(), new ParseDouble(), new ParseInt(), new ParseInt()});
+                CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, PresetSimulation.getPathsAmount(), new CellProcessor[]{
+            new ParseDouble(), new ParseDouble(), new ParseDouble(), new ParseInt(), new ParseInt()});
 
-
-
-        if(extractedRoutes.size() == 0) {
+        if (extractedRoutes.isEmpty()) {
             LOG.log(Level.SEVERE, "No CSV files found under the directory: {0}", PERMANENT_FOLDER_PATHS);
-        } else if(extractedRoutes.size() < PresetSimulation.getPathsAmount()) {
+        } else if (extractedRoutes.size() < PresetSimulation.getPathsAmount()) {
             LOG.log(Level.SEVERE, "{0} CSV files found under the directory: {1}, {2} paths requested", new Object[]{extractedRoutes.size(), PERMANENT_FOLDER_PATHS, PresetSimulation.getPathsAmount()});
-        }
-
-
-        //TODO Remove show
-        // USE the extracted data
-        for (List<ICSVBean> aux : extractedRoutes) {
-            System.out.println(aux);
         }
 
         // Set the extracted routes as the DataSet to use
         List<LocationLog> locationLogList = new ArrayList<>();
 
-        for(List<ICSVBean> route : extractedRoutes){
+        for (List<ICSVBean> route : extractedRoutes) {
             LocationLog routeLog = new LocationLog();
 
             routeLog.setLocationLogId(0);
@@ -178,28 +169,29 @@ public class CSVUtils {
             locationLogList.add(routeLog);
         }
 
-        if(locationLogList.size() < PresetSimulation.getPathsAmount()) {
+        if (locationLogList.size() < PresetSimulation.getPathsAmount()) {
             LOG.log(Level.SEVERE, "CSV Paths available: {0}, Paths requested: {1}", new Object[]{locationLogList.size(), PresetSimulation.getPathsAmount()});
         }
 
         return locationLogList;
     }
 
-    private static List<List<ICSVBean>> extractFromFolder(Path folder, CsvPreference csvPreference, int maxByFile, CellProcessor[] cellProcessors){
+    private static List<List<ICSVBean>> extractFromFolder(Path folder, CsvPreference csvPreference, int maxByFile, CellProcessor[] cellProcessors) {
         File[] temporalFolderFiles = folder.toFile().listFiles();
         List<List<ICSVBean>> extractedItems = new ArrayList<>();
 
         int csvCounter = 0;
         if (temporalFolderFiles != null) {
             for (File aux : temporalFolderFiles) {
-                if(aux.getName().contains(".csv")){
+                if (aux.getName().contains(".csv")) {
                     extractedItems.add(extractFromSingleFile(aux, csvPreference, cellProcessors));
                     csvCounter++;
                 }
 
                 // Generate as many paths as requested
-                if(csvCounter == maxByFile)
+                if (csvCounter == maxByFile) {
                     break;
+                }
             }
         }
 
@@ -243,6 +235,6 @@ public class CSVUtils {
             return null;
         }
 
-        return extractFromFolder(PERMANENT_FOLDER_DRIVERS, CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, PresetSimulation.getDriversByPath(),  new CellProcessor[]{new ParseDouble(), new ParseDouble()});
+        return extractFromFolder(PERMANENT_FOLDER_DRIVERS, CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, PresetSimulation.getDriversByPath(), new CellProcessor[]{new ParseDouble(), new ParseDouble()});
     }
 }

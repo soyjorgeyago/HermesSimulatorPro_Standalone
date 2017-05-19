@@ -117,13 +117,14 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
     private static ScheduledThreadPoolExecutor threadPool;
 
+    // TODO: Relocate in PresetSimulation.properties
     private static boolean randomizeEachSmartDriverBehaviour = true;
 
     private static int retries = 5;
 
     // TODO: Relocate in PresetSimulation.properties
     private static boolean loopingSimulation = true;
-    static boolean kafkaProducerPerSmartDriver = true;
+    private static boolean kafkaProducerPerSmartDriver = true;
 
     // Kafka
     private static AtomicLong kafkaRecordId;
@@ -252,10 +253,11 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 }
 
                 int activeSmartDrivers = simulatedSmartDriverHashMap.size() - pausedSimulatedSmartDrivers.size();
-                if (activeSmartDrivers > 0)
+                if (activeSmartDrivers > 0) {
                     currentMeanSmartDriversDelayMs.set(totalDelaysMs / activeSmartDrivers);
-                else
+                } else {
                     currentMeanSmartDriversDelayMs.set(-1);
+                }
                 logCurrentStatus();
 
                 String json = new Gson().toJson(new SimulatorStatus(System.currentTimeMillis(), GENERATED.intValue(), SENT.intValue(), OK.intValue(), NOT_OK.intValue(), ERRORS.intValue(), RECOVERED.intValue(), FINALLY_PENDING.intValue(), threadPool.getQueue().size(), currentMeanSmartDriversDelayMs.get(), pausedSimulatedSmartDrivers.size()));
@@ -270,6 +272,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                         LOG.log(Level.SEVERE, "statusMonitorTimer() - Can't pause SimulatedSmartDriver {0}", mostRecentSmartDriver.getSha());
                     }
                 } else {
+                    // If there are paused SmartDrivers and the current mean delay is below the threshold value, it will resume one SmartDriver at a time.
                     if (!pausedSimulatedSmartDrivers.isEmpty()) {
                         try {
                             pausedSimulatedSmartDrivers.get(0).resumeSmartDriver();
@@ -667,24 +670,8 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         emergencyScheduler = scheduledExecutorService.scheduleAtFixedRate(new EmergencyShutdown(startSimulationTime, PresetSimulation.getMaxSimulationTimeMs() + 60000), 0, 5, TimeUnit.SECONDS);
     }
 
-    public boolean isLoopingSimulation() {
-        return loopingSimulation;
-    }
-
-    public boolean isKafkaProducerPerSmartDriver() {
+    public static boolean isKafkaProducerPerSmartDriver() {
         return kafkaProducerPerSmartDriver;
-    }
-
-    public void setKafkaProducerPerSmartDriver(boolean kppsd) {
-        kafkaProducerPerSmartDriver = kppsd;
-    }
-
-    public boolean isRandomizeEachSmartDriverBehaviour() {
-        return randomizeEachSmartDriverBehaviour;
-    }
-
-    public void setRandomizeEachSmartDriverBehaviour(boolean r) {
-        randomizeEachSmartDriverBehaviour = r;
     }
 
     public int getRetries() {

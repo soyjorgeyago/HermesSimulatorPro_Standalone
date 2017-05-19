@@ -213,7 +213,7 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean {
         this.streamServer = streamServer;
         switch (streamServer) {
             case 0:
-                if (SimulatorController.kafkaProducerPerSmartDriver) {
+                if (SimulatorController.isKafkaProducerPerSmartDriver()) {
                     // Inicializamos el 'kafkaProducer' de Kafka.
                     Properties kafkaProperties = Kafka.getKafkaProducerProperties();
                     kafkaProperties.setProperty("client.id", sha);
@@ -298,7 +298,7 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean {
             // Por defecto, en la simulación se tiende al estado relajado.
             relaxing = true;
 
-            LOG.log(Level.INFO, "SimulatedSmartDriver.run() - El usuario de SmartDriver se encuentra en: ({0}, {1})", new Object[]{currentLocationLogDetail.getLatitude(), currentLocationLogDetail.getLongitude()});
+            LOG.log(Level.FINE, "SimulatedSmartDriver.run() - El usuario de SmartDriver se encuentra en: ({0}, {1})", new Object[]{currentLocationLogDetail.getLatitude(), currentLocationLogDetail.getLongitude()});
             LOG.log(Level.FINE, "SimulatedSmartDriver.run() - Elemento actual: {0} de {1}", new Object[]{currentPosition, localLocationLogDetailList.size()});
 
             // Comprobamos si ha pasado suficiente tiempo como para pasar a la siguiente localización.
@@ -436,7 +436,7 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean {
                             // Kafka
                             try {
                                 String json = new Gson().toJson(events);
-                                if (SimulatorController.kafkaProducerPerSmartDriver) {
+                                if (SimulatorController.isKafkaProducerPerSmartDriver()) {
                                     smartDriverKafkaProducer.send(new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION,
                                             smartDriverKafkaRecordId,
                                             json
@@ -503,7 +503,7 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean {
                             // Kafka
                             try {
                                 String json = new Gson().toJson(events);
-                                if (SimulatorController.kafkaProducerPerSmartDriver) {
+                                if (SimulatorController.isKafkaProducerPerSmartDriver()) {
                                     smartDriverKafkaProducer.send(new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION,
                                             smartDriverKafkaRecordId,
                                             json
@@ -636,7 +636,7 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean {
                 // Kafka
                 try {
                     String json = new Gson().toJson(event);
-                    if (SimulatorController.kafkaProducerPerSmartDriver) {
+                    if (SimulatorController.isKafkaProducerPerSmartDriver()) {
                         smartDriverKafkaProducer.send(new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION,
                                 smartDriverKafkaRecordId,
                                 json
@@ -787,7 +787,7 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean {
                 // Kafka
                 try {
                     String json = new Gson().toJson(event);
-                    if (SimulatorController.kafkaProducerPerSmartDriver) {
+                    if (SimulatorController.isKafkaProducerPerSmartDriver()) {
                         smartDriverKafkaProducer.send(new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION,
                                 smartDriverKafkaRecordId,
                                 json
@@ -892,7 +892,7 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean {
     public void finish() {
         finished = true;
         try {
-            if (SimulatorController.kafkaProducerPerSmartDriver) {
+            if (SimulatorController.isKafkaProducerPerSmartDriver()) {
                 // Si tuviera un 'producer' de Kafka, lo cerramos.
                 if (smartDriverKafkaProducer != null) {
                     smartDriverKafkaProducer.flush();
