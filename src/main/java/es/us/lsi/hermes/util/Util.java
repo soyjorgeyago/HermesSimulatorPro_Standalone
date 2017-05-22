@@ -115,8 +115,10 @@ public class Util {
         Map<String, String> env = System.getenv();
         if (env.containsKey("COMPUTERNAME")) {
             return env.get("COMPUTERNAME");
+        }else if (env.containsKey("HOSTNAME")) {
+            return env.get("HOSTNAME");
         } else {
-            return env.getOrDefault("HOSTNAME", "Unknown");
+            return "Unknown";
         }
     }
 }

@@ -38,6 +38,9 @@ public class PresetSimulation {
     private static int maxSimulationTimeInSeconds;
     private static String maxSimulationTimeStringFormatted;
     private static int statusSamplingIntervalInSeconds;
+    private static int consumerPollTimeout;
+    private static boolean loopingSimulation;
+    private static boolean kafkaProducerPerSmartDriver;
 
     static {
         LOG.log(Level.INFO, "PresetSimulation() - Preset configuration init.");
@@ -78,6 +81,10 @@ public class PresetSimulation {
             maxSimulationTimeStringFormatted = Constants.getBundleValue("Infinite");
         }
         statusSamplingIntervalInSeconds = getIntValue("status.sampling.interval.s", 1, 30, 1);
+        consumerPollTimeout = getIntValue("consumer.poll.timeout.ms", 1000);
+
+        loopingSimulation = getBooleanValue("looping.simulation", true);
+        kafkaProducerPerSmartDriver = getBooleanValue("kafka.producer.per.driver", false);
     }
 
     private static String getPathValue(String propertyName, String defaultValue) {
@@ -226,5 +233,25 @@ public class PresetSimulation {
 
     public static int getStatusSamplingIntervalInSeconds() {
         return statusSamplingIntervalInSeconds;
+    }
+
+    public static int getConsumerPollTimeout() {
+        return consumerPollTimeout;
+    }
+
+    public static boolean isLoopingSimulation() {
+        return loopingSimulation;
+    }
+
+    public static boolean isKafkaProducerPerSmartDriver() {
+        return kafkaProducerPerSmartDriver;
+    }
+
+    public static void setLoopingSimulation(boolean loopingSimulation) {
+        PresetSimulation.loopingSimulation = loopingSimulation;
+    }
+
+    public static void setKafkaProducerPerSmartDriver(boolean kafkaProducerPerSmartDriver) {
+        PresetSimulation.kafkaProducerPerSmartDriver = kafkaProducerPerSmartDriver;
     }
 }

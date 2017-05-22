@@ -39,18 +39,9 @@ import org.supercsv.cellprocessor.ift.CellProcessor;
 import ztreamy.JSONSerializer;
 import ztreamy.PublisherHC;
 
-public final class SimulatedSmartDriver implements Runnable, ICSVBean {
+public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulatorControllerObserver {
 
     private static final Logger LOG = Logger.getLogger(SimulatedSmartDriver.class.getName());
-
-    // Parámetros recogidos de SmartDriver.
-    private static final int SEND_INTERVAL_SECONDS = 10;
-    private static final int SEND_INTERVAL_METERS = 500;
-    private static final double HIGH_ACCELERATION_THRESHOLD = 2.5d;
-    private static final double HIGH_DECELERATION_THRESHOLD = -3.5d;
-
-    private static final String DATA_SECTION = "Data Section";
-    private static final String VEHICLE_LOCATION = "Vehicle Location";
 
     // Parámetros para la simulación.
     private int stressLoad; // Indicará el nivel de carga de estrés.
@@ -100,7 +91,7 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean {
     private final String sha;
 
     private final int streamServer;
-//    private final SurroundingVehiclesConsumer surroundingVehiclesConsumer;
+    private SurroundingVehiclesConsumer surroundingVehiclesConsumer = null;
 
     // Current streaming server response delay in milliseconds.
     private long currentDelay_ms;
@@ -174,8 +165,13 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean {
         this.sha = new String(Hex.encodeHex(DigestUtils.sha256(System.currentTimeMillis() + ll.getPerson().getEmail())));
         this.currentDelay_ms = 0L;
         this.infiniteSimulation = infiniteSimulation;
+
 //        // TODO: Probar otros timeouts más altos.
-//        this.surroundingVehiclesConsumer = new SurroundingVehiclesConsumer(Long.parseLong(Kafka.getKafkaProperties().getProperty("consumer.poll.timeout.ms", "1000")), sha, this);
+        if(PresetSimulation.isKafkaProducerPerSmartDriver()) {
+            this.surroundingVehiclesConsumer = new SurroundingVehiclesConsumer(this);
+            surroundingVehiclesConsumer.start();
+        }
+
         this.pendingVehicleLocations = new ArrayList<>();
         this.pendingDataSections = new ArrayList<>();
         this.localLocationLogDetailList = new ArrayList<>();
@@ -484,7 +480,7 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean {
             }
 
             // Se enviará un resumen cada 500 metros.
-            if (sectionDistance >= SEND_INTERVAL_METERS) {
+            if (sectionDistance >= Constants.SEND_INTERVAL_METERS) {
                 sendDataSection();
             } else if (PresetSimulation.isRetryOnFail() && !pendingDataSections.isEmpty()) {
 
@@ -605,8 +601,31 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean {
         }
     }
 
+    public void stressBySurrounding(int surroundingVehicles) {
+        // Graduación del estrés por cambios de la velocidad
+        if (surroundingVehicles < 10) {
+            //  Es una variación de velocidad moderada.
+            if (stressLoad > 0) {
+                stressLoad--;
+            }
+        } else if (surroundingVehicles < 15) {
+            // Es una variación de velocidad alta, añadimos un punto de estrés.
+            stressLoad++;
+            relaxing = false;
+        } else if (surroundingVehicles < 20) {
+            // Es una variación de velocidad muy alta, añadimos 2 punto de estrés.
+            stressLoad += 2;
+            relaxing = false;
+        } else {
+            // Es una variación de velocidad brusca, añadimos 5 puntos de estrés.
+            stressLoad += 5;
+            relaxing = false;
+        }
+    }
+
+
     private boolean isTimeToSend() {
-        return ztreamySecondsCount >= SEND_INTERVAL_SECONDS;
+        return ztreamySecondsCount >= Constants.SEND_INTERVAL_SECONDS;
     }
 
     private boolean isTimeToRetry() {
@@ -628,7 +647,7 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean {
         bodyObject.put("Location", smartDriverLocation);
         SimulatorController.increaseGenerated();
 
-        ExtendedEvent event = new ExtendedEvent(sha, "application/json", Constants.SIMULATOR_APPLICATION_ID, VEHICLE_LOCATION, bodyObject, retries);
+        ExtendedEvent event = new ExtendedEvent(sha, "application/json", Constants.SIMULATOR_APPLICATION_ID, Constants.VEHICLE_LOCATION, bodyObject, retries);
 
         SimulatorController.increaseSends();
         switch (streamServer) {
@@ -737,12 +756,12 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean {
 
             if (acceleration > 0.0d) {
                 accelerationStats.addValue(acceleration);
-                if (acceleration > HIGH_ACCELERATION_THRESHOLD) {
+                if (acceleration > Constants.HIGH_ACCELERATION_THRESHOLD) {
                     numHighAccelerations++;
                 }
             } else if (acceleration < 0.0d) {
                 decelerationStats.addValue(acceleration);
-                if (numHighDecelerations < HIGH_DECELERATION_THRESHOLD) {
+                if (numHighDecelerations < Constants.HIGH_DECELERATION_THRESHOLD) {
                     numHighDecelerations++;
                 }
             }
@@ -776,10 +795,10 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean {
         dataSection.setRoadSection(roadSectionList);
 
         HashMap<String, Object> bodyObject = new HashMap<>();
-        bodyObject.put(DATA_SECTION, dataSection);
+        bodyObject.put(Constants.DATA_SECTION, dataSection);
         SimulatorController.increaseGenerated();
 
-        ExtendedEvent event = new ExtendedEvent(sha, "application/json", Constants.SIMULATOR_APPLICATION_ID, DATA_SECTION, bodyObject, retries);
+        ExtendedEvent event = new ExtendedEvent(sha, "application/json", Constants.SIMULATOR_APPLICATION_ID, Constants.DATA_SECTION, bodyObject, retries);
 
         SimulatorController.increaseSends();
         switch (streamServer) {
@@ -906,7 +925,10 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean {
             if (publisher != null) {
                 publisher.close();
             }
+
+            surroundingVehiclesConsumer.stopConsumer();
         } catch (Exception ex) {
+            // No need to capture
         }
     }
 
@@ -1044,7 +1066,15 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean {
         }
     }
 
+    @Override
+    public void update(String id, int surroundingSize) {
+        if(id.equals(sha)) {
+            stressBySurrounding(surroundingSize);
+        }
+    }
+
     // ------------------------- CSV IMP/EXP -------------------------
+
     private CellProcessor[] cellProcessors;
     private String[] fields;
     private String[] headers;
@@ -1072,5 +1102,4 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean {
     public String[] getHeaders() {
         return headers;
     }
-
 }
