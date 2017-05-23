@@ -234,11 +234,11 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
     }
 
     private void decreasePendingVehicleLocationsRetries() {
-        decreaseEventList(pendingVehicleLocations, VEHICLE_LOCATION);
+        decreaseEventList(pendingVehicleLocations, Constants.VEHICLE_LOCATION);
     }
 
     private void decreasePendingDataSectionsRetries() {
-        decreaseEventList(pendingDataSections, DATA_SECTION);
+        decreaseEventList(pendingDataSections, Constants.DATA_SECTION);
     }
 
     private void decreaseEventList(List<ExtendedEvent> extendedEvents, String eventType) {
