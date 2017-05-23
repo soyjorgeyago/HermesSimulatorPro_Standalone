@@ -122,10 +122,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
     private static int retries = 5;
 
-    // TODO: Relocate in PresetSimulation.properties
-    private static boolean loopingSimulation = true;
-    private static boolean kafkaProducerPerSmartDriver = true;
-
     // Kafka
     private static AtomicLong kafkaRecordId;
     private static volatile KafkaProducer<Long, String> kafkaProducer;
@@ -326,8 +322,11 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         LOG.log(Level.INFO, "executeSimulation() - Comienzo de la simulación: {0}", Constants.dfISO8601.format(startSimulationTime));
         LOG.log(Level.INFO, "executeSimulation() - Envío de tramas a: {0}", Stream_Server.values()[streamServer.ordinal() % 2].name());
         LOG.log(Level.INFO, "executeSimulation() - Se inicia el consumidor de análisis de vehículos cercanos");
-        surroundingVehiclesConsumer = new SurroundingVehiclesConsumer(this);
-        surroundingVehiclesConsumer.start();
+
+        if(!PresetSimulation.isKafkaProducerPerSmartDriver()) {
+            surroundingVehiclesConsumer = new SurroundingVehiclesConsumer(this);
+            surroundingVehiclesConsumer.start();
+        }
 
         // Simulator status monitor initCSV.
         startStatusMonitorTimer();
@@ -404,7 +403,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
     private SimulatedSmartDriver initSimulatedSmartDriver(long id, LocationLog ll, int smartDriversBunch, double speedRandomFactor, double hrRandomFactor) throws MalformedURLException, HermesException {
 
-        SimulatedSmartDriver ssd = new SimulatedSmartDriver(id, ll, randomizeEachSmartDriverBehaviour, loopingSimulation, streamServer.ordinal() % 2, retries, speedRandomFactor, hrRandomFactor);
+        SimulatedSmartDriver ssd = new SimulatedSmartDriver(id, ll, randomizeEachSmartDriverBehaviour, PresetSimulation.isLoopingSimulation(), streamServer.ordinal() % 2, retries, speedRandomFactor, hrRandomFactor);
         simulatedSmartDriverHashMap.put(ssd.getSha(), ssd);
 
         long delay = 0L;
@@ -487,7 +486,9 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                     LOG.log(Level.SEVERE, "finishSimulation() - ########## SIMULACION INTERRUMPIDA ##########");
                 }
                 LOG.log(Level.INFO, "finishSimulation() - Se para el consumidor de análisis de vehículos cercanos");
-                surroundingVehiclesConsumer.stopConsumer();
+
+                if(surroundingVehiclesConsumer != null)
+                    surroundingVehiclesConsumer.stopConsumer();
                 String simulationSummary;
                 if (interrupted || ERRORS.get() > 0 || NOT_OK.get() > 0) {
                     simulationSummary = MessageFormat.format("RESULTADO DE LA SIMULACION:\n\n-> Servidor de tramas={0}\n\n-> Tramas generadas={1}\n-> Envíos realizados={2}\n-> Oks={3}\n-> NoOks={4}\n-> Errores={5}\n-> Recuperados={6}\n-> No reenviados finalmente={7}\n-> Hilos restantes={8}\n-> Trayectos={9}\n-> Distancia máxima={10}\n-> Instancias SmartDriver por trayecto={11}\n-> Reintentar fallidos={12}\n-> Segundos entre reintentos={13}\n-> Máximo retraso temporal={14}s\n\n", Stream_Server.values()[streamServer.ordinal() % 2].name(), GENERATED, SENT, OK, NOT_OK, ERRORS, RECOVERED, FINALLY_PENDING, threadPool.getQueue().size(), locationLogList.size(), PresetSimulation.getMaxPathDistance(), PresetSimulation.getDriversByPath(), PresetSimulation.isRetryOnFail(), PresetSimulation.getIntervalBetweenRetriesInSeconds(), Constants.df2Decimals.format(maxSmartDriversDelayMs.get() / 1000.0d));
@@ -603,10 +604,10 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         try {
             streamServer = Stream_Server.values()[value];
             if (streamServer.ordinal() > 1) {
-                loopingSimulation = false;
+                PresetSimulation.setLoopingSimulation(false);
             }
             if (streamServer.ordinal() % 2 != 0) {
-                kafkaProducerPerSmartDriver = false;
+                PresetSimulation.setKafkaProducerPerSmartDriver(false);
             }
         } catch (Exception ex) {
             // Si no fuera un valor válido, establecemos un valor por defecto.
@@ -619,14 +620,10 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     }
 
     @Override
-    public void update(Vehicle v) {
-        SimulatedSmartDriver ssd = simulatedSmartDriverHashMap.get(v.getId());
+    public void update(String id, int surroundingSize) {
+        SimulatedSmartDriver ssd = simulatedSmartDriverHashMap.get(id);
         if (ssd != null) {
-            if (!v.getSurroundingVehicles().isEmpty()) {
-                // TODO
-            } else {
-                // TODO
-            }
+            ssd.stressBySurrounding(surroundingSize);
         }
     }
 
@@ -671,7 +668,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     }
 
     public static boolean isKafkaProducerPerSmartDriver() {
-        return kafkaProducerPerSmartDriver;
+        return PresetSimulation.isKafkaProducerPerSmartDriver();
     }
 
     public int getRetries() {

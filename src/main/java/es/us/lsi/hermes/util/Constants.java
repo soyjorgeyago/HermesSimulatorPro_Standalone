@@ -8,9 +8,12 @@ import java.text.SimpleDateFormat;
 import java.util.ResourceBundle;
 import java.util.logging.Logger;
 
-public class Constants {
+public final class Constants {
+
+    private Constants() { }
 
     private static final Logger LOG = Logger.getLogger(Constants.class.getName());
+
     private static final ResourceBundle BUNDLE = ResourceBundle.getBundle("Bundle");
 
     // Application name for events send.
@@ -49,4 +52,15 @@ public class Constants {
     public static String getBundleValue(String key, Object... params) {
         return MessageFormat.format(BUNDLE.getString(key), params);
     }
+
+    // Simulated Smart Driver ----------------------------------------------
+
+    // Parámetros recogidos de SmartDriver.
+    public static final int SEND_INTERVAL_SECONDS = 10;
+    public static final int SEND_INTERVAL_METERS = 500;
+    public static final double HIGH_ACCELERATION_THRESHOLD = 2.5d;
+    public static final double HIGH_DECELERATION_THRESHOLD = -3.5d;
+
+    public static final String DATA_SECTION = "Data Section";
+    public static final String VEHICLE_LOCATION = "Vehicle Location";
 }

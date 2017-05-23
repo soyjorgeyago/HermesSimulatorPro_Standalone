@@ -1,7 +1,9 @@
 package es.us.lsi.hermes.simulator;
 
-import es.us.lsi.hermes.analysis.Vehicle;
+//import es.us.lsi.hermes.analysis.Vehicle;
 
 public interface ISimulatorControllerObserver {
-    void update(Vehicle v);
+//    void update(Vehicle v);
+
+    void update(String id, int surroundingSize);
 }

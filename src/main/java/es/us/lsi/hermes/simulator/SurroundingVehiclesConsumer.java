@@ -5,6 +5,7 @@ import es.us.lsi.hermes.analysis.Vehicle;
 import es.us.lsi.hermes.kafka.Kafka;
 import es.us.lsi.hermes.util.Constants;
 import java.util.Collections;
+import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import kafka.utils.ShutdownableThread;
@@ -30,7 +31,11 @@ public class SurroundingVehiclesConsumer extends ShutdownableThread {
         // TODO: Investigar si mediante el consumer.id o mediante el group.id podemos hacer que cada consumer coja lo suyo únicamente.
 //        props.put("consumer.id", sourceId);
 //        this.sourceId = sourceId;
-        this.kafkaConsumer = new KafkaConsumer<>(Kafka.getKafkaConsumerProperties());
+
+        Properties properties = Kafka.getKafkaConsumerProperties();
+        if(PresetSimulation.isKafkaProducerPerSmartDriver())
+            properties.put("group.id", "Consumer " + Math.random());
+        this.kafkaConsumer = new KafkaConsumer<>(properties);
         this.pollTimeout = Long.parseLong(Kafka.getKafkaConsumerProperties().getProperty("consumer.poll.timeout.ms", "1000"));
         this.observer = observer;
         this.gson = new Gson();
@@ -50,7 +55,7 @@ public class SurroundingVehiclesConsumer extends ShutdownableThread {
             LOG.log(Level.FINE, "SurroundingVehiclesConsumer.doWork() - {0}: {1} [{2}] con offset {3}", new Object[]{record.topic(), Constants.dfISO8601.format(record.timestamp()), record.key(), record.offset()});
 
             Vehicle vehicle = gson.fromJson(record.value(), Vehicle.class);
-            observer.update(vehicle);
+            observer.update(vehicle.getId(), vehicle.getSurroundingVehicles().size());
         }
     }
 }

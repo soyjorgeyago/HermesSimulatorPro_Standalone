@@ -34,3 +34,7 @@ max.response.delay.ms=5000
 max.simulation.time.s=0
 # Simulator status sampling interval from 1 to 30 seconds.
 status.sampling.interval.s=1
+# Restart the route after the driver reaches its destination
+looping.simulation=true
+# Sure a producer in each driver instead of having it integrated in the controller
+kafka.producer.per.driver=false
