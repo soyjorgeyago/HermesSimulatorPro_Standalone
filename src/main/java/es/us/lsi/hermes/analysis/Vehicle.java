@@ -1,13 +1,13 @@
 package es.us.lsi.hermes.analysis;
 
-import es.us.lsi.hermes.smartDriver.Location;
+import es.us.lsi.hermes.smartDriver.VehicleLocation;
 import java.util.List;
 
 public class Vehicle {
 
     private String id;
     private int score;
-    private List<Location> historicLocations;
+    private List<VehicleLocation> historicLocations;
     private List<SurroundingVehicle> surroundingVehicles;
 
     public Vehicle() {
@@ -29,11 +29,11 @@ public class Vehicle {
         this.score = score;
     }
 
-    public List<Location> getHistoricLocations() {
+    public List<VehicleLocation> getHistoricLocations() {
         return historicLocations;
     }
 
-    public void setHistoricLocations(List<Location> historicLocations) {
+    public void setHistoricLocations(List<VehicleLocation> historicLocations) {
         this.historicLocations = historicLocations;
     }
 

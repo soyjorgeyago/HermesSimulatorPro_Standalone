@@ -20,10 +20,10 @@ public class StorageUtils {
             String folderStr;
             Path folderPath;
 
-            if(temporal) {
+            if (temporal) {
                 folderPath = Files.createTempDirectory("Hermes_Simulator");
                 folderStr = folderPath.toAbsolutePath().toString() + File.separator;
-            }else {
+            } else {
                 File directory = new File("Hermes_Simulator_CSV");
                 directory.mkdir();
                 folderPath = directory.toPath();
@@ -38,12 +38,12 @@ public class StorageUtils {
     }
 
     @SuppressWarnings("all")
-    static void clearFolderContent(Path folderPath){
-        try{
+    static void clearFolderContent(Path folderPath) {
+        try {
             for (File pathFile : folderPath.toFile().listFiles()) {
                 pathFile.delete();
             }
-        } catch (NullPointerException | SecurityException  ex) {
+        } catch (NullPointerException | SecurityException ex) {
             LOG.log(Level.SEVERE, "Error deleting the files located at path: " + folderPath, ex);
         }
     }
@@ -65,16 +65,9 @@ public class StorageUtils {
     static Path createCsvFolders(String subFolder) {
         String formattedPath = PresetSimulation.getPathForCsvStorage();
 
-//        TODO Review if is necessary to adapt Linux urls to Windows and vice-versa.
-//        if(SystemUtils.IS_OS_LINUX) {
-//            formattedPath = formattedPath.replace('\\', '/');
-//        } else {
-//            formattedPath = formattedPath.replace('/', '\\');
-//        }
-
         try {
             // Creamos un directorio para contener los CSV generados.
-            File directory = new File(formattedPath + "\\" + subFolder);
+            File directory = new File(formattedPath + File.separator + subFolder);
             String tempFolderPath = directory.toPath().toString() + File.separator;
             directory.mkdir();
 
@@ -88,7 +81,7 @@ public class StorageUtils {
 
     static File generateCsvFile(String fileNameHeader, String fileNameWithExtension, String subfolder) {
         Path folder;
-        switch(subfolder){
+        switch (subfolder) {
             case "drivers":
                 folder = CSVUtils.PERMANENT_FOLDER_DRIVERS;
                 break;
@@ -104,12 +97,12 @@ public class StorageUtils {
         return new File(folder.toUri().getPath(), eventsFileNameCSV);
     }
 
-    public static boolean canWrite(String path){
+    public static boolean canWrite(String path) {
         try {
             File dir = new File(path);
             dir.mkdir();
             return !Strings.isNullOrEmpty(path) && dir.canWrite();
-        }catch (Exception ex){
+        } catch (Exception ex) {
             return false;
         }
     }
