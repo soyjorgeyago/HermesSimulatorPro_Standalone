@@ -63,7 +63,7 @@ public class StorageUtils {
     }
 
     static Path createCsvFolders(String subFolder) {
-        String formattedPath = PresetSimulation.getPathForCsvStorage();
+        String formattedPath = PresetSimulation.getCsvStorageFolder();
 
         try {
             // Creamos un directorio para contener los CSV generados.

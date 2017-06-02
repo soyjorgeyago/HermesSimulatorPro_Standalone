@@ -1,7 +1,6 @@
 package es.us.lsi.hermes.location;
 
-import es.us.lsi.hermes.csv.ICSVBean;
-import es.us.lsi.hermes.person.Person;
+import es.us.lsi.hermes.location.detail.LocationLogDetail;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Date;
@@ -11,10 +10,7 @@ public class LocationLog implements Serializable {
 
     private static final long serialVersionUID = 1L;
     private Integer locationLogId;
-    private Person person;
-    private List<ICSVBean> locationLogDetailList;
-    private String filename;
-
+    private List<LocationLogDetail> locationLogDetailList;
     private int duration;
     private double distance;
 
@@ -34,27 +30,11 @@ public class LocationLog implements Serializable {
         return new Date(System.currentTimeMillis());
     }
 
-    public Person getPerson() {
-        return person;
-    }
-
-    public void setPerson(Person person) {
-        this.person = person;
-    }
-
-    public String getFilename() {
-        return filename;
-    }
-
-    public void setFilename(String filename) {
-        this.filename = filename;
-    }
-
-    public List<ICSVBean> getLocationLogDetailList() {
+    public List<LocationLogDetail> getLocationLogDetailList() {
         return locationLogDetailList;
     }
 
-    public void setLocationLogDetailList(List<ICSVBean> locationLogDetailList) {
+    public void setLocationLogDetailList(List<LocationLogDetail> locationLogDetailList) {
         this.locationLogDetailList = locationLogDetailList;
     }
 

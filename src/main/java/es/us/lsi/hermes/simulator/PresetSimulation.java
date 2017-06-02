@@ -32,8 +32,8 @@ public class PresetSimulation {
     private static String sendResultsToEmail;
     private static boolean randomizeEachSmartDriverBehaviour;
     private static int retries;
-    private static boolean useRoutesFromHdd;
-    private static String pathForCsvStorage;
+    private static boolean loadPathsAndDriversFromHdd;
+    private static String csvStorageFolder;
     private static int maxResponseDelayMs;
     private static int maxSimulationTimeInSeconds;
     private static String maxSimulationTimeStringFormatted;
@@ -70,8 +70,8 @@ public class PresetSimulation {
         sendResultsToEmail = getEmailValue("send.results.to.email", "jorgeyago.ingeniero@gmail.com");
         randomizeEachSmartDriverBehaviour = getBooleanValue("randomize.behaviour", true);
         retries = getIntValue("retries", -1, 5, 1);
-        useRoutesFromHdd = getBooleanValue("use.routes.from.hdd", false);
-        pathForCsvStorage = getPathValue("path.csv.storage", "CSV_storage");
+        loadPathsAndDriversFromHdd = getBooleanValue("hdd.load", false);
+        csvStorageFolder = getPathValue("csv.storage.folder", "CSV_storage");
         maxResponseDelayMs = getIntValue("max.response.delay.ms", 10, 10000, 5000);
         maxSimulationTimeInSeconds = getIntValue("max.simulation.time.s", 0);
         if (maxSimulationTimeInSeconds > 0) {
@@ -211,12 +211,12 @@ public class PresetSimulation {
         return retries;
     }
 
-    public static boolean isUseRoutesFromHdd() {
-        return useRoutesFromHdd;
+    public static boolean isLoadPathsAndDriversFromHdd() {
+        return loadPathsAndDriversFromHdd;
     }
 
-    public static String getPathForCsvStorage() {
-        return pathForCsvStorage;
+    public static String getCsvStorageFolder() {
+        return csvStorageFolder;
     }
 
     public static int getMaxResponseDelayMs() {

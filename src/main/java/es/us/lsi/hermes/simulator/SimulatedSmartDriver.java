@@ -1,8 +1,6 @@
 package es.us.lsi.hermes.simulator;
 
 import com.google.gson.Gson;
-import es.us.lsi.hermes.csv.ICSVBean;
-import es.us.lsi.hermes.smartDriver.SmartDriverStatus;
 import es.us.lsi.hermes.location.LocationLog;
 import es.us.lsi.hermes.location.detail.LocationLogDetail;
 import es.us.lsi.hermes.kafka.Kafka;
@@ -34,30 +32,17 @@ import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.supercsv.cellprocessor.ParseDouble;
-import org.supercsv.cellprocessor.ift.CellProcessor;
 import ztreamy.JSONSerializer;
 import ztreamy.PublisherHC;
 
-public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulatorControllerObserver {
+public final class SimulatedSmartDriver extends MonitorizedDriver implements Runnable, ISimulatorControllerObserver {
 
     private static final Logger LOG = Logger.getLogger(SimulatedSmartDriver.class.getName());
-
-    // Parámetros para la simulación.
-    private int stressLoad; // Indicará el nivel de carga de estrés.
-    private boolean relaxing; // Indicará si el usuario está relajándose tras una carga de estrés.
-    private static final double MIN_SPEED = 10.0d; // Velocidad mínima de los SmartDrivers.
 
     // Aunque sólo tengamos 2 tipos de eventos, 'VehicleLocation' y 'DataSection', internamente distinguimos entre cuando es un envío normal o cuando es una repetición de un envío previo.
     public enum Event_Type {
         NORMAL_VEHICLE_LOCATION, RECOVERED_VEHICLE_LOCATION, NORMAL_DATA_SECTION, RECOVERED_DATA_SECTION
     }
-
-    // Tiempo de simulación transcurrido en segundos del SmartDriver.
-    private int elapsedSeconds;
-
-    // Indicará si el vehículo se ha movido.
-    private boolean locationChanged;
 
     // Ztreamy
     private PublisherHC publisher;
@@ -65,12 +50,16 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
     // Kafka
     private long smartDriverKafkaRecordId;
     private KafkaProducer<Long, String> smartDriverKafkaProducer;
+
+    // Parámetros para la simulación.
+    private int stressLoad; // Indicará el nivel de carga de estrés.
+    private boolean relaxing; // Indicará si el usuario está relajándose tras una carga de estrés.
+    private static final double MIN_SPEED = 10.0d; // Velocidad mínima de los SmartDrivers.
     // Lista de hitos del recorrido por las que pasará el SmartDriver.
     private List<LocationLogDetail> localLocationLogDetailList;
 
-    private int currentPosition;
-    private boolean finished;
-    private final LocationLog ll;
+    private boolean locationChanged;
+
     private double sectionDistance;
     private double cummulativePositiveSpeeds;
     private final List<RoadSection> roadSectionList;
@@ -93,9 +82,6 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
     private final int streamServer;
     private SurroundingVehiclesConsumer surroundingVehiclesConsumer = null;
 
-    // Current streaming server response delay in milliseconds.
-    private long currentDelay_ms;
-
     private boolean infiniteSimulation;
     private final int retries;
 
@@ -103,11 +89,7 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
 
     public SimulatedSmartDriver() {
         this.id = 0;
-        this.ll = null;
-        this.elapsedSeconds = 0;
         this.locationChanged = false;
-        this.currentPosition = 0;
-        this.finished = false;
         this.sectionDistance = 0.0d;
         this.roadSectionList = new ArrayList<>();
         this.cummulativePositiveSpeeds = 0.0d;
@@ -115,7 +97,6 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
         this.stressLoad = 0;
         this.minRrTime = 0;
         this.sha = "";
-        this.currentDelay_ms = 0L;
         this.infiniteSimulation = false;
         this.pendingVehicleLocations = new ArrayList<>();
         this.pendingDataSections = new ArrayList<>();
@@ -128,7 +109,7 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
         this.streamServer = 0;
         this.paused = false;
 
-        initCSV();
+        init();
     }
 
     /**
@@ -147,13 +128,10 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
      * @throws MalformedURLException
      * @throws HermesException
      */
-    public SimulatedSmartDriver(long id, LocationLog ll, boolean randomBehaviour, boolean infiniteSimulation, int streamServer, int retries, double speedRandomFactor, double hrRandomFactor) throws MalformedURLException, HermesException {
+    public SimulatedSmartDriver(long id, LocationLog ll, boolean infiniteSimulation, int streamServer, int retries, double speedRandomFactor, double hrRandomFactor) throws MalformedURLException, HermesException {
+        final SecureRandom random = new SecureRandom();
         this.id = id;
-        this.ll = ll;
-        this.elapsedSeconds = 0;
         this.locationChanged = false;
-        this.currentPosition = 0;
-        this.finished = false;
         this.sectionDistance = 0.0d;
         this.roadSectionList = new ArrayList<>();
         this.cummulativePositiveSpeeds = 0.0d;
@@ -162,51 +140,54 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
         this.stressLoad = 0; // Suponemos que inicialmente no está estresado.
         int age = ThreadLocalRandom.current().nextInt(18, 65 + 1); // Simularemos conductores de distintas edades (entre 18 y 65 años), para establecer el ritmo cardíaco máximo en la simulación.
         this.minRrTime = (int) Math.ceil(60000.0d / (220 - age)); // Mínimo R-R, que establecerá el ritmo cardíaco máximo.
-        this.sha = new String(Hex.encodeHex(DigestUtils.sha256(System.currentTimeMillis() + ll.getPerson().getEmail())));
-        this.currentDelay_ms = 0L;
+        this.sha = new String(Hex.encodeHex(DigestUtils.sha256(random + "@sim.com")));
         this.infiniteSimulation = infiniteSimulation;
-
-//        // TODO: Probar otros timeouts más altos.
-        if(PresetSimulation.isKafkaProducerPerSmartDriver()) {
-            this.surroundingVehiclesConsumer = new SurroundingVehiclesConsumer(this);
-            surroundingVehiclesConsumer.start();
-        }
-
+        this.streamServer = streamServer;
+        this.retries = retries;
+        this.paused = false;
         this.pendingVehicleLocations = new ArrayList<>();
         this.pendingDataSections = new ArrayList<>();
         this.localLocationLogDetailList = new ArrayList<>();
 
-        if (speedRandomFactor == -1 && hrRandomFactor == -1) {
-            final SecureRandom RANDOM = new SecureRandom();
+//        // TODO: Probar otros timeouts más altos.
+        if (PresetSimulation.isKafkaProducerPerSmartDriver()) {
+            this.surroundingVehiclesConsumer = new SurroundingVehiclesConsumer(this);
+        }
 
-            this.speedRandomFactor = 0.5d + (RANDOM.nextDouble() * 1.0d);
-            this.hrRandomFactor = 0.9d + (RANDOM.nextDouble() * 0.2d);
+        if (speedRandomFactor == -1 && hrRandomFactor == -1) {
+            this.speedRandomFactor = 0.5d + (random.nextDouble() * 1.0d);
+            this.hrRandomFactor = 0.9d + (random.nextDouble() * 0.2d);
         } else {
             this.speedRandomFactor = speedRandomFactor;
             this.hrRandomFactor = hrRandomFactor;
         }
 
         for (int i = 0; i < ll.getLocationLogDetailList().size(); i++) {
-            LocationLogDetail lld = (LocationLogDetail) ll.getLocationLogDetailList().get(i);
+            LocationLogDetail lldOriginal = (LocationLogDetail) ll.getLocationLogDetailList().get(i);
+            LocationLogDetail lld = new LocationLogDetail(lldOriginal.getLatitude(), lldOriginal.getLongitude(), lldOriginal.getSpeed(), lldOriginal.getHeartRate(), lldOriginal.getRrTime(), lldOriginal.getSecondsToBeHere());
 
-            // Aplicamos la variación aleatoria de la velocidad.
-            if (randomBehaviour) {
-                lld.setSpeed(lld.getSpeed() * speedRandomFactor);
-                lld.setHeartRate((int) (lld.getHeartRate() * hrRandomFactor));
-            }
+            lld.setSpeed(lld.getSpeed() * speedRandomFactor);
+            lld.setHeartRate((int) (lld.getHeartRate() * hrRandomFactor));
 
             // Make sure the speed is bigger or equal to MIN_SPEED.
             if (lld.getSpeed() < MIN_SPEED) {
                 lld.setSpeed(MIN_SPEED);
                 lld.setSecondsToBeHere((int) (Math.ceil(lld.getSecondsToBeHere() * (lld.getSpeed() / MIN_SPEED))));
-            } else if (randomBehaviour) {
+            } else {
                 lld.setSecondsToBeHere((int) (Math.ceil(lld.getSecondsToBeHere() / speedRandomFactor)));
             }
 
-            lld = new LocationLogDetail(lld.getLatitude(), lld.getLongitude(), lld.getSpeed(), lld.getHeartRate(), lld.getRrTime(), lld.getSecondsToBeHere());
             localLocationLogDetailList.add(lld);
         }
-        this.streamServer = streamServer;
+
+        init();
+    }
+
+    private void init() {
+        if (surroundingVehiclesConsumer != null) {
+            surroundingVehiclesConsumer.start();
+        }
+
         switch (streamServer) {
             case 0:
                 if (SimulatorController.isKafkaProducerPerSmartDriver()) {
@@ -223,10 +204,6 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
             default:
                 throw new IllegalArgumentException("Invalid Stream Server option");
         }
-        this.retries = retries;
-        this.paused = false;
-
-        initCSV();
     }
 
     public String getSha() {
@@ -257,9 +234,6 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
         }
     }
 
-//    public void startConsumer() {
-//        surroundingVehiclesConsumer.start();
-//    }
     @Override
     public void run() {
         try {
@@ -269,7 +243,7 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
                 }
             }
 
-            if (finished) {
+            if (hasFinished()) {
                 throw new RuntimeException("Finished SmartDriver");
             }
 
@@ -287,7 +261,7 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
 //                // Se ha cumplido el tiempo, paramos la ejecución.
 //                finish();
 //            } else {
-            LocationLogDetail currentLocationLogDetail = localLocationLogDetailList.get(currentPosition);
+            LocationLogDetail currentLocationLogDetail = localLocationLogDetailList.get(getCurrentPosition());
 
             double distance;
             double bearing;
@@ -295,18 +269,17 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
             relaxing = true;
 
             LOG.log(Level.FINE, "SimulatedSmartDriver.run() - El usuario de SmartDriver se encuentra en: ({0}, {1})", new Object[]{currentLocationLogDetail.getLatitude(), currentLocationLogDetail.getLongitude()});
-            LOG.log(Level.FINE, "SimulatedSmartDriver.run() - Elemento actual: {0} de {1}", new Object[]{currentPosition, localLocationLogDetailList.size()});
+            LOG.log(Level.FINE, "SimulatedSmartDriver.run() - Elemento actual: {0} de {1}", new Object[]{getCurrentPosition(), localLocationLogDetailList.size()});
 
             // Comprobamos si ha pasado suficiente tiempo como para pasar a la siguiente localización.
-            if (elapsedSeconds >= currentLocationLogDetail.getSecondsToBeHere()) {
+            if (getElapsedSeconds() >= currentLocationLogDetail.getSecondsToBeHere()) {
                 // Comprobamos si hemos llegado al destino.
-                if (currentPosition == localLocationLogDetailList.size() - 1) {
+                if (getCurrentPosition() == localLocationLogDetailList.size() - 1) {
                     if (!infiniteSimulation) {
                         // Notificamos que ha terminado el SmartDriver actual.
                         SimulatorController.smartDriverHasFinished(this.getSha());
 
-                        LOG.log(Level.FINE, "SimulatedSmartDriver.run() - El usuario ha llegado a su destino en: {0}", DurationFormatUtils.formatDuration(elapsedSeconds * 1000L, "HH:mm:ss", true));
-                        SimulatorController.addFinallyPending(pendingVehicleLocations.size() + pendingDataSections.size());
+                        LOG.log(Level.FINE, "SimulatedSmartDriver.run() - El usuario ha llegado a su destino en: {0}", DurationFormatUtils.formatDuration(getElapsedSeconds(), "HH:mm:ss", true));
                         finish();
                     } else {
                         // Hemos llegado al final, pero es una simulación infinita. Le damos la vuelta al recorrido y seguimos.
@@ -319,21 +292,21 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
                             lld1.setSecondsToBeHere(lld2.getSecondsToBeHere());
                             lld2.setSecondsToBeHere(stbh1);
                         }
-                        currentPosition = 0;
-                        elapsedSeconds = 0;
+                        setCurrentPosition(0);
+                        resetElapsedSeconds();
                     }
                 } else {
                     // No hemos llegado al destino, avanzamos de posición.
-                    int previousPosition = currentPosition;
-                    for (int i = currentPosition; i < localLocationLogDetailList.size(); i++) {
-                        currentPosition = i;
-                        if (localLocationLogDetailList.get(i).getSecondsToBeHere() > elapsedSeconds) {
+                    int previousPosition = getCurrentPosition();
+                    for (int i = getCurrentPosition(); i < localLocationLogDetailList.size(); i++) {
+                        setCurrentPosition(i);
+                        if (localLocationLogDetailList.get(i).getSecondsToBeHere() > getElapsedSeconds()) {
                             break;
                         }
                     }
 
-                    LOG.log(Level.FINE, "SimulatedSmartDriver.run() - Avanzamos de posición: {0}", currentPosition);
-                    currentLocationLogDetail = localLocationLogDetailList.get(currentPosition);
+                    LOG.log(Level.FINE, "SimulatedSmartDriver.run() - Avanzamos de posición: {0}", getCurrentPosition());
+                    currentLocationLogDetail = localLocationLogDetailList.get(getCurrentPosition());
                     LOG.log(Level.FINE, "SimulatedSmartDriver.run() - El usuario de SmartDriver se encuentra en: ({0}, {1})", new Object[]{currentLocationLogDetail.getLatitude(), currentLocationLogDetail.getLongitude()});
 
                     LocationLogDetail previousLocationLogDetail = localLocationLogDetailList.get(previousPosition);
@@ -424,7 +397,7 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
                     /////////////////////////////////////////////////////
 
                     // Aprovechamos que no toca envío de 'VehicleLocation' para probar a enviar los que hubieran fallado.
-                    SimulatorController.increaseSends();
+                    increaseSent();
                     ExtendedEvent[] events = new ExtendedEvent[pendingVehicleLocations.size()];
 
                     switch (streamServer) {
@@ -456,8 +429,8 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
                             try {
                                 int result = publisher.publish(pendingVehicleLocations.toArray(events), true);
                                 if (result == HttpURLConnection.HTTP_OK) {
-                                    SimulatorController.addRecovered(events.length);
-                                    LOG.log(Level.INFO, "*Reintento* - {0} 'VehicleLocation' pendientes enviadas correctamante. SmartDriver: {1}", new Object[]{events.length, ll.getPerson().getEmail()});
+                                    addRecovered(events.length);
+                                    LOG.log(Level.INFO, "*Reintento* - {0} 'VehicleLocation' pendientes enviadas correctamante. SmartDriver: {1}", new Object[]{events.length, sha});
                                     pendingVehicleLocations.clear();
                                 } else {
                                     LOG.log(Level.SEVERE, "*Reintento* - Error SEND (Not OK): No se han podido reenviar los {0} 'VehicleLocation' pendientes", events.length);
@@ -491,7 +464,7 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
                     /////////////////////////////////////////////////
 
                     // Aprovechamos que no toca envío de 'DataSection' para probar a enviar los que hubieran fallado.
-                    SimulatorController.increaseSends();
+                    increaseSent();
                     ExtendedEvent[] events = new ExtendedEvent[pendingDataSections.size()];
 
                     switch (streamServer) {
@@ -523,8 +496,8 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
                             try {
                                 int result = publisher.publish(pendingDataSections.toArray(events), true);
                                 if (result == HttpURLConnection.HTTP_OK) {
-                                    SimulatorController.addRecovered(events.length);
-                                    LOG.log(Level.INFO, "*Reintento* - {0} 'DataSection' pendientes enviados correctamante. SmartDriver: {1}", new Object[]{events.length, ll.getPerson().getEmail()});
+                                    addRecovered(events.length);
+                                    LOG.log(Level.INFO, "*Reintento* - {0} 'DataSection' pendientes enviados correctamante. SmartDriver: {1}", new Object[]{events.length, sha});
                                     pendingDataSections.clear();
                                 } else {
                                     LOG.log(Level.SEVERE, "*Reintento* - Error SEND (Not OK): No se han podido reenviar los {0} 'DataSection' pendientes", events.length);
@@ -546,12 +519,12 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
                 }
             }
 
-            elapsedSeconds++;
+            increaseElapsedSeconds();
             ztreamySecondsCount++;
             if (!pendingVehicleLocations.isEmpty() || !pendingDataSections.isEmpty()) {
                 secondsBetweenRetries++;
             }
-            LOG.log(Level.FINE, "SimulatedSmartDriver.run() - Elapsed simulation time: {0}", DurationFormatUtils.formatDuration(elapsedSeconds * 1000l, "HH:mm:ss", true));
+            LOG.log(Level.FINE, "SimulatedSmartDriver.run() - Elapsed simulation time: {0}", DurationFormatUtils.formatDuration(getElapsedSeconds(), "HH:mm:ss", true));
         } catch (InterruptedException ex) {
             LOG.log(Level.INFO, "SimulatedSmartDriver.run() - Interrupted!");
         }
@@ -623,7 +596,6 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
         }
     }
 
-
     private boolean isTimeToSend() {
         return ztreamySecondsCount >= Constants.SEND_INTERVAL_SECONDS;
     }
@@ -645,11 +617,11 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
 
         HashMap<String, Object> bodyObject = new HashMap<>();
         bodyObject.put("Location", smartDriverLocation);
-        SimulatorController.increaseGenerated();
+        increaseGenerated();
 
         ExtendedEvent event = new ExtendedEvent(sha, "application/json", Constants.SIMULATOR_APPLICATION_ID, Constants.VEHICLE_LOCATION, bodyObject, retries);
 
-        SimulatorController.increaseSends();
+        increaseSent();
         switch (streamServer) {
             case 0:
                 // Kafka
@@ -669,8 +641,8 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
                         ), new KafkaCallBack(System.currentTimeMillis(), id, new ExtendedEvent[]{event}, Event_Type.NORMAL_VEHICLE_LOCATION));
                     }
                 } catch (Exception ex) {
-                    if (!finished) {
-                        SimulatorController.increaseErrors();
+                    if (!hasFinished()) {
+                        increaseErrors();
                         if (PresetSimulation.isRetryOnFail()) {
                             // Si ha fallado, almacenamos el 'VehicleLocation' que se debería haber enviado y lo intentamos luego.
                             pendingVehicleLocations.add(event);
@@ -687,11 +659,11 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
                 try {
                     int result = publisher.publish(event, true);
                     if (result == HttpURLConnection.HTTP_OK) {
-                        SimulatorController.increaseOkSends();
-                        LOG.log(Level.FINE, "sendEvery10SecondsIfLocationChanged() - Localización de trayecto simulado enviada correctamante. SmartDriver: {0}", ll.getPerson().getEmail());
+                        increaseOks();
+                        LOG.log(Level.FINE, "sendEvery10SecondsIfLocationChanged() - Localización de trayecto simulado enviada correctamante. SmartDriver: {0}", sha);
                         locationChanged = false;
                     } else {
-                        SimulatorController.increaseNoOkSends();
+                        increaseNotOks();
                         if (PresetSimulation.isRetryOnFail()) {
                             // Si ha fallado, almacenamos el 'VehicleLocation' que se debería haber enviado y lo intentamos luego.
                             pendingVehicleLocations.add(event);
@@ -702,8 +674,8 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
                 } catch (MalformedURLException ex) {
                     LOG.log(Level.SEVERE, "sendEvery10SecondsIfLocationChanged() - Error en la URL", ex);
                 } catch (IOException ex) {
-                    if (!finished) {
-                        SimulatorController.increaseErrors();
+                    if (!hasFinished()) {
+                        increaseErrors();
                         if (PresetSimulation.isRetryOnFail()) {
                             // Si ha fallado, almacenamos el 'VehicleLocation' que se debería haber enviado y lo intentamos luego.
                             pendingVehicleLocations.add(event);
@@ -712,8 +684,8 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
                         reconnectPublisher();
                     }
                 } catch (Exception ex) {
-                    if (!finished) {
-                        SimulatorController.increaseErrors();
+                    if (!hasFinished()) {
+                        increaseErrors();
                         if (PresetSimulation.isRetryOnFail()) {
                             // Si ha fallado, almacenamos el 'VehicleLocation' que se debería haber enviado y lo intentamos luego.
                             pendingVehicleLocations.add(event);
@@ -796,11 +768,11 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
 
         HashMap<String, Object> bodyObject = new HashMap<>();
         bodyObject.put(Constants.DATA_SECTION, dataSection);
-        SimulatorController.increaseGenerated();
+        increaseGenerated();
 
         ExtendedEvent event = new ExtendedEvent(sha, "application/json", Constants.SIMULATOR_APPLICATION_ID, Constants.DATA_SECTION, bodyObject, retries);
 
-        SimulatorController.increaseSends();
+        increaseSent();
         switch (streamServer) {
             case 0:
                 // Kafka
@@ -820,8 +792,8 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
                         ), new KafkaCallBack(System.currentTimeMillis(), id, new ExtendedEvent[]{event}, Event_Type.NORMAL_DATA_SECTION));
                     }
                 } catch (Exception ex) {
-                    if (!finished) {
-                        SimulatorController.increaseErrors();
+                    if (!hasFinished()) {
+                        increaseErrors();
                         if (PresetSimulation.isRetryOnFail()) {
                             // Si ha fallado, almacenamos el 'DataSection' que se debería haber enviado y lo intentamos luego.
                             pendingDataSections.add(event);
@@ -841,10 +813,10 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
                     int result = publisher.publish(event, true);
 
                     if (result == HttpURLConnection.HTTP_OK) {
-                        SimulatorController.increaseOkSends();
-                        LOG.log(Level.FINE, "sendDataSectionToZtreamy() - Datos de sección de trayecto simulado enviada correctamante. SmartDriver: {0}", ll.getPerson().getEmail());
+                        increaseOks();
+                        LOG.log(Level.FINE, "sendDataSectionToZtreamy() - Datos de sección de trayecto simulado enviada correctamante. SmartDriver: {0}", sha);
                     } else {
-                        SimulatorController.increaseNoOkSends();
+                        increaseNotOks();
                         if (PresetSimulation.isRetryOnFail()) {
                             // Si ha fallado, almacenamos el 'DataSection' que se debería haber enviado y lo intentamos luego.
                             pendingDataSections.add(event);
@@ -855,8 +827,8 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
                 } catch (MalformedURLException ex) {
                     LOG.log(Level.SEVERE, "sendDataSectionToZtreamy() - Error en la URL", ex);
                 } catch (IOException ex) {
-                    if (!finished) {
-                        SimulatorController.increaseErrors();
+                    if (!hasFinished()) {
+                        increaseErrors();
                         if (PresetSimulation.isRetryOnFail()) {
                             // Si ha fallado, almacenamos el 'DataSection' que se debería haber enviado y lo intentamos luego.
                             pendingDataSections.add(event);
@@ -865,8 +837,8 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
                         reconnectPublisher();
                     }
                 } catch (Exception ex) {
-                    if (!finished) {
-                        SimulatorController.increaseErrors();
+                    if (!hasFinished()) {
+                        increaseErrors();
                         if (PresetSimulation.isRetryOnFail()) {
                             // Si ha fallado, almacenamos el 'DataSection' que se debería haber enviado y lo intentamos luego.
                             pendingDataSections.add(event);
@@ -909,7 +881,8 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
     }
 
     public void finish() {
-        finished = true;
+        setFinished();
+
         try {
             if (SimulatorController.isKafkaProducerPerSmartDriver()) {
                 // Si tuviera un 'producer' de Kafka, lo cerramos.
@@ -932,10 +905,6 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
         }
     }
 
-    public long getCurrentDelayMs() {
-        return currentDelay_ms;
-    }
-
     public double getSpeedRandomFactor() {
         return speedRandomFactor;
     }
@@ -952,10 +921,6 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
         this.hrRandomFactor = hrRandomFactor;
     }
 
-    public int getElapsedSeconds() {
-        return elapsedSeconds;
-    }
-
     public synchronized void pauseSmartDriver() throws InterruptedException {
         paused = true;
     }
@@ -963,6 +928,11 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
     public synchronized void resumeSmartDriver() throws InterruptedException {
         paused = false;
         notify();
+    }
+
+    @Override
+    public int getPending() {
+        return pendingVehicleLocations.size() + pendingDataSections.size();
     }
 
     public synchronized boolean isPaused() {
@@ -998,33 +968,34 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
         public void onCompletion(RecordMetadata metadata, Exception exception) {
             if (metadata != null) {
                 // Register the current delay.
-                currentDelay_ms = System.currentTimeMillis() - startTime;
-                LOG.log(Level.FINE, "onCompletion() - Message received in Kafka\n - Key: {0}\n - Events: {1}\n - Partition: {2}\n - Offset: {3}\n - Elapsed time: {4} ms", new Object[]{key, events.length, metadata.partition(), metadata.offset(), currentDelay_ms});
+                setCurrentDelayMs(System.currentTimeMillis() - startTime);
+                LOG.log(Level.FINE, "onCompletion() - Message received in Kafka\n - Key: {0}\n - Events: {1}\n - Partition: {2}\n - Offset: {3}\n - Elapsed time: {4} ms", new Object[]{key, events.length, metadata.partition(), metadata.offset(), getCurrentDelayMs()});
 
                 switch (type) {
                     case RECOVERED_VEHICLE_LOCATION:
-                        SimulatorController.addRecovered(events.length);
-                        LOG.log(Level.INFO, "*Retry* - {0} Pending 'VehicleLocation' events {1} successfully received. SmartDriver: {2}", new Object[]{events.length, type.name(), ll.getPerson().getEmail()});
+                        addRecovered(events.length);
+                        LOG.log(Level.INFO, "*Retry* - {0} Pending 'VehicleLocation' events {1} successfully received. SmartDriver: {2}", new Object[]{events.length, type.name(), sha});
                         pendingVehicleLocations.clear();
                         break;
                     case RECOVERED_DATA_SECTION:
-                        SimulatorController.addRecovered(events.length);
-                        LOG.log(Level.INFO, "*Retry* - {0} Pending 'DataSection' events {1} successfully received. SmartDriver: {2}", new Object[]{events.length, type.name(), ll.getPerson().getEmail()});
+                        addRecovered(events.length);
+                        LOG.log(Level.INFO, "*Retry* - {0} Pending 'DataSection' events {1} successfully received. SmartDriver: {2}", new Object[]{events.length, type.name(), sha});
                         pendingDataSections.clear();
                         break;
                     case NORMAL_VEHICLE_LOCATION:
-                        SimulatorController.increaseOkSends();
-                        LOG.log(Level.FINE, "onCompletion() - 'VehicleLocation' successfully received. SmartDriver: {0}", ll.getPerson().getEmail());
+                        increaseOks();
+                        LOG.log(Level.FINE, "onCompletion() - 'VehicleLocation' successfully received. SmartDriver: {0}", sha);
                         locationChanged = false;
                         break;
                     case NORMAL_DATA_SECTION:
-                        SimulatorController.increaseOkSends();
-                        LOG.log(Level.FINE, "onCompletion() - 'DataSection' successfully received. SmartDriver: {0}", ll.getPerson().getEmail());
+                        increaseOks();
+                        LOG.log(Level.FINE, "onCompletion() - 'DataSection' successfully received. SmartDriver: {0}", sha);
                         break;
                     default:
                         break;
                 }
             } else {
+                increaseNotOks();
                 LOG.log(Level.SEVERE, "onCompletion() - Unable to send message to Kafka", exception);
 
                 switch (type) {
@@ -1041,14 +1012,14 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
                         }
                         break;
                     case NORMAL_VEHICLE_LOCATION:
-                        SimulatorController.increaseErrors();
+                        increaseErrors();
                         if (PresetSimulation.isRetryOnFail()) {
                             // If fails to send the 'VehicleLocation' stream, it is stored in order to be sent later.
                             pendingVehicleLocations.addAll(Arrays.asList(events));
                         }
                         break;
                     case NORMAL_DATA_SECTION:
-                        SimulatorController.increaseErrors();
+                        increaseErrors();
                         if (PresetSimulation.isRetryOnFail()) {
                             // If fails to send the 'DataSection' stream, it is stored in order to be sent later.
                             pendingDataSections.addAll(Arrays.asList(events));
@@ -1059,47 +1030,18 @@ public final class SimulatedSmartDriver implements Runnable, ICSVBean, ISimulato
                 }
             }
 
-            // Finally, it is sent the SmartDriver current status to the streaming server.
-            String json = new Gson().toJson(new SmartDriverStatus(getSha(), System.currentTimeMillis(), currentDelay_ms, metadata != null ? metadata.serializedValueSize() : 0));
-            LOG.log(Level.FINE, "onCompletion() - SmartDriver status JSON: {0}", json);
-            SimulatorController.getKafkaMonitoringProducer().send(new ProducerRecord<>(Kafka.TOPIC_SMARTDRIVER_STATUS, getSha(), json));
+            // FIXME: Only if necessary. At this moment, it Will be only used the Simulator Status Topic to lighten the simulator.
+//            // Finally, it is sent the SmartDriver current status to the streaming server.
+//            String json = new Gson().toJson(new SmartDriverStatus(getSha(), System.currentTimeMillis(), currentDelay_ms, metadata != null ? metadata.serializedValueSize() : 0));
+//            LOG.log(Level.FINE, "onCompletion() - SmartDriver status JSON: {0}", json);
+//            SimulatorController.getKafkaMonitoringProducer().send(new ProducerRecord<>(Kafka.TOPIC_SMARTDRIVER_STATUS, getSha(), json));
         }
     }
 
     @Override
     public void update(String id, int surroundingSize) {
-        if(id.equals(sha)) {
+        if (id.equals(sha)) {
             stressBySurrounding(surroundingSize);
         }
-    }
-
-    // ------------------------- CSV IMP/EXP -------------------------
-
-    private CellProcessor[] cellProcessors;
-    private String[] fields;
-    private String[] headers;
-
-    @Override
-    public void initCSV() {
-        cellProcessors = new CellProcessor[]{new ParseDouble(), new ParseDouble()};
-
-        headers = new String[]{"SpeedRandomFactor", "HrRandomFactor"};
-
-        fields = new String[]{"speedRandomFactor", "hrRandomFactor"};
-    }
-
-    @Override
-    public CellProcessor[] getProcessors() {
-        return cellProcessors;
-    }
-
-    @Override
-    public String[] getFields() {
-        return fields;
-    }
-
-    @Override
-    public String[] getHeaders() {
-        return headers;
     }
 }

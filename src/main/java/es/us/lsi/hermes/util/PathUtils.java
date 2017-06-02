@@ -10,7 +10,6 @@ import es.us.lsi.hermes.google.directions.*;
 import es.us.lsi.hermes.location.LocationLog;
 import es.us.lsi.hermes.location.detail.LocationLogDetail;
 import es.us.lsi.hermes.openStreetMap.PositionSimulatedSpeed;
-import es.us.lsi.hermes.person.Person;
 import es.us.lsi.hermes.simulator.PathRequestWebService;
 import es.us.lsi.hermes.simulator.PresetSimulation;
 import es.us.lsi.hermes.simulator.SimulatorController;
@@ -38,7 +37,7 @@ public class PathUtils {
         }
 
         // Listado de posiciones que componen el trayecto de SmartDriver.
-        ArrayList<ICSVBean> locationLogDetailList = new ArrayList<>();
+        ArrayList<LocationLogDetail> locationLogDetailList = new ArrayList<>();
 
         double pathDistance = 0.0d;
         int pathDurationInSeconds = 0;
@@ -102,7 +101,7 @@ public class PathUtils {
         Leg l = r.getLegs().get(0);
 
         // Listado de posiciones que componen el trayecto de SmartDriver.
-        ArrayList<ICSVBean> locationLogDetailList = new ArrayList<>();
+        ArrayList<LocationLogDetail> locationLogDetailList = new ArrayList<>();
 
         double speed;
         double pathDistance = 0.0d;
@@ -309,11 +308,6 @@ public class PathUtils {
                     ll.setLocationLogDetailList(interpolateLocationLogDetailList(ll.getLocationLogDetailList()));
                 }
 
-                // Creamos un usuario simulado, al que le asignaremos el trayecto.
-                Person person = Person.createSimimulatedPerson();
-                ll.setPerson(person);
-                ll.setFilename(person.getFullName());
-
                 SimulatorController.getLocationLogList().add(ll);
 
                 // RDL: Once a full route is created, store it on routes folder
@@ -324,8 +318,8 @@ public class PathUtils {
         }
     }
 
-    private static List<ICSVBean> interpolateLocationLogDetailList(List<ICSVBean> lldList) {
-        List<ICSVBean> interpolatedLocationLogDetailList = new ArrayList<>();
+    private static List<LocationLogDetail> interpolateLocationLogDetailList(List<LocationLogDetail> lldList) {
+        List<LocationLogDetail> interpolatedLocationLogDetailList = new ArrayList<>();
 
         for (int i = 0; i < lldList.size() - 1; i++) {
             LocationLogDetail lld1 = (LocationLogDetail) lldList.get(i),
@@ -336,8 +330,8 @@ public class PathUtils {
         return interpolatedLocationLogDetailList;
     }
 
-    private static List<ICSVBean> interpolateBetween(LocationLogDetail lld1, LocationLogDetail lld2) {
-        List<ICSVBean> lldListBetween = new ArrayList<>();
+    private static List<LocationLogDetail> interpolateBetween(LocationLogDetail lld1, LocationLogDetail lld2) {
+        List<LocationLogDetail> lldListBetween = new ArrayList<>();
 
         double pointsDistance = Util.distanceHaversine(lld1.getLatitude(), lld1.getLongitude(), lld2.getLatitude(), lld2.getLongitude());
 

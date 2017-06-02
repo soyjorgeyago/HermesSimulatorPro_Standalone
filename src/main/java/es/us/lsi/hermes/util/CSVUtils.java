@@ -3,9 +3,7 @@ package es.us.lsi.hermes.util;
 import es.us.lsi.hermes.csv.ICSVBean;
 import es.us.lsi.hermes.location.LocationLog;
 import es.us.lsi.hermes.location.detail.LocationLogDetail;
-import es.us.lsi.hermes.person.Person;
 import es.us.lsi.hermes.simulator.PresetSimulation;
-import es.us.lsi.hermes.simulator.SimulatedSmartDriver;
 import es.us.lsi.hermes.simulator.SimulatorController;
 import net.lingala.zip4j.core.ZipFile;
 import net.lingala.zip4j.exception.ZipException;
@@ -39,9 +37,10 @@ public class CSVUtils {
         exportToCSV(CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, false, driversFile, driversList);
     }
 
-    static void createRouteDataFile(String fileNameHeader, List<ICSVBean> locationList) {
+    static void createRouteDataFile(String fileNameHeader, List<LocationLogDetail> locationList) {
         File routesFile = StorageUtils.generateCsvFile(fileNameHeader, "_path.csv", "paths");
-        exportToCSV(CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, false, routesFile, locationList);
+        List<ICSVBean> convertedList = new ArrayList(locationList);
+        exportToCSV(CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, false, routesFile, convertedList);
     }
 
     private static void createStatusDataFile(String formattedCurrentTime, List<ICSVBean> statusList) {
@@ -135,38 +134,34 @@ public class CSVUtils {
         return zipFilesPathsList;
     }
 
-    public static List<LocationLog> extractSimulatedPaths() {
+    public static List<LocationLog> loadPathsFromFolder() {
         if (PERMANENT_FOLDER_PATHS == null) {
             return null;
         }
 
-        List<List<ICSVBean>> extractedRoutes = extractFromFolder(PERMANENT_FOLDER_PATHS,
+        List<List<LocationLogDetail>> pathsLoaded = loadAllPathFiles(PERMANENT_FOLDER_PATHS,
                 CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, PresetSimulation.getPathsAmount(), new CellProcessor[]{
             new ParseDouble(), new ParseDouble(), new ParseDouble(), new ParseInt(), new ParseInt()});
 
-        if (extractedRoutes.isEmpty()) {
+        if (pathsLoaded.isEmpty()) {
             LOG.log(Level.SEVERE, "No CSV files found under the directory: {0}", PERMANENT_FOLDER_PATHS);
-        } else if (extractedRoutes.size() < PresetSimulation.getPathsAmount()) {
-            LOG.log(Level.SEVERE, "{0} CSV files found under the directory: {1}, {2} paths requested", new Object[]{extractedRoutes.size(), PERMANENT_FOLDER_PATHS, PresetSimulation.getPathsAmount()});
+        } else if (pathsLoaded.size() < PresetSimulation.getPathsAmount()) {
+            LOG.log(Level.SEVERE, "{0} CSV files found under the directory: {1}, {2} paths requested", new Object[]{pathsLoaded.size(), PERMANENT_FOLDER_PATHS, PresetSimulation.getPathsAmount()});
         }
 
         // Set the extracted routes as the DataSet to use
         List<LocationLog> locationLogList = new ArrayList<>();
 
-        for (List<ICSVBean> route : extractedRoutes) {
+        int i = 0;
+        for (List<LocationLogDetail> route : pathsLoaded) {
             LocationLog routeLog = new LocationLog();
 
-            routeLog.setLocationLogId(0);
-            routeLog.setDistance(0);
-            routeLog.setDuration(0);
+            routeLog.setLocationLogId(i);
 
             routeLog.setLocationLogDetailList(route);
 
-            Person person = Person.createSimimulatedPerson();
-            routeLog.setPerson(person);
-            routeLog.setFilename(person.getFullName());
-
             locationLogList.add(routeLog);
+            i++;
         }
 
         if (locationLogList.size() < PresetSimulation.getPathsAmount()) {
@@ -176,30 +171,52 @@ public class CSVUtils {
         return locationLogList;
     }
 
-    private static List<List<ICSVBean>> extractFromFolder(Path folder, CsvPreference csvPreference, int maxByFile, CellProcessor[] cellProcessors) {
+    private static List<List<LocationLogDetail>> loadAllPathFiles(Path folder, CsvPreference csvPreference, int maxFiles, CellProcessor[] cellProcessors) {
         File[] temporalFolderFiles = folder.toFile().listFiles();
-        List<List<ICSVBean>> extractedItems = new ArrayList<>();
+        List<List<LocationLogDetail>> loadedItems = new ArrayList<>();
 
         int csvCounter = 0;
         if (temporalFolderFiles != null) {
             for (File aux : temporalFolderFiles) {
                 if (aux.getName().contains(".csv")) {
-                    extractedItems.add(extractFromSingleFile(aux, csvPreference, cellProcessors));
+                    loadedItems.add(loadPathsFiles(aux, csvPreference, cellProcessors));
                     csvCounter++;
                 }
 
                 // Generate as many paths as requested
-                if (csvCounter == maxByFile) {
+                if (csvCounter >= maxFiles) {
                     break;
                 }
             }
         }
 
-        return extractedItems;
+        return loadedItems;
+    }
+    
+    private static List<List<DriverParameters>> loadLimitedFilesContentFromFolder(Path folder, CsvPreference csvPreference, int maxFiles, int maxByFile, CellProcessor[] cellProcessors, ICSVBean c) {
+        File[] temporalFolderFiles = folder.toFile().listFiles();
+        List<List<DriverParameters>> loadedItems = new ArrayList<>();
+
+        int csvCounter = 0;
+        if (temporalFolderFiles != null) {
+            for (File aux : temporalFolderFiles) {
+                if (aux.getName().contains(".csv")) {
+                    loadedItems.add(loadLimitedCsvFile(aux, csvPreference, cellProcessors, maxByFile));
+                    csvCounter++;
+                }
+
+                // Generate as many paths as requested
+                if (csvCounter >= maxFiles) {
+                    break;
+                }
+            }
+        }
+
+        return loadedItems;
     }
 
-    private static List<ICSVBean> extractFromSingleFile(File file, CsvPreference csvPreference, CellProcessor[] cellProcessors) {
-        List<ICSVBean> extractedRoute = new ArrayList<>();
+    private static List<LocationLogDetail> loadPathsFiles(File file, CsvPreference csvPreference, CellProcessor[] cellProcessors) {
+        List<LocationLogDetail> result = new ArrayList<>();
         ICsvBeanReader beanReader = null;
 
         try {
@@ -209,9 +226,9 @@ public class CSVUtils {
             final String[] header = beanReader.getHeader(true);
 
             // While there are new lines, save those into the list
-            ICSVBean lineTemp;
-            while ((lineTemp = beanReader.read(cellProcessors.length >= 5 ? LocationLogDetail.class : SimulatedSmartDriver.class, header, cellProcessors)) != null) {
-                extractedRoute.add(lineTemp);
+            LocationLogDetail lineTemp;
+            while ((lineTemp = beanReader.read(LocationLogDetail.class, header, cellProcessors)) != null) {
+                result.add(lineTemp);
             }
 
         } catch (IOException ex) {
@@ -226,15 +243,51 @@ public class CSVUtils {
             }
         }
 
-        return extractedRoute;
+        return result;
+    }
+    
+    private static List<DriverParameters> loadLimitedCsvFile(File file, CsvPreference csvPreference, CellProcessor[] cellProcessors, int maxByFile) {
+        List<DriverParameters> result = new ArrayList<>();
+        ICsvBeanReader beanReader = null;
+
+        try {
+            beanReader = new CsvBeanReader(new FileReader(file), csvPreference);
+
+            // the header elements are used to map the values to the bean (names must match)
+            final String[] header = beanReader.getHeader(true);
+
+            // While there are new lines, save those into the list
+            int i = 0;
+            DriverParameters lineTemp = beanReader.read(DriverParameters.class, header, cellProcessors);
+            while (lineTemp != null) {
+                result.add(lineTemp);
+                i++;
+                if (i >= maxByFile) {
+                    break;
+                }
+            }
+
+        } catch (IOException ex) {
+            LOG.log(Level.SEVERE, "Exception parsing the stored routes", ex);
+        } finally {
+            try {
+                if (beanReader != null) {
+                    beanReader.close();
+                }
+            } catch (IOException ex) {
+                LOG.log(Level.WARNING, "Exception closing the beanReader", ex);
+            }
+        }
+
+        return result;
     }
 
     //FIXME delete files from drivers/paths before creating new ones
-    public static List<List<ICSVBean>> extractSimulatedDriverForPath() {
+    public static List<List<DriverParameters>> loadSimulatedDriversForPath() {
         if (PERMANENT_FOLDER_DRIVERS == null) {
             return null;
         }
 
-        return extractFromFolder(PERMANENT_FOLDER_DRIVERS, CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, PresetSimulation.getDriversByPath(), new CellProcessor[]{new ParseDouble(), new ParseDouble()});
+        return loadLimitedFilesContentFromFolder(PERMANENT_FOLDER_DRIVERS, CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, PresetSimulation.getPathsAmount(), PresetSimulation.getDriversByPath(), new CellProcessor[]{new ParseDouble(), new ParseDouble()}, new DriverParameters());
     }
 }

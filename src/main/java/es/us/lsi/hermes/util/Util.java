@@ -2,6 +2,8 @@ package es.us.lsi.hermes.util;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
@@ -112,13 +114,21 @@ public class Util {
      * @return Computer name.
      */
     public static String getComputerName() {
-        Map<String, String> env = System.getenv();
-        if (env.containsKey("COMPUTERNAME")) {
-            return env.get("COMPUTERNAME");
-        }else if (env.containsKey("HOSTNAME")) {
-            return env.get("HOSTNAME");
-        } else {
-            return "Unknown";
+        try {
+            Map<String, String> env = System.getenv();
+
+            if (env.containsKey("COMPUTERNAME")) {
+                return env.get("COMPUTERNAME");
+            } else if (env.containsKey("HOSTNAME")) {
+                return env.get("HOSTNAME");
+            } else {
+                InetAddress addr;
+                addr = InetAddress.getLocalHost();
+                return (addr.getHostName());
+            }
+        } catch (UnknownHostException ex) {
         }
+        
+        return "Unknown";
     }
 }
