@@ -5,7 +5,7 @@ max.path.distance=5
 # Amount of generated paths from 1 to 10.
 paths.amount=10
 # Drivers by path from 1 to 100.
-drivers.by.path=1000
+drivers.by.path=100
 # 0 for Google Maps, 1 for OpenStreetMap.
 paths.generation.method=1
 # 0 for Kafka server, 1 for Ztreamy server.

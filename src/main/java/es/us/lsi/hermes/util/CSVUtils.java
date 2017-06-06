@@ -39,7 +39,7 @@ public class CSVUtils {
 
     static void createRouteDataFile(String fileNameHeader, List<LocationLogDetail> locationList) {
         File routesFile = StorageUtils.generateCsvFile(fileNameHeader, "_path.csv", "paths");
-        List<ICSVBean> convertedList = new ArrayList(locationList);
+        List<ICSVBean> convertedList = new ArrayList<ICSVBean>(locationList);
         exportToCSV(CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, false, routesFile, convertedList);
     }
 

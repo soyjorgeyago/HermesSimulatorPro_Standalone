@@ -10,17 +10,8 @@ import java.io.Serializable;
 import java.net.MalformedURLException;
 import java.nio.file.Path;
 import java.text.MessageFormat;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Properties;
-import java.util.Random;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.*;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -101,7 +92,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     // Kafka
     private static AtomicLong kafkaRecordId;
     private static volatile KafkaProducer<Long, String> kafkaProducer;
-    private static volatile KafkaProducer<String, String> kafkaMonitorigProducer;
+    private static volatile KafkaProducer<String, String> kafkaMonitoringProducer;
     private static Properties kafkaProducerProperties;
     private static Properties kafkaMonitoringProducerProperties;
 
@@ -243,7 +234,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
                 String json = new Gson().toJson(new SimulatorStatus(System.currentTimeMillis(), generated, sent, oks, notOks, errors, recovered, pending, activeSmartDrivers, currentMeanSmartDriversDelayMs, pausedSimulatedSmartDrivers.size()));
                 LOG.log(Level.FINE, "statusMonitorTimer() - Simulation status JSON: {0}", json);
-                SimulatorController.getKafkaMonitoringProducer().send(new ProducerRecord<>(Kafka.TOPIC_SIMULATOR_STATUS, computerNameWithStartTime, json));
+                kafkaMonitoringProducer.send(new ProducerRecord<>(Kafka.TOPIC_SIMULATOR_STATUS, computerNameWithStartTime, json));
 
                 // If the current mean delay exceeds the threshold value, the most recent SmartDriver thread will be paused in order to improve the delay.
                 if (currentMeanSmartDriversDelayMs > PresetSimulation.getMaxResponseDelayMs()) {
@@ -302,7 +293,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         currentState = State.SIMULATING;
 
         kafkaProducer = new KafkaProducer<>(kafkaProducerProperties);
-        kafkaMonitorigProducer = new KafkaProducer<>(kafkaMonitoringProducerProperties);
+        kafkaMonitoringProducer = new KafkaProducer<>(kafkaMonitoringProducerProperties);
 
         tempFolder = StorageUtils.createTempFolder();
         startSimulationTime = System.currentTimeMillis();
@@ -330,7 +321,8 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 + "\n-> Paths requested: {6}" + (pathNumberWarnings ? " Path generated {7} - WARNING" : "")
                 + "\n-> Drivers per paths requested: {8}"
                 + "\n-> Number of threads that will be created: {5}"
-                + "\n-> Maximum simulation time: {9}",
+                + "\n-> Maximum simulation time: {9}"
+                + "\n-> Paths and Drivers from disk: {10}",
                 timeRate.name(),
                 timeRate.equals(Time_Rate.X1),
                 PresetSimulation.isRetryOnFail(),
@@ -340,7 +332,8 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 PresetSimulation.getPathsAmount(),
                 locationLogList.size(),
                 PresetSimulation.getDriversByPath(),
-                PresetSimulation.getMaxSimulationTimeStringFormatted());
+                PresetSimulation.getMaxSimulationTimeStringFormatted(),
+                PresetSimulation.isLoadPathsAndDriversFromHdd());
         LOG.log(Level.INFO, "SimulatorController - executeSimulation() - FINAL CONDITIONS: {0}", simulationSummary);
 
         List<List<DriverParameters>> loadedDriverParameters = null;
@@ -453,7 +446,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
     public static void smartDriverHasFinished(String id) {
         LOG.log(Level.FINE, "smartDriverHasFinished() - Ha terminado el SmartDriver con id={0}, quedan {1} restantes", new Object[]{id, threadPool.getQueue().size()});
-        SimulatedSmartDriver ssd = simulatedSmartDriverHashMap.remove(id);
+        simulatedSmartDriverHashMap.remove(id);
     }
 
     private synchronized void finishSimulation(boolean interrupted) {
@@ -476,18 +469,14 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 String timeSummary = MessageFormat.format("Inicio de la simulacion: {0} -> Fin de la simulación: {1} ({2})", Constants.dfISO8601.format(startSimulationTime), Constants.dfISO8601.format(endSimulationTime), DurationFormatUtils.formatDuration(endSimulationTime - startSimulationTime, "HH:mm:ss", true));
                 LOG.log(Level.INFO, "finishSimulation() - {0}", timeSummary);
 
-                int i = 1;
                 String body = "<html><head><title></title></head><body>" + (interrupted ? "<h1 style=\"color:red;\">SIMULACION INTERRUMPIDA</h1>" : "") + "<p>" + statusString.replaceAll("\n", "<br/>") + "</p><p>" + timeSummary + "</p><p>Un saludo.</p></body></html>";
                 Email.generateAndSendEmail(PresetSimulation.getSendResultsToEmail(), "FIN DE SIMULACION " + Util.getComputerName(), body);
             }
         } catch (MessagingException ex) {
             LOG.log(Level.SEVERE, "finishSimulation() - No se ha podido enviar el e-mail con los resultados de la simulación", ex.getCause());
         } finally {
-            if (interrupted) {
-                currentState = State.INTERRUPTED;
-            } else {
-                currentState = State.ENDED;
-            }
+            currentState = interrupted ? State.INTERRUPTED : State.ENDED;
+
             resetSimulation();
 
             // JYFR: PRUEBA
@@ -508,9 +497,9 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 // https://issues.streamsets.com/browse/SDC-4925
             }
 
-            if (kafkaMonitorigProducer != null) {
-                kafkaMonitorigProducer.flush();
-                kafkaMonitorigProducer.close();
+            if (kafkaMonitoringProducer != null) {
+                kafkaMonitoringProducer.flush();
+                kafkaMonitoringProducer.close();
                 // FIXME: Algunas veces salta una excepción de tipo 'java.lang.InterruptedException'.
                 // Es un 'bug' que aún está en estado aabierto en Kafka.
                 // https://issues.streamsets.com/browse/SDC-4925
@@ -627,10 +616,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
     public static synchronized KafkaProducer<Long, String> getKafkaProducer() {
         return kafkaProducer;
-    }
-
-    public static synchronized KafkaProducer<String, String> getKafkaMonitoringProducer() {
-        return kafkaMonitorigProducer;
     }
 
     public static synchronized List<LocationLog> getLocationLogList() {

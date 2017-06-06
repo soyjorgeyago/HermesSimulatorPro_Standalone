@@ -18,7 +18,6 @@ public class DriverParameters implements ICSVBean {
         this.speedRandomFactor = speedRandomFactor;
         this.hrRandomFactor = hrRandomFactor;
     }
-    
 
     public double getSpeedRandomFactor() {
         return speedRandomFactor;
@@ -37,6 +36,7 @@ public class DriverParameters implements ICSVBean {
     }
 
     // ------------------------- CSV IMP/EXP -------------------------
+
     private CellProcessor[] cellProcessors;
     private String[] fields;
     private String[] headers;
