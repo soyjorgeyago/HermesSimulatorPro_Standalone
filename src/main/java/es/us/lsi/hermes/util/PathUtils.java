@@ -5,7 +5,6 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
-import es.us.lsi.hermes.csv.ICSVBean;
 import es.us.lsi.hermes.google.directions.*;
 import es.us.lsi.hermes.location.LocationLog;
 import es.us.lsi.hermes.location.detail.LocationLogDetail;
@@ -69,7 +68,7 @@ public class PathUtils {
             // Añadimos los segundos correspondientes a la distancia recorrida entre puntos.
             // Indicamos cuántos segundos deben pasar para estar en esta posición.
             pathDurationInSeconds += pointDuration;
-            lld.setSecondsToBeHere(pathDurationInSeconds);
+            lld.setSecondsToRemainHere(pathDurationInSeconds);
 
             locationLogDetailList.add(lld);
 
@@ -130,7 +129,7 @@ public class PathUtils {
             // Añadimos los segundos correspondientes a la distancia recorrida entre puntos.
             pathDurationInSeconds += pointDuration;
             // Indicamos cuántos segundos deben pasar para estar en esta posición.
-            lld.setSecondsToBeHere(pathDurationInSeconds);
+            lld.setSecondsToRemainHere(pathDurationInSeconds);
 
             locationLogDetailList.add(lld);
 
@@ -322,8 +321,8 @@ public class PathUtils {
         List<LocationLogDetail> interpolatedLocationLogDetailList = new ArrayList<>();
 
         for (int i = 0; i < lldList.size() - 1; i++) {
-            LocationLogDetail lld1 = (LocationLogDetail) lldList.get(i),
-                    lld2 = (LocationLogDetail) lldList.get(i + 1);
+            LocationLogDetail lld1 = lldList.get(i),
+                    lld2 = lldList.get(i + 1);
             interpolatedLocationLogDetailList.addAll(PathUtils.interpolateBetween(lld1, lld2));
         }
 
@@ -340,10 +339,10 @@ public class PathUtils {
 
         double latitudeFragment = (lld2.getLatitude() - lld1.getLatitude()) / numberOfInnerLocations;
         double longitudeFragment = (lld2.getLongitude() - lld1.getLongitude()) / numberOfInnerLocations;
-        double heartRateFragment = (lld2.getHeartRate() - lld1.getHeartRate()) / numberOfInnerLocations;
-        double rrFragment = (lld2.getRrTime() - lld1.getRrTime()) / numberOfInnerLocations;
+//        double heartRateFragment = (lld2.getHeartRate() - lld1.getHeartRate()) / numberOfInnerLocations;
+//        double rrFragment = (lld2.getRrTime() - lld1.getRrTime()) / numberOfInnerLocations;
         double speedFragment = (lld2.getSpeed() - lld1.getSpeed()) / numberOfInnerLocations;
-        double secondsToBeHereFragment = (lld2.getSecondsToBeHere() - lld1.getSecondsToBeHere()) / numberOfInnerLocations;
+        double secondsToBeHereFragment = (lld2.getSecondsToRemainHere() - lld1.getSecondsToRemainHere()) / numberOfInnerLocations;
 
         for (int i = 0; i < numberOfInnerLocations; i++) {
             LocationLogDetail lld = new LocationLogDetail();
@@ -351,9 +350,9 @@ public class PathUtils {
             lld.setLatitude(i * latitudeFragment + lld1.getLatitude());
             lld.setLongitude(i * longitudeFragment + lld1.getLongitude());
             lld.setSpeed(i * speedFragment + lld1.getSpeed());
-            lld.setHeartRate((int) (i * heartRateFragment + lld1.getHeartRate()));
-            lld.setRrTime((int) (i * rrFragment + lld1.getRrTime()));
-            lld.setSecondsToBeHere((int) (i * secondsToBeHereFragment + lld1.getSecondsToBeHere()));
+//            lld.setHeartRate((int) (i * heartRateFragment + lld1.getHeartRate()));
+//            lld.setRrTime((int) (i * rrFragment + lld1.getRrTime()));
+            lld.setSecondsToRemainHere((int) (i * secondsToBeHereFragment + lld1.getSecondsToRemainHere()));
 
             lldListBetween.add(lld);
         }

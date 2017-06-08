@@ -183,6 +183,7 @@ public class PresetSimulation {
         return streamServer;
     }
 
+    // FIXME do something with this
     public static int getStartingMode() {
         return startingMode;
     }

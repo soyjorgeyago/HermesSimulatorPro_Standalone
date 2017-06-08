@@ -24,7 +24,7 @@ public abstract class MonitorizedDriver {
         this.errors = 0;
         this.recovered = 0;
         this.elapsedSeconds = 0;
-        this.currentDelayMs = 0l;
+        this.currentDelayMs = 0L;
         this.currentPosition = 0;
         this.finished = false;
     }
