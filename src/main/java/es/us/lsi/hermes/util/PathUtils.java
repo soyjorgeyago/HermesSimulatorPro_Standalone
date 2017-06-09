@@ -316,8 +316,8 @@ public class PathUtils {
         List<LocationLogDetail> interpolatedLocationLogDetailList = new ArrayList<>();
 
         for (int i = 0; i < lldList.size() - 1; i++) {
-            LocationLogDetail lld1 = (LocationLogDetail) lldList.get(i),
-                    lld2 = (LocationLogDetail) lldList.get(i + 1);
+            LocationLogDetail lld1 = lldList.get(i),
+                    lld2 = lldList.get(i + 1);
             interpolatedLocationLogDetailList.addAll(PathUtils.interpolateBetween(lld1, lld2));
         }
 

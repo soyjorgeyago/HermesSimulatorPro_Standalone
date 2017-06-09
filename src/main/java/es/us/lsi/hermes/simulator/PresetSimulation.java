@@ -178,6 +178,7 @@ public class PresetSimulation {
         return pathsGenerationMethod;
     }
 
+    //TODO
     public static Constants.SmartDrivers_Starting_Mode getStartingMode() {
         return startingMode;
     }

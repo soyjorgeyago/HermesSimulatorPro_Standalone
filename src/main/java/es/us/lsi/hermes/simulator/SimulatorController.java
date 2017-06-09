@@ -317,6 +317,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 PresetSimulation.isLoadPathsAndDriversFromHdd());
         LOG.log(Level.INFO, "SimulatorController - executeSimulation() - FINAL CONDITIONS: {0}", simulationSummary);
 
+        // Load the driver unique properties from disk if requested
         List<List<DriverParameters>> loadedDriverParameters = null;
         if (PresetSimulation.isLoadPathsAndDriversFromHdd()) {
             loadedDriverParameters = CSVUtils.loadSimulatedDriversForPath();
@@ -324,37 +325,44 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
         try {
             long id = 0L;
-            for (int i = 0; i < PresetSimulation.getPathsAmount(); i++) {
-                LocationLog ll = locationLogList.get(i);
+            // Get the smallest of them both, for the cases when we request 5 paths and only 4 are generated
+            int pathAmount = Math.min(locationLogList.size(), PresetSimulation.getPathsAmount());
+            for (int pathIndex = 0; pathIndex < pathAmount; pathIndex++) {
+                //FIXME por Raul
+                int pathPointsCount = locationLogList.get(pathIndex).getLocationLogDetailList().size();
 
                 // Para el caso del modo de inicio LINEAL, si hay más de 10 SmartDrivers, se toma el 10% para repartir su inicio durante 50 segundos.
                 int smartDriversBunch = PresetSimulation.getDriversByPath() > 10 ? (int) (PresetSimulation.getDriversByPath() * 0.10) : 1;
 
-                LOG.log(Level.FINE, "executeSimulation() - Cada 10 segundos, se iniciarán {0} SmartDrivers en el trayecto {1}", new Object[]{smartDriversBunch, i});
+                LOG.log(Level.FINE, "executeSimulation() - Cada 10 segundos, se iniciarán {0} SmartDrivers en el trayecto {1}", new Object[]{smartDriversBunch, pathIndex});
 
                 List<ICSVBean> driverParameters = new ArrayList<>();
-                for (int j = 0; j < PresetSimulation.getDriversByPath(); j++) {
+                for (int driverIndex = 0; driverIndex < PresetSimulation.getDriversByPath(); driverIndex++) {
 
-                    DriverParameters dp;
+                    DriverParameters driverParams;
                     if (PresetSimulation.isLoadPathsAndDriversFromHdd() && loadedDriverParameters != null) {
-                        dp = loadedDriverParameters.get(i).get(j);
+                        driverParams = loadedDriverParameters.get(pathIndex).get(driverIndex);
                     } else {
                         if (PresetSimulation.isRandomizeEachSmartDriverBehaviour()) {
                             // Aleatory values.
-                            dp = new DriverParameters();
+                            driverParams = new DriverParameters();
                         } else {
                             // Same preset values.
-                            dp = new DriverParameters(1, 1);
+                            driverParams = new DriverParameters(1, 1);
                         }
                     }
 
-                    initSimulatedSmartDriver(id, i, dp, smartDriversBunch, dp.getSpeedRandomFactor(), dp.getHrRandomFactor());
-                    driverParameters.add(dp);
+                    //FIXME por Raul
+//                    initSimulatedSmartDriver(id, pathIndex, pathPointsCount, smartDriversBunch,
+//                            driverParams.getSpeedRandomFactor(), driverParams.getHrRandomFactor());
+                    initSimulatedSmartDriver(id, pathIndex, driverParams, smartDriversBunch,
+                            driverParams.getSpeedRandomFactor(), driverParams.getHrRandomFactor());
+                    driverParameters.add(driverParams);
                     id++;
                 }
 
                 if (!PresetSimulation.isLoadPathsAndDriversFromHdd()) {
-                    CSVUtils.createDriversDataFile(String.valueOf(i + 1), driverParameters);
+                    CSVUtils.createDriversDataFile(String.valueOf(pathIndex + 1), driverParameters);
                 }
             }
 
@@ -370,8 +378,13 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     }
 
     private void initSimulatedSmartDriver(long id, int pathId, DriverParameters dp, int smartDriversBunch, double speedRandomFactor, double hrRandomFactor) throws MalformedURLException, HermesException {
+//    //FIXME por Raul
+//    private void initSimulatedSmartDriver(long id, int pathIndex, int pathPointsCount, int smartDriversBunch, double speedRandomFactor, double hrRandomFactor) throws MalformedURLException, HermesException {
 
         SimulatedSmartDriver ssd = new SimulatedSmartDriver(id, pathId, dp, PresetSimulation.isLoopingSimulation(), retries, speedRandomFactor, hrRandomFactor);
+        //FIXME por Raul
+//        SimulatedSmartDriver ssd = new SimulatedSmartDriver(id, pathIndex, pathPointsCount, PresetSimulation.isLoopingSimulation(), streamServer.ordinal() % 2, retries, speedRandomFactor, hrRandomFactor);
+
         simulatedSmartDriverHashMap.put(ssd.getSha(), ssd);
 
         long delay = 0L;
@@ -582,7 +595,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
             LOG.log(Level.SEVERE, "getPath() - Error getting path {0}", pathId);
         }
 
-        return new ArrayList();
+        return new ArrayList<>();
     }
 
     class EmergencyShutdown implements Runnable {

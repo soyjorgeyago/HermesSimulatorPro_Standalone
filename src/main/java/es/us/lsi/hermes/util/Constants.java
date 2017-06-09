@@ -65,6 +65,7 @@ public final class Constants {
     public static final int SEND_INTERVAL_METERS = 500;
     public static final double HIGH_ACCELERATION_THRESHOLD = 2.5d;
     public static final double HIGH_DECELERATION_THRESHOLD = -3.5d;
+    public static final double MIN_SPEED = 10.0d; // Velocidad mínima de los SmartDrivers.
 
     public static final String DATA_SECTION = "Data Section";
     public static final String VEHICLE_LOCATION = "Vehicle Location";

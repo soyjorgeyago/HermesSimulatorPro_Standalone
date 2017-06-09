@@ -16,7 +16,7 @@ public class LocationLogDetail implements Serializable, ICSVBean {
     private int speed;
     private int heartRate;
     private int rrTime;
-    private int secondsToBeHere;
+    private int secondsToRemainHere;
 
     public LocationLogDetail() {
         this.latitude = 0.0d;
@@ -24,7 +24,7 @@ public class LocationLogDetail implements Serializable, ICSVBean {
         this.speed = 0;
         this.heartRate = 0;
         this.rrTime = 0;
-        this.secondsToBeHere = 0;
+        this.secondsToRemainHere = 0;
         initCSV();
     }
 
@@ -42,7 +42,7 @@ public class LocationLogDetail implements Serializable, ICSVBean {
         this.speed = speed;
         this.heartRate = heartRate;
         this.rrTime = rrTime;
-        this.secondsToBeHere = secondsToBeHere;
+        this.secondsToRemainHere = secondsToBeHere;
     }
 
     public double getLatitude() {
@@ -85,12 +85,12 @@ public class LocationLogDetail implements Serializable, ICSVBean {
         this.rrTime = rrTime;
     }
 
-    public int getSecondsToBeHere() {
-        return secondsToBeHere;
+    public int getSecondsToRemainHere() {
+        return secondsToRemainHere;
     }
 
-    public void setSecondsToBeHere(int secondsToBeHere) {
-        this.secondsToBeHere = secondsToBeHere;
+    public void setSecondsToRemainHere(int secondsToRemainHere) {
+        this.secondsToRemainHere = secondsToRemainHere;
     }
 
     @Override
@@ -100,7 +100,7 @@ public class LocationLogDetail implements Serializable, ICSVBean {
 
 //    public String getMarkerTitle() {
 //        StringBuilder sb = new StringBuilder();
-//        sb.append(ResourceBundle.getBundle("/Bundle").getString("Time")).append(": ").append(Constants.dfTime.format(System.currentTimeMillis() + (secondsToBeHere * 1000)));
+//        sb.append(ResourceBundle.getBundle("/Bundle").getString("Time")).append(": ").append(Constants.dfTime.format(System.currentTimeMillis() + (secondsToRemainHere * 1000)));
 //        sb.append(" ");
 //        sb.append(ResourceBundle.getBundle("/Bundle").getString("HeartRate")).append(": ").append(Integer.toString(getHeartRate()));
 //        sb.append(" ");
@@ -118,9 +118,9 @@ public class LocationLogDetail implements Serializable, ICSVBean {
     public void initCSV() {
         cellProcessors = new CellProcessor[]{new ParseDouble(), new ParseDouble(), new ParseInt(), new ParseInt(), new ParseInt()};
 
-        headers = new String[]{"Latitude", "Longitude", "Speed", "SecondsToBeHere", "RrTime"};
+        headers = new String[]{"Latitude", "Longitude", "Speed", "SecondsToRemainHere", "RrTime"};
 
-        fields = new String[]{"latitude", "longitude", "speed", "secondsToBeHere", "rrTime"};
+        fields = new String[]{"latitude", "longitude", "speed", "secondsToRemainHere", "rrTime"};
     }
 
     @Override

@@ -59,4 +59,16 @@ public class VehicleLocation implements Serializable {
         this.accuracy = accuracy;
     }
 
+
+    @Override
+    public String toString() {
+        return "VehicleLocation{" +
+                "timeStamp='" + timeStamp + '\'' +
+                ", longitude=" + longitude +
+                ", stress=" + stress +
+                ", latitude=" + latitude +
+                ", speed=" + speed +
+                ", accuracy=" + accuracy +
+                '}';
+    }
 }

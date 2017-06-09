@@ -26,7 +26,7 @@ public abstract class MonitorizedDriver {
         this.recovered = 0;
         this.elapsedSeconds = 0;
         this.pointToPointElapsedSeconds = 0;
-        this.currentDelayMs = 0l;
+        this.currentDelayMs = 0L;
         this.currentPosition = 0;
         this.finished = false;
     }
@@ -82,7 +82,7 @@ public abstract class MonitorizedDriver {
     public int getDriverSimulationTimeInSeconds() {
         return elapsedSeconds;
     }
-    
+
     public int getPointToPointElapsedSeconds() {
         return pointToPointElapsedSeconds;
     }
