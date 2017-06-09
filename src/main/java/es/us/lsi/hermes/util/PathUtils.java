@@ -27,9 +27,9 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class PathUtils {
-    
+
     private static final Logger LOG = Logger.getLogger(PathUtils.class.getName());
-    
+
     private static void createPathOpenStreetMaps(List<PositionSimulatedSpeed> pssList, LocationLog ll) {
         if (pssList == null || pssList.isEmpty()) {
             return;
@@ -37,7 +37,7 @@ public class PathUtils {
 
         // Listado de posiciones que componen el trayecto de SmartDriver.
         ArrayList<LocationLogDetail> locationLogDetailList = new ArrayList<>();
-        
+
         double pathDistance = 0.0d;
         int pathDurationInSeconds = 0;
 
@@ -54,7 +54,7 @@ public class PathUtils {
 
             // Creamos un nodo del trayecto, como si usásemos SmartDriver.
             LocationLogDetail lld = new LocationLogDetail(currentCoordinates.get(1), currentCoordinates.get(0), pss.getSpeed().intValue());
-            
+
             List<Double> previousCoordinates = previous.getPosition().getCoordinates();
             // Calculamos la distancia en metros entre los puntos previo y actual, así como el tiempo necesario para recorrer dicha distancia.
             Double pointDistance = Util.distanceHaversine(previousCoordinates.get(1), previousCoordinates.get(0), currentCoordinates.get(1), currentCoordinates.get(0));
@@ -69,7 +69,7 @@ public class PathUtils {
             // Indicamos cuántos segundos deben pasar para estar en esta posición.
             pathDurationInSeconds += pointDuration;
             lld.setSecondsToBeHere(pointDuration);
-            
+
             locationLogDetailList.add(lld);
 
             // Asignamos el actual al anterior, para poder seguir calculando las distancias y tiempos respecto al punto previo.
@@ -78,11 +78,11 @@ public class PathUtils {
 
         // Asignamos el listado de posiciones.
         ll.setLocationLogDetailList(locationLogDetailList);
-        
+
         ll.setDistance(pathDistance);
         ll.setDuration(pathDurationInSeconds);
     }
-    
+
     private static void createPathGoogleMaps(GeocodedWaypoints gcwp, LocationLog ll) {
 
         // Analizamos la información obtenida de la consulta a Google Directions.
@@ -90,22 +90,22 @@ public class PathUtils {
         if (gcwp.getRoutes() == null || gcwp.getRoutes().isEmpty()) {
             return;
         }
-        
+
         Route r = gcwp.getRoutes().get(0);
         // Comprobamos que traiga información de la ruta.
         if (r.getLegs() == null) {
             return;
         }
-        
+
         Leg l = r.getLegs().get(0);
 
         // Listado de posiciones que componen el trayecto de SmartDriver.
         ArrayList<LocationLogDetail> locationLogDetailList = new ArrayList<>();
-        
+
         double speed;
         double pathDistance = 0.0d;
         int pathDurationInSeconds = 0;
-        
+
         ArrayList<Location> locationList = PolylineDecoder.decodePoly(r.getOverviewPolyline().getPoints());
         // Posición anterior en el trayecto.
         Location previous = locationList.get(0);
@@ -122,7 +122,7 @@ public class PathUtils {
 
             // Convertimos la velocidad a Km/h.
             speed = pointDuration > 0 ? pointDistance * 3.6 / pointDuration : 0.0d;
-            
+
             // Creamos un nodo del trayecto, como si usásemos SmartDriver.
             LocationLogDetail lld = new LocationLogDetail(location.getLat(), location.getLng(), (int) speed);
 
@@ -130,7 +130,7 @@ public class PathUtils {
             pathDurationInSeconds += pointDuration;
             // Indicamos cuántos segundos deben pasar para estar en esta posición.
             lld.setSecondsToBeHere(pointDuration);
-            
+
             locationLogDetailList.add(lld);
 
             // Asignamos el actual al anterior, para poder seguir calculando las distancias y tiempos respecto al punto previo.
@@ -142,35 +142,35 @@ public class PathUtils {
         ll.setDistance(pathDistance);
         ll.setDuration(pathDurationInSeconds);
     }
-    
+
     private static Location getRandomLocation(double latitude, double longitude, int radius) {
         Random random = new Random();
 
         // TODO: Comprobar que es una localización que no sea 'unnamed'
         // El radio se considerará en kilómetros. Lo convertimos a grados.
         double radiusInDegrees = radius / 111f;
-        
+
         double u = random.nextDouble();
         double v = random.nextDouble();
         double w = radiusInDegrees * Math.sqrt(u);
         double t = 2 * Math.PI * v;
         double x = w * Math.cos(t);
         double y = w * Math.sin(t);
-        
+
         double new_x = x / Math.cos(latitude);
-        
+
         double foundLongitude = new_x + longitude;
         double foundLatitude = y + latitude;
-        
+
         LOG.log(Level.FINE, "getRandomLocation() - Longitud: {0}, Latitud: {1}", new Object[]{foundLongitude, foundLatitude});
-        
+
         Location result = new Location();
         result.setLat(foundLatitude);
         result.setLng(foundLongitude);
-        
+
         return result;
     }
-    
+
     public static void generateSimulatedPaths() {
         // Lista con las tareas de petición de rutas.
         List<Callable<String>> pathRequestTaskList = new ArrayList<>();
@@ -251,13 +251,13 @@ public class PathUtils {
         // Paramos el 'listener'
         PathRequestWebService.shutdown();
     }
-    
+
     private static void requestPaths(List<Callable<String>> pathRequestTaskSublist) {
         try {
             // Clearing directory before saving CSV files
             StorageUtils.clearFolderContent(CSVUtils.PERMANENT_FOLDER_DRIVERS);
             StorageUtils.clearFolderContent(CSVUtils.PERMANENT_FOLDER_PATHS);
-            
+
             List<Future<String>> futureTaskList = PathRequestWebService.submitAllTask(pathRequestTaskSublist);
             int pathCounter = 0;
             for (Future<String> aFutureTaskList : futureTaskList) {
@@ -267,7 +267,7 @@ public class PathUtils {
                 // Procesamos el JSON de respuesta, en función de la plataforma a la que le hayamos hecho la petición.
                 try {
                     String json = aFutureTaskList.get();
-                    
+
                     if (PresetSimulation.getPathsGenerationMethod() == Constants.Paths_Generation_Method.GOOGLE.ordinal()) {
                         /////////////////
                         // GOOGLE MAPS //
@@ -299,13 +299,9 @@ public class PathUtils {
                     continue;
                 }
 
-                // Vemos si se quiere interpolación, para asegurar que haya una localización al menos cada 2.77m, que sería el caso de que un conductor
-                // fuera a la velocidad mínima asignada en las simulaciones (10Km/h)
-                if (SimulatorController.isInterpolate()) {
-                    // Haremos una interpolación lineal para que haya un punto cada 2.77m.
-                    ll.setLocationLogDetailList(interpolateLocationLogDetailList(ll.getLocationLogDetailList()));
-                }
-                
+                // Interpolate to assure a position for each simulation second.
+                ll.setLocationLogDetailList(interpolateLocationLogDetailList(ll.getLocationLogDetailList()));
+
                 SimulatorController.getLocationLogList().add(ll);
 
                 // RDL: Once a full route is created, store it on routes folder
@@ -315,46 +311,46 @@ public class PathUtils {
             LOG.log(Level.SEVERE, "Error obtaining the path's JSON", ex);
         }
     }
-    
+
     private static List<LocationLogDetail> interpolateLocationLogDetailList(List<LocationLogDetail> lldList) {
         List<LocationLogDetail> interpolatedLocationLogDetailList = new ArrayList<>();
-        
+
         for (int i = 0; i < lldList.size() - 1; i++) {
             LocationLogDetail lld1 = (LocationLogDetail) lldList.get(i),
                     lld2 = (LocationLogDetail) lldList.get(i + 1);
             interpolatedLocationLogDetailList.addAll(PathUtils.interpolateBetween(lld1, lld2));
         }
-        
+
         return interpolatedLocationLogDetailList;
     }
-    
+
     private static List<LocationLogDetail> interpolateBetween(LocationLogDetail lld1, LocationLogDetail lld2) {
         List<LocationLogDetail> lldListBetween = new ArrayList<>();
 
         // To get 1 intermediate point each second.
         int numberOfInnerLocations = lld2.getSecondsToBeHere() - lld1.getSecondsToBeHere();
-        
+
         double latitudeFragment = (double) (lld2.getLatitude() - lld1.getLatitude()) / numberOfInnerLocations;
         double longitudeFragment = (double) (lld2.getLongitude() - lld1.getLongitude()) / numberOfInnerLocations;
         double heartRateFragment = (double) (lld2.getHeartRate() - lld1.getHeartRate()) / numberOfInnerLocations;
         double rrFragment = (double) (lld2.getRrTime() - lld1.getRrTime()) / numberOfInnerLocations;
         double speedFragment = (double) (lld2.getSpeed() - lld1.getSpeed()) / numberOfInnerLocations;
-        
+
         for (int i = 0; i < numberOfInnerLocations; i++) {
             LocationLogDetail lld = new LocationLogDetail();
-            
+
             lld.setLatitude(i * latitudeFragment + lld1.getLatitude());
             lld.setLongitude(i * longitudeFragment + lld1.getLongitude());
             lld.setSpeed((int) (i * speedFragment + lld1.getSpeed()));
             lld.setHeartRate((int) (i * heartRateFragment + lld1.getHeartRate()));
             lld.setRrTime((int) (i * rrFragment + lld1.getRrTime()));
             lld.setSecondsToBeHere(1);
-            
+
             lldListBetween.add(lld);
         }
         lld2.setSecondsToBeHere(1);
         lldListBetween.add(lld2);
-        
+
         return lldListBetween;
     }
 }

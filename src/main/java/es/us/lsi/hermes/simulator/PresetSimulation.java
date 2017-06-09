@@ -24,7 +24,6 @@ public class PresetSimulation {
     private static int pathsAmount;
     private static int driversByPath;
     private static int pathsGenerationMethod;
-    private static int streamServer;
     private static Constants.SmartDrivers_Starting_Mode startingMode;
     private static boolean retryOnFail;
     private static int intervalBetweenRetriesInSeconds;
@@ -62,7 +61,6 @@ public class PresetSimulation {
         pathsAmount = getIntValue("paths.amount", 1, 10, 5);
         driversByPath = getIntValue("drivers.by.path", 1, 3000, 10);
         pathsGenerationMethod = getIntValue("paths.generation.method", 0, 1, 0);
-        streamServer = getIntValue("stream.server", 0, 1, 0);
         int sm = getIntValue("starting.mode", 0, 2, 1);
         startingMode = Constants.SmartDrivers_Starting_Mode.values()[sm];
         retryOnFail = getBooleanValue("retry.on.fail", true);
@@ -178,10 +176,6 @@ public class PresetSimulation {
 
     public static int getPathsGenerationMethod() {
         return pathsGenerationMethod;
-    }
-
-    public static int getStreamServer() {
-        return streamServer;
     }
 
     public static Constants.SmartDrivers_Starting_Mode getStartingMode() {

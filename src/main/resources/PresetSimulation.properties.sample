@@ -8,8 +8,6 @@ paths.amount=10
 drivers.by.path=100
 # 0 for Google Maps, 1 for OpenStreetMap.
 paths.generation.method=1
-# 0 for Kafka server, 1 for Ztreamy server.
-stream.server=0
 # 0 for aleatory, 1 for lineal, 2 for all at the same time.
 starting.mode=1
 # Indicates if trying to send a fail stream again or not.

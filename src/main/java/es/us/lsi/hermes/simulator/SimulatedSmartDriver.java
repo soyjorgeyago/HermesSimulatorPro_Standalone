@@ -9,9 +9,6 @@ import es.us.lsi.hermes.util.Constants;
 import es.us.lsi.hermes.util.DriverParameters;
 import es.us.lsi.hermes.util.HermesException;
 import es.us.lsi.hermes.util.Util;
-import es.us.lsi.hermes.ztreamy.Ztreamy;
-import java.io.IOException;
-import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.security.SecureRandom;
 import java.util.ArrayList;
@@ -31,8 +28,6 @@ import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import ztreamy.JSONSerializer;
-import ztreamy.PublisherHC;
 
 public final class SimulatedSmartDriver extends MonitorizedDriver implements Runnable, ISimulatorControllerObserver {
 
@@ -42,11 +37,6 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
     public enum Event_Type {
         NORMAL_VEHICLE_LOCATION, RECOVERED_VEHICLE_LOCATION, NORMAL_DATA_SECTION, RECOVERED_DATA_SECTION
     }
-
-    private final int streamServer;
-
-    // Ztreamy
-    private PublisherHC publisher;
 
     // Kafka
     private long smartDriverKafkaRecordId;
@@ -60,8 +50,12 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
 
     private double sectionDistance;
     private double cummulativePositiveSpeeds;
-    private int ztreamySecondsCount;
+    
+    // FIXME: Pass to MonitorizedDriver
+    private int secondsCount;
+    // FIXME: Pass to MonitorizedDriver
     private int secondsBetweenRetries;
+    
     private final int minRrTime;
     private final List<RoadSection> roadSectionList;
 
@@ -83,7 +77,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
     private final int retries;
     private boolean paused;
 
-    private int pathId;
+    private final int pathId;
     private final DriverParameters driverParameters;
     private final int[] pathPointsSecondsToBeHere;
     private final int[] pathPointsSpeed;
@@ -106,20 +100,19 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
      * @throws MalformedURLException
      * @throws HermesException
      */
-    public SimulatedSmartDriver(long id, int pathId, DriverParameters dp, boolean infiniteSimulation, int streamServer, int retries, double speedRandomFactor, double hrRandomFactor) throws MalformedURLException, HermesException {
+    public SimulatedSmartDriver(long id, int pathId, DriverParameters dp, boolean infiniteSimulation, int retries, double speedRandomFactor, double hrRandomFactor) throws MalformedURLException, HermesException {
         final SecureRandom random = new SecureRandom();
         this.id = id;
         this.locationChanged = false;
         this.sectionDistance = 0.0d;
         this.cummulativePositiveSpeeds = 0.0d;
-        this.ztreamySecondsCount = 0;
+        this.secondsCount = 0;
         this.secondsBetweenRetries = 0;
         this.stressLoad = 0; // Suponemos que inicialmente no está estresado.
         int age = ThreadLocalRandom.current().nextInt(18, 65 + 1); // Simularemos conductores de distintas edades (entre 18 y 65 años), para establecer el ritmo cardíaco máximo en la simulación.
         this.minRrTime = (int) Math.ceil(60000.0d / (220 - age)); // Mínimo R-R, que establecerá el ritmo cardíaco máximo.
         this.sha = new String(Hex.encodeHex(DigestUtils.sha256(random + "@sim.com")));
         this.infiniteSimulation = infiniteSimulation;
-        this.streamServer = streamServer;
         this.retries = retries;
         this.paused = false;
         this.pathId = pathId;
@@ -160,21 +153,11 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
             surroundingVehiclesConsumer.start();
         }
 
-        switch (streamServer) {
-            case 0:
-                if (SimulatorController.isKafkaProducerPerSmartDriver()) {
-                    // Inicializamos el 'kafkaProducer' de Kafka.
-                    Properties kafkaProperties = Kafka.getKafkaProducerProperties();
-                    kafkaProperties.setProperty("client.id", sha);
-                    this.smartDriverKafkaProducer = new KafkaProducer<>(kafkaProperties);
-                }
-                break;
-            case 1:
-                // Inicializamos el 'publisher' de Ztreamy.
-                this.publisher = new PublisherHC(Ztreamy.getServerUrl(), new JSONSerializer());
-                break;
-            default:
-                throw new IllegalArgumentException("Invalid Stream Server option");
+        if (SimulatorController.isKafkaProducerPerSmartDriver()) {
+            // Inicializamos el 'kafkaProducer' de Kafka.
+            Properties kafkaProperties = Kafka.getKafkaProducerProperties();
+            kafkaProperties.setProperty("client.id", sha);
+            this.smartDriverKafkaProducer = new KafkaProducer<>(kafkaProperties);
         }
     }
 
@@ -358,54 +341,26 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
                     increaseSent();
                     ExtendedEvent[] events = new ExtendedEvent[pendingVehicleLocations.size()];
 
-                    switch (streamServer) {
-                        case 0:
-                            // Kafka
-                            try {
-                                String json = new Gson().toJson(events);
-                                if (SimulatorController.isKafkaProducerPerSmartDriver()) {
-                                    smartDriverKafkaProducer.send(new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION,
-                                            smartDriverKafkaRecordId,
-                                            json
-                                    ), new KafkaCallBack(System.currentTimeMillis(), smartDriverKafkaRecordId, events, Event_Type.RECOVERED_VEHICLE_LOCATION));
-                                    smartDriverKafkaRecordId++;
-                                } else {
-                                    long id = SimulatorController.getNextKafkaRecordId();
-                                    SimulatorController.getKafkaProducer().send(new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION,
-                                            id,
-                                            json
-                                    ), new KafkaCallBack(System.currentTimeMillis(), id, events, Event_Type.RECOVERED_VEHICLE_LOCATION));
-                                }
-                            } catch (Exception ex) {
-                                LOG.log(Level.SEVERE, "*Reintento* - Error: {0} - No se han podido reenviar los {1} 'VehicleLocation' pendientes", new Object[]{ex.getMessage(), pendingVehicleLocations.size()});
-                            } finally {
-                                secondsBetweenRetries = 0;
-                            }
-                            break;
-                        case 1:
-                            // Ztreamy
-                            try {
-                                int result = publisher.publish(pendingVehicleLocations.toArray(events), true);
-                                if (result == HttpURLConnection.HTTP_OK) {
-                                    addRecovered(events.length);
-                                    LOG.log(Level.INFO, "*Reintento* - {0} 'VehicleLocation' pendientes enviadas correctamante. SmartDriver: {1}", new Object[]{events.length, sha});
-                                    pendingVehicleLocations.clear();
-                                } else {
-                                    LOG.log(Level.SEVERE, "*Reintento* - Error SEND (Not OK): No se han podido reenviar los {0} 'VehicleLocation' pendientes", events.length);
-                                    if (retries != -1) {
-                                        decreasePendingVehicleLocationsRetries();
-                                    }
-                                    reconnectPublisher();
-                                }
-                            } catch (IOException ex) {
-                                LOG.log(Level.SEVERE, "*Reintento* - Error: {0} - No se han podido reenviar los {1} 'VehicleLocation' pendientes", new Object[]{ex.getMessage(), pendingVehicleLocations.size()});
-                                reconnectPublisher();
-                            } finally {
-                                secondsBetweenRetries = 0;
-                            }
-                            break;
-                        default:
-                            throw new IllegalArgumentException("Invalid Stream Server option");
+                    // Kafka
+                    try {
+                        String json = new Gson().toJson(events);
+                        if (SimulatorController.isKafkaProducerPerSmartDriver()) {
+                            smartDriverKafkaProducer.send(new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION,
+                                    smartDriverKafkaRecordId,
+                                    json
+                            ), new KafkaCallBack(System.currentTimeMillis(), smartDriverKafkaRecordId, events, Event_Type.RECOVERED_VEHICLE_LOCATION));
+                            smartDriverKafkaRecordId++;
+                        } else {
+                            long id = SimulatorController.getNextKafkaRecordId();
+                            SimulatorController.getKafkaProducer().send(new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION,
+                                    id,
+                                    json
+                            ), new KafkaCallBack(System.currentTimeMillis(), id, events, Event_Type.RECOVERED_VEHICLE_LOCATION));
+                        }
+                    } catch (Exception ex) {
+                        LOG.log(Level.SEVERE, "*Reintento* - Error: {0} - No se han podido reenviar los {1} 'VehicleLocation' pendientes", new Object[]{ex.getMessage(), pendingVehicleLocations.size()});
+                    } finally {
+                        secondsBetweenRetries = 0;
                     }
                 }
             }
@@ -425,60 +380,32 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
                     increaseSent();
                     ExtendedEvent[] events = new ExtendedEvent[pendingDataSections.size()];
 
-                    switch (streamServer) {
-                        case 0:
-                            // Kafka
-                            try {
-                                String json = new Gson().toJson(events);
-                                if (SimulatorController.isKafkaProducerPerSmartDriver()) {
-                                    smartDriverKafkaProducer.send(new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION,
-                                            smartDriverKafkaRecordId,
-                                            json
-                                    ), new KafkaCallBack(System.currentTimeMillis(), smartDriverKafkaRecordId, events, Event_Type.RECOVERED_DATA_SECTION));
-                                    smartDriverKafkaRecordId++;
-                                } else {
-                                    long id = SimulatorController.getNextKafkaRecordId();
-                                    SimulatorController.getKafkaProducer().send(new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION,
-                                            id,
-                                            json
-                                    ), new KafkaCallBack(System.currentTimeMillis(), id, events, Event_Type.RECOVERED_DATA_SECTION));
-                                }
-                            } catch (Exception ex) {
-                                LOG.log(Level.SEVERE, "*Reintento* - Error: {0} - No se han podido reenviar los {1} 'DataSection' pendientes", new Object[]{ex.getMessage(), pendingDataSections.size()});
-                            } finally {
-                                secondsBetweenRetries = 0;
-                            }
-                            break;
-                        case 1:
-                            // ZTreamy
-                            try {
-                                int result = publisher.publish(pendingDataSections.toArray(events), true);
-                                if (result == HttpURLConnection.HTTP_OK) {
-                                    addRecovered(events.length);
-                                    LOG.log(Level.INFO, "*Reintento* - {0} 'DataSection' pendientes enviados correctamante. SmartDriver: {1}", new Object[]{events.length, sha});
-                                    pendingDataSections.clear();
-                                } else {
-                                    LOG.log(Level.SEVERE, "*Reintento* - Error SEND (Not OK): No se han podido reenviar los {0} 'DataSection' pendientes", events.length);
-                                    if (retries != -1) {
-                                        decreasePendingDataSectionsRetries();
-                                    }
-                                    reconnectPublisher();
-                                }
-                            } catch (IOException ex) {
-                                LOG.log(Level.SEVERE, "*Reintento* - Error: {0} - No se han podido reenviar los {1} 'DataSection' pendientes", new Object[]{ex.getMessage(), pendingDataSections.size()});
-                                reconnectPublisher();
-                            } finally {
-                                secondsBetweenRetries = 0;
-                            }
-                            break;
-                        default:
-                            throw new IllegalArgumentException("Invalid Stream Server option");
+                    // Kafka
+                    try {
+                        String json = new Gson().toJson(events);
+                        if (SimulatorController.isKafkaProducerPerSmartDriver()) {
+                            smartDriverKafkaProducer.send(new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION,
+                                    smartDriverKafkaRecordId,
+                                    json
+                            ), new KafkaCallBack(System.currentTimeMillis(), smartDriverKafkaRecordId, events, Event_Type.RECOVERED_DATA_SECTION));
+                            smartDriverKafkaRecordId++;
+                        } else {
+                            long id = SimulatorController.getNextKafkaRecordId();
+                            SimulatorController.getKafkaProducer().send(new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION,
+                                    id,
+                                    json
+                            ), new KafkaCallBack(System.currentTimeMillis(), id, events, Event_Type.RECOVERED_DATA_SECTION));
+                        }
+                    } catch (Exception ex) {
+                        LOG.log(Level.SEVERE, "*Reintento* - Error: {0} - No se han podido reenviar los {1} 'DataSection' pendientes", new Object[]{ex.getMessage(), pendingDataSections.size()});
+                    } finally {
+                        secondsBetweenRetries = 0;
                     }
                 }
             }
 
             increaseDriverSimulationTime();
-            ztreamySecondsCount++;
+            secondsCount++;
             if (!pendingVehicleLocations.isEmpty() || !pendingDataSections.isEmpty()) {
                 secondsBetweenRetries++;
             }
@@ -555,7 +482,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
     }
 
     private boolean isTimeToSend() {
-        return ztreamySecondsCount >= Constants.SEND_INTERVAL_SECONDS;
+        return secondsCount >= Constants.SEND_INTERVAL_SECONDS;
     }
 
     private boolean isTimeToRetry() {
@@ -580,84 +507,33 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         ExtendedEvent event = new ExtendedEvent(sha, "application/json", Constants.SIMULATOR_APPLICATION_ID, Constants.VEHICLE_LOCATION, bodyObject, retries);
 
         increaseSent();
-        switch (streamServer) {
-            case 0:
-                // Kafka
-                try {
-                    String json = new Gson().toJson(event);
-                    if (SimulatorController.isKafkaProducerPerSmartDriver()) {
-                        smartDriverKafkaProducer.send(new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION,
-                                smartDriverKafkaRecordId,
-                                json
-                        ), new KafkaCallBack(System.currentTimeMillis(), smartDriverKafkaRecordId, new ExtendedEvent[]{event}, Event_Type.NORMAL_VEHICLE_LOCATION));
-                        smartDriverKafkaRecordId++;
-                    } else {
-                        long id = SimulatorController.getNextKafkaRecordId();
-                        SimulatorController.getKafkaProducer().send(new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION,
-                                id,
-                                json
-                        ), new KafkaCallBack(System.currentTimeMillis(), id, new ExtendedEvent[]{event}, Event_Type.NORMAL_VEHICLE_LOCATION));
-                    }
-                } catch (Exception ex) {
-                    if (!hasFinished()) {
-                        increaseErrors();
-                        if (PresetSimulation.isRetryOnFail()) {
-                            // Si ha fallado, almacenamos el 'VehicleLocation' que se debería haber enviado y lo intentamos luego.
-                            pendingVehicleLocations.add(event);
-                        }
-                        LOG.log(Level.SEVERE, "sendEvery10SecondsIfLocationChanged() - Error desconocido: {0}", ex);
-                    }
-                } finally {
-                    // Iniciamos el contador de tiempo para el siguiente envío.
-                    ztreamySecondsCount = 0;
+        try {
+            String json = new Gson().toJson(event);
+            if (SimulatorController.isKafkaProducerPerSmartDriver()) {
+                smartDriverKafkaProducer.send(new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION,
+                        smartDriverKafkaRecordId,
+                        json
+                ), new KafkaCallBack(System.currentTimeMillis(), smartDriverKafkaRecordId, new ExtendedEvent[]{event}, Event_Type.NORMAL_VEHICLE_LOCATION));
+                smartDriverKafkaRecordId++;
+            } else {
+                long id = SimulatorController.getNextKafkaRecordId();
+                SimulatorController.getKafkaProducer().send(new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION,
+                        id,
+                        json
+                ), new KafkaCallBack(System.currentTimeMillis(), id, new ExtendedEvent[]{event}, Event_Type.NORMAL_VEHICLE_LOCATION));
+            }
+        } catch (Exception ex) {
+            if (!hasFinished()) {
+                increaseErrors();
+                if (PresetSimulation.isRetryOnFail()) {
+                    // Si ha fallado, almacenamos el 'VehicleLocation' que se debería haber enviado y lo intentamos luego.
+                    pendingVehicleLocations.add(event);
                 }
-                break;
-            case 1:
-                // Ztreamy
-                try {
-                    int result = publisher.publish(event, true);
-                    if (result == HttpURLConnection.HTTP_OK) {
-                        increaseOks();
-                        LOG.log(Level.FINE, "sendEvery10SecondsIfLocationChanged() - Localización de trayecto simulado enviada correctamante. SmartDriver: {0}", sha);
-                        locationChanged = false;
-                    } else {
-                        increaseNotOks();
-                        if (PresetSimulation.isRetryOnFail()) {
-                            // Si ha fallado, almacenamos el 'VehicleLocation' que se debería haber enviado y lo intentamos luego.
-                            pendingVehicleLocations.add(event);
-                        }
-                        LOG.log(Level.SEVERE, "sendEvery10SecondsIfLocationChanged() - Error SEND (Not OK)");
-                        reconnectPublisher();
-                    }
-                } catch (MalformedURLException ex) {
-                    LOG.log(Level.SEVERE, "sendEvery10SecondsIfLocationChanged() - Error en la URL", ex);
-                } catch (IOException ex) {
-                    if (!hasFinished()) {
-                        increaseErrors();
-                        if (PresetSimulation.isRetryOnFail()) {
-                            // Si ha fallado, almacenamos el 'VehicleLocation' que se debería haber enviado y lo intentamos luego.
-                            pendingVehicleLocations.add(event);
-                        }
-                        LOG.log(Level.SEVERE, "sendEvery10SecondsIfLocationChanged() - Error I/O: {0}", ex.getMessage());
-                        reconnectPublisher();
-                    }
-                } catch (Exception ex) {
-                    if (!hasFinished()) {
-                        increaseErrors();
-                        if (PresetSimulation.isRetryOnFail()) {
-                            // Si ha fallado, almacenamos el 'VehicleLocation' que se debería haber enviado y lo intentamos luego.
-                            pendingVehicleLocations.add(event);
-                        }
-                        LOG.log(Level.SEVERE, "sendEvery10SecondsIfLocationChanged() - Error desconocido: {0}", ex.getMessage());
-                        reconnectPublisher();
-                    }
-                } finally {
-                    // Iniciamos el contador de tiempo para el siguiente envío.
-                    ztreamySecondsCount = 0;
-                }
-                break;
-            default:
-                throw new IllegalArgumentException("Invalid Stream Server option");
+                LOG.log(Level.SEVERE, "sendEvery10SecondsIfLocationChanged() - Error desconocido: {0}", ex);
+            }
+        } finally {
+            // Iniciamos el contador de tiempo para el siguiente envío.
+            secondsCount = 0;
         }
     }
 
@@ -731,88 +607,35 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         ExtendedEvent event = new ExtendedEvent(sha, "application/json", Constants.SIMULATOR_APPLICATION_ID, Constants.DATA_SECTION, bodyObject, retries);
 
         increaseSent();
-        switch (streamServer) {
-            case 0:
-                // Kafka
-                try {
-                    String json = new Gson().toJson(event);
-                    if (SimulatorController.isKafkaProducerPerSmartDriver()) {
-                        smartDriverKafkaProducer.send(new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION,
-                                smartDriverKafkaRecordId,
-                                json
-                        ), new KafkaCallBack(System.currentTimeMillis(), smartDriverKafkaRecordId, new ExtendedEvent[]{event}, Event_Type.NORMAL_DATA_SECTION));
-                        smartDriverKafkaRecordId++;
-                    } else {
-                        long id = SimulatorController.getNextKafkaRecordId();
-                        SimulatorController.getKafkaProducer().send(new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION,
-                                id,
-                                json
-                        ), new KafkaCallBack(System.currentTimeMillis(), id, new ExtendedEvent[]{event}, Event_Type.NORMAL_DATA_SECTION));
-                    }
-                } catch (Exception ex) {
-                    if (!hasFinished()) {
-                        increaseErrors();
-                        if (PresetSimulation.isRetryOnFail()) {
-                            // Si ha fallado, almacenamos el 'DataSection' que se debería haber enviado y lo intentamos luego.
-                            pendingDataSections.add(event);
-                        }
-                        LOG.log(Level.SEVERE, "sendDataSectionToZtreamy() - Error desconocido: {0} - Primera trama de la sección: {1} - Enviada a las: {2}", new Object[]{ex.getMessage(), dataSection.getRoadSection().get(0).getTimeStamp(), Constants.dfISO8601.format(System.currentTimeMillis())});
-                    }
-                } finally {
-                    // Reiniciamos los acumulados.
-                    roadSectionList.clear();
-                    cummulativePositiveSpeeds = 0.0d;
-                    sectionDistance = 0.0d;
+        try {
+            String json = new Gson().toJson(event);
+            if (SimulatorController.isKafkaProducerPerSmartDriver()) {
+                smartDriverKafkaProducer.send(new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION,
+                        smartDriverKafkaRecordId,
+                        json
+                ), new KafkaCallBack(System.currentTimeMillis(), smartDriverKafkaRecordId, new ExtendedEvent[]{event}, Event_Type.NORMAL_DATA_SECTION));
+                smartDriverKafkaRecordId++;
+            } else {
+                long id = SimulatorController.getNextKafkaRecordId();
+                SimulatorController.getKafkaProducer().send(new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION,
+                        id,
+                        json
+                ), new KafkaCallBack(System.currentTimeMillis(), id, new ExtendedEvent[]{event}, Event_Type.NORMAL_DATA_SECTION));
+            }
+        } catch (Exception ex) {
+            if (!hasFinished()) {
+                increaseErrors();
+                if (PresetSimulation.isRetryOnFail()) {
+                    // Si ha fallado, almacenamos el 'DataSection' que se debería haber enviado y lo intentamos luego.
+                    pendingDataSections.add(event);
                 }
-                break;
-            case 1:
-                // Ztreamy
-                try {
-                    int result = publisher.publish(event, true);
-
-                    if (result == HttpURLConnection.HTTP_OK) {
-                        increaseOks();
-                        LOG.log(Level.FINE, "sendDataSectionToZtreamy() - Datos de sección de trayecto simulado enviada correctamante. SmartDriver: {0}", sha);
-                    } else {
-                        increaseNotOks();
-                        if (PresetSimulation.isRetryOnFail()) {
-                            // Si ha fallado, almacenamos el 'DataSection' que se debería haber enviado y lo intentamos luego.
-                            pendingDataSections.add(event);
-                        }
-                        LOG.log(Level.SEVERE, "sendDataSectionToZtreamy() - Error SEND (Not OK): Primera trama de la sección: {0} - Enviada a las: {1}", new Object[]{dataSection.getRoadSection().get(0).getTimeStamp(), Constants.dfISO8601.format(System.currentTimeMillis())});
-                        reconnectPublisher();
-                    }
-                } catch (MalformedURLException ex) {
-                    LOG.log(Level.SEVERE, "sendDataSectionToZtreamy() - Error en la URL", ex);
-                } catch (IOException ex) {
-                    if (!hasFinished()) {
-                        increaseErrors();
-                        if (PresetSimulation.isRetryOnFail()) {
-                            // Si ha fallado, almacenamos el 'DataSection' que se debería haber enviado y lo intentamos luego.
-                            pendingDataSections.add(event);
-                        }
-                        LOG.log(Level.SEVERE, "sendDataSectionToZtreamy() - Error I/O: {0} - Primera trama de la sección: {1} - Enviada a las: {2}", new Object[]{ex.getMessage(), dataSection.getRoadSection().get(0).getTimeStamp(), Constants.dfISO8601.format(System.currentTimeMillis())});
-                        reconnectPublisher();
-                    }
-                } catch (Exception ex) {
-                    if (!hasFinished()) {
-                        increaseErrors();
-                        if (PresetSimulation.isRetryOnFail()) {
-                            // Si ha fallado, almacenamos el 'DataSection' que se debería haber enviado y lo intentamos luego.
-                            pendingDataSections.add(event);
-                        }
-                        LOG.log(Level.SEVERE, "sendDataSectionToZtreamy() - Error desconocido: {0} - Primera trama de la sección: {1} - Enviada a las: {2}", new Object[]{ex.getMessage(), dataSection.getRoadSection().get(0).getTimeStamp(), Constants.dfISO8601.format(System.currentTimeMillis())});
-                        reconnectPublisher();
-                    }
-                } finally {
-                    // Reiniciamos los acumulados.
-                    roadSectionList.clear();
-                    cummulativePositiveSpeeds = 0.0d;
-                    sectionDistance = 0.0d;
-                }
-                break;
-            default:
-                throw new IllegalArgumentException("Invalid Stream Server option");
+                LOG.log(Level.SEVERE, "sendDataSectionToZtreamy() - Error desconocido: {0} - Primera trama de la sección: {1} - Enviada a las: {2}", new Object[]{ex.getMessage(), dataSection.getRoadSection().get(0).getTimeStamp(), Constants.dfISO8601.format(System.currentTimeMillis())});
+            }
+        } finally {
+            // Reiniciamos los acumulados.
+            roadSectionList.clear();
+            cummulativePositiveSpeeds = 0.0d;
+            sectionDistance = 0.0d;
         }
     }
 
@@ -831,13 +654,6 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         return 0.0d;
     }
 
-    private void reconnectPublisher() {
-        publisher.close();
-        this.publisher = new PublisherHC(Ztreamy.getServerUrl(), new JSONSerializer());
-
-        LOG.log(Level.FINE, "reconnectPublisher() - Publisher reconnected");
-    }
-
     public void finish() {
         setFinished();
 
@@ -851,10 +667,6 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
                     // Es un 'bug' que aún está en estado aabierto en Kafka.
                     // https://issues.streamsets.com/browse/SDC-4925
                 }
-            }
-            // Si tuviera un 'publisher' de Ztreamy, lo cerramos.
-            if (publisher != null) {
-                publisher.close();
             }
 
             surroundingVehiclesConsumer.stopConsumer();

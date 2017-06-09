@@ -43,12 +43,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
     private static Constants.Paths_Generation_Method pathsGenerationMethod;
 
-    // Los trayectos generados puede que no tengan la densidad de puntos necesaria para tener una posición en cada segundo de la simulación.
-    // Además, cada 'SmartDriver' tendrá sus características de conducción, con lo que si fuera más rápido harían falta menos puntos y si fuera más lento
-    // harían falta más puntos. Se calculará la interpolación tomando la velocidad mínima de 10Km/h.
-    // FIXME: Transfer to properties file.
-    private static boolean interpolate = true;
-
     private static List<LocationLog> locationLogList = new ArrayList<>();
 
     private static long startSimulationTime = 0L;
@@ -70,11 +64,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     // Directorio temporal para almacenar los archivos generados.
     // TODO: Still necessary?
     private static Path tempFolder;
-
-    private enum Stream_Server {
-        KAFKA, ZTREAMY, FIRST_KAFKA_THEN_ZTREAMY, FIRST_ZTREAMY_THEN_KAFKA
-    }
-    private static Stream_Server streamServer = Stream_Server.KAFKA;
 
     private static Date scheduledDate;
 
@@ -291,7 +280,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         tempFolder = StorageUtils.createTempFolder();
         startSimulationTime = System.currentTimeMillis();
         LOG.log(Level.INFO, "executeSimulation() - Comienzo de la simulación: {0}", Constants.dfISO8601.format(startSimulationTime));
-        LOG.log(Level.INFO, "executeSimulation() - Envío de tramas a: {0}", Stream_Server.values()[streamServer.ordinal() % 2].name());
         LOG.log(Level.INFO, "executeSimulation() - Se inicia el consumidor de análisis de vehículos cercanos");
 
         if (!PresetSimulation.isKafkaProducerPerSmartDriver()) {
@@ -383,7 +371,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
     private void initSimulatedSmartDriver(long id, int pathId, DriverParameters dp, int smartDriversBunch, double speedRandomFactor, double hrRandomFactor) throws MalformedURLException, HermesException {
 
-        SimulatedSmartDriver ssd = new SimulatedSmartDriver(id, pathId, dp, PresetSimulation.isLoopingSimulation(), streamServer.ordinal() % 2, retries, speedRandomFactor, hrRandomFactor);
+        SimulatedSmartDriver ssd = new SimulatedSmartDriver(id, pathId, dp, PresetSimulation.isLoopingSimulation(), retries, speedRandomFactor, hrRandomFactor);
         simulatedSmartDriverHashMap.put(ssd.getSha(), ssd);
 
         long delay = 0L;
@@ -504,10 +492,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         }
     }
 
-    public static boolean isInterpolate() {
-        return interpolate;
-    }
-
     public static Path getTempFolder() {
         return tempFolder;
     }
@@ -521,25 +505,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 return true;
             default:
                 return false;
-        }
-    }
-
-    public int getStreamServer() {
-        return streamServer.ordinal();
-    }
-
-    public void setStreamServer(int value) {
-        try {
-            streamServer = Stream_Server.values()[value];
-            if (streamServer.ordinal() > 1) {
-                PresetSimulation.setLoopingSimulation(false);
-            }
-            if (streamServer.ordinal() % 2 != 0) {
-                PresetSimulation.setKafkaProducerPerSmartDriver(false);
-            }
-        } catch (Exception ex) {
-            // Si no fuera un valor válido, establecemos un valor por defecto.
-            streamServer = Stream_Server.KAFKA;
         }
     }
 
