@@ -1,7 +1,6 @@
 package es.us.lsi.hermes.simulator;
 
 import com.google.gson.Gson;
-import es.us.lsi.hermes.location.LocationLog;
 import es.us.lsi.hermes.location.detail.LocationLogDetail;
 import es.us.lsi.hermes.kafka.Kafka;
 import es.us.lsi.hermes.smartDriver.DataSection;
@@ -11,9 +10,6 @@ import es.us.lsi.hermes.util.Constants;
 import es.us.lsi.hermes.util.DriverParameters;
 import es.us.lsi.hermes.util.HermesException;
 import es.us.lsi.hermes.util.Util;
-import es.us.lsi.hermes.ztreamy.Ztreamy;
-import java.io.IOException;
-import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.security.SecureRandom;
 import java.util.ArrayList;
@@ -33,8 +29,6 @@ import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import ztreamy.JSONSerializer;
-import ztreamy.PublisherHC;
 
 public final class SimulatedSmartDriver extends MonitorizedDriver implements Runnable, ISimulatorControllerObserver {
 
@@ -216,9 +210,6 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
                 throw new RuntimeException("Finished SmartDriver");
             }
 
-            if ((PresetSimulation.getMaxSimulationTimeMs() > 0) &&
-                    ((System.currentTimeMillis() - SimulatorController.getStartSimulationTime()) >=
-                            PresetSimulation.getMaxSimulationTimeMs())) {
             // Check if there is a simulation time defined.
             if ((PresetSimulation.getMaxSimulationTimeMs() > 0)
                     && ((System.currentTimeMillis() - SimulatorController.getStartSimulationTime()) >= PresetSimulation.getMaxSimulationTimeMs())) {
@@ -256,7 +247,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
             // If it's time to send (every 10 seconds) and the location has changed, do so.
             if (locationChanged && isTimeToSend()) {
                 sendEvery10SecondsIfLocationChanged(currentLocationLogDetail);
-            // If the simulation allows retries, we have pending data and it's time to send, do so.
+                // If the simulation allows retries, we have pending data and it's time to send, do so.
             } else if (PresetSimulation.isRetryOnFail() && !pendingVehicleLocations.isEmpty() && isTimeToRetry()) {
                 retryPendingVehicleLocations();
             }
@@ -275,7 +266,8 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
                 secondsBetweenRetries++;
             }
             LOG.log(Level.FINE, "SimulatedSmartDriver.run() - Elapsed simulation time: {0}", DurationFormatUtils.formatDuration(getDriverSimulationTimeInSeconds(), "HH:mm:ss", true));
-        } catch (InterruptedException ex) {
+
+        } catch(InterruptedException ex){
             LOG.log(Level.INFO, "SimulatedSmartDriver.run() - Interrupted!");
         }
     }
