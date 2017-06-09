@@ -166,25 +166,6 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
             this.hrRandomFactor = hrRandomFactor;
         }
 
-//        //FIXME missing - speed tweak by driver
-//        for (int i = 0; i < ll.getLocationLogDetailList().size(); i++) {
-//            LocationLogDetail lldOriginal = (LocationLogDetail) ll.getLocationLogDetailList().get(i);
-//            LocationLogDetail lld = new LocationLogDetail(lldOriginal.getLatitude(), lldOriginal.getLongitude(), lldOriginal.getSpeed(), lldOriginal.getHeartRate(), lldOriginal.getRrTime(), lldOriginal.getSecondsToBeHere());
-//
-//            lld.setSpeed(lld.getSpeed() * speedRandomFactor);
-//            lld.setHeartRate((int) (lld.getHeartRate() * hrRandomFactor));
-//
-//            // Make sure the speed is bigger or equal to MIN_SPEED.
-//            if (lld.getSpeed() < MIN_SPEED) {
-//                lld.setSpeed(MIN_SPEED);
-//                lld.setSecondsToBeHere((int) (Math.ceil(lld.getSecondsToBeHere() * (lld.getSpeed() / MIN_SPEED))));
-//            } else {
-//                lld.setSecondsToBeHere((int) (Math.ceil(lld.getSecondsToBeHere() / speedRandomFactor)));
-//            }
-//
-//            localLocationLogDetailList.add(lld);
-//        }
-
         init();
     }
 
@@ -269,6 +250,9 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
             LOG.log(Level.FINE, "SimulatedSmartDriver.run() - Elemento actual: {0} de {1}", new Object[]{getCurrentPosition(), pathPointsCount});
 
             // Check if it's time to change to the next location
+            //FIXME
+            System.out.println("Elapsed " + getElapsedSeconds());
+            System.out.println("Remaining " + secondsToRemainHere);
             if (getElapsedSeconds() >= secondsToRemainHere) {
                 // If we have arrived to the end of the path, restart or finish the simulation
                 if (getCurrentPosition() == (pathPointsCount-1) && direction > 0) {
@@ -277,6 +261,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
 
                 // Update the current location
                 currentLocationLogDetail = updateCurrentPosition();
+                resetElapsedSeconds();
             }
 
             // If it's time to send (every 10 seconds) and the location has changed, do so.
@@ -321,17 +306,17 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
                 try {
                     String json = new Gson().toJson(events);
                     if (SimulatorController.isKafkaProducerPerSmartDriver()) {
-                        smartDriverKafkaProducer.send(new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION,
-                                smartDriverKafkaRecordId,
-                                json
-                        ), new KafkaCallBack(System.currentTimeMillis(), smartDriverKafkaRecordId, events, Event_Type.RECOVERED_DATA_SECTION));
+                        smartDriverKafkaProducer.send(
+                                new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION, smartDriverKafkaRecordId, json),
+                                new KafkaCallBack(System.currentTimeMillis(), smartDriverKafkaRecordId, events,
+                                Event_Type.RECOVERED_DATA_SECTION));
                         smartDriverKafkaRecordId++;
                     } else {
                         long id = SimulatorController.getNextKafkaRecordId();
-                        SimulatorController.getKafkaProducer().send(new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION,
-                                id,
-                                json
-                        ), new KafkaCallBack(System.currentTimeMillis(), id, events, Event_Type.RECOVERED_DATA_SECTION));
+                        SimulatorController.getKafkaProducer().send(
+                                new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION, id, json),
+                                new KafkaCallBack(System.currentTimeMillis(), id, events,
+                                Event_Type.RECOVERED_DATA_SECTION));
                     }
                 } catch (Exception ex) {
                     LOG.log(Level.SEVERE, "*Reintento* - Error: {0} - No se han podido reenviar los {1} 'DataSection' pendientes", new Object[]{ex.getMessage(), pendingDataSections.size()});
@@ -381,17 +366,17 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
                 try {
                     String json = new Gson().toJson(events);
                     if (SimulatorController.isKafkaProducerPerSmartDriver()) {
-                        smartDriverKafkaProducer.send(new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION,
-                                smartDriverKafkaRecordId,
-                                json
-                        ), new KafkaCallBack(System.currentTimeMillis(), smartDriverKafkaRecordId, events, Event_Type.RECOVERED_VEHICLE_LOCATION));
+                        smartDriverKafkaProducer.send(
+                                new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION, smartDriverKafkaRecordId, json),
+                                new KafkaCallBack(System.currentTimeMillis(), smartDriverKafkaRecordId, events,
+                                Event_Type.RECOVERED_VEHICLE_LOCATION));
                         smartDriverKafkaRecordId++;
                     } else {
                         long id = SimulatorController.getNextKafkaRecordId();
-                        SimulatorController.getKafkaProducer().send(new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION,
-                                id,
-                                json
-                        ), new KafkaCallBack(System.currentTimeMillis(), id, events, Event_Type.RECOVERED_VEHICLE_LOCATION));
+                        SimulatorController.getKafkaProducer().send(
+                                new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION, id, json),
+                                new KafkaCallBack(System.currentTimeMillis(), id, events,
+                                Event_Type.RECOVERED_VEHICLE_LOCATION));
                     }
                 } catch (Exception ex) {
                     LOG.log(Level.SEVERE, "*Reintento* - Error: {0} - No se han podido reenviar los {1} 'VehicleLocation' pendientes", new Object[]{ex.getMessage(), pendingVehicleLocations.size()});
@@ -430,10 +415,44 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         int previousPosition = getCurrentPosition();
 
         // Set the new position (index and direction based)
-        setCurrentPosition(previousPosition + direction);
+//        setCurrentPosition(previousPosition + direction);
+        if(direction > 0) {
+            for (int i = getCurrentPosition() + 1; i < getLocationLog().getLocationLogDetailList().size(); i++) {
+                if (getLocationLogDetailByPos(i).getSecondsToRemainHere() != 0) {
+                    setCurrentPosition(i);
+                    break;
+                }
+            }
+        } else {
+            for (int i = getCurrentPosition() - 1; i >= 0; i--) {
+                if (getLocationLogDetailByPos(i).getSecondsToRemainHere() != 0) {
+                    setCurrentPosition(i);
+                    break;
+                }
+            }
+        }
+
+//        // Set the new position (time based)
+//        for (int i = getCurrentPosition(); i < getLocationLog().getLocationLogDetailList().size(); i++) {
+//            setCurrentPosition(i);
+//
+//            if(direction > 0) {
+//                if (getLocationLog().getLocationLogDetailList().get(i).getSecondsToRemainHere() > getElapsedSeconds()) {
+//                    break;
+//                }
+//            }else{
+//                int secondsToGoNext = getLocationLogDetailByPos(i + direction).getSecondsToRemainHere();
+//                if (secondsToRemainHere - secondsToGoNext > getElapsedSeconds()) {
+//                    break;
+//                }
+//            }
+//        }
+
+//        Cambia el CSV y la manera en la que el time to be here se guarda, asi te ahorras todo el recalculado y demas
 
         LOG.log(Level.FINE, "SimulatedSmartDriver.run() - Avanzamos de posición: {0}", getCurrentPosition());
         LocationLogDetail newCurrentPosition = getLocationLogDetailByPos(getCurrentPosition());
+
         LocationLogDetail previousLocationLogDetail = getLocationLogDetailByPos(previousPosition);
         LOG.log(Level.FINE, "SimulatedSmartDriver.run() - El usuario de SmartDriver se encuentra en: ({0}, {1})",
                 new Object[]{newCurrentPosition.getLatitude(), newCurrentPosition.getLongitude()});
@@ -501,7 +520,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         locationChanged = true;
         //FIXME triple check
 //        secondsToRemainHere = getLocationLogDetailByPos(getCurrentPosition()).getSecondsToRemainHere() - newCurrentPosition.getSecondsToRemainHere();
-        secondsToRemainHere = Math.abs(previousLocationLogDetail.getSecondsToRemainHere() - newCurrentPosition.getSecondsToRemainHere());
+        secondsToRemainHere = newCurrentPosition.getSecondsToRemainHere();
 
         heartRate = (int) (newCurrentPosition.getHeartRate() * hrRandomFactor);
         speed = newCurrentPosition.getSpeed() * speedRandomFactor;
@@ -531,18 +550,12 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
 
         // When we reach the end in an infinite simulation, turn around and repeat the process
         } else {
-            // Calculate the indexes to iterate over the path in one direction or another
-            int indexA, indexB;
-            if(isReversed) {
-                direction = -1;
-                indexA = pathPointsCount / 2;
-                indexB = 0;
-            } else {
-                direction = 1;
-                indexA = 0;
-                indexB = pathPointsCount / 2;
-            }
+            // Calculate the direction to iterate one way or another
+            direction = isReversed ? -1 : 1;
             isReversed = !isReversed;
+
+            if(!isReversed)
+                secondsToRemainHere = 0;
 
             resetElapsedSeconds();
         }
@@ -724,11 +737,11 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         // Creamos un objeto de tipo 'DataSection' de los que 'SmartDriver' envía al servidor de tramas.
         DataSection dataSection = new DataSection();
 
-        DescriptiveStatistics speedStats = new DescriptiveStatistics();
-        DescriptiveStatistics heartRateStats = new DescriptiveStatistics();
-        DescriptiveStatistics rrStats = new DescriptiveStatistics();
-        DescriptiveStatistics accelerationStats = new DescriptiveStatistics();
-        DescriptiveStatistics decelerationStats = new DescriptiveStatistics();
+        DescriptiveStatistics speedStats = new DescriptiveStatistics(),
+                heartRateStats = new DescriptiveStatistics(),
+                rrStats = new DescriptiveStatistics(),
+                accelerationStats = new DescriptiveStatistics(),
+                decelerationStats = new DescriptiveStatistics();
         RoadSection rdPrevious = roadSectionList.get(0);
         speedStats.addValue(rdPrevious.getSpeed());
         rrStats.addValue(rdPrevious.getRrTime());
@@ -750,7 +763,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
                 }
             } else if (acceleration < 0.0d) {
                 decelerationStats.addValue(acceleration);
-                //TODO Review
+                //TODO Review - According to Intellij, always false
                 if (numHighDecelerations < Constants.HIGH_DECELERATION_THRESHOLD) {
                     numHighDecelerations++;
                 }
@@ -797,17 +810,17 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
                 try {
                     String json = new Gson().toJson(event);
                     if (SimulatorController.isKafkaProducerPerSmartDriver()) {
-                        smartDriverKafkaProducer.send(new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION,
-                                smartDriverKafkaRecordId,
-                                json
-                        ), new KafkaCallBack(System.currentTimeMillis(), smartDriverKafkaRecordId, new ExtendedEvent[]{event}, Event_Type.NORMAL_DATA_SECTION));
+                        smartDriverKafkaProducer.send(
+                                new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION, smartDriverKafkaRecordId, json),
+                                new KafkaCallBack(System.currentTimeMillis(), smartDriverKafkaRecordId,
+                                new ExtendedEvent[]{event}, Event_Type.NORMAL_DATA_SECTION));
                         smartDriverKafkaRecordId++;
                     } else {
                         long id = SimulatorController.getNextKafkaRecordId();
-                        SimulatorController.getKafkaProducer().send(new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION,
-                                id,
-                                json
-                        ), new KafkaCallBack(System.currentTimeMillis(), id, new ExtendedEvent[]{event}, Event_Type.NORMAL_DATA_SECTION));
+                        SimulatorController.getKafkaProducer().send(
+                                new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION, id, json),
+                                new KafkaCallBack(System.currentTimeMillis(), id,
+                                new ExtendedEvent[]{event}, Event_Type.NORMAL_DATA_SECTION));
                     }
                 } catch (Exception ex) {
                     if (!hasFinished()) {

@@ -68,7 +68,10 @@ public class PathUtils {
             // Añadimos los segundos correspondientes a la distancia recorrida entre puntos.
             // Indicamos cuántos segundos deben pasar para estar en esta posición.
             pathDurationInSeconds += pointDuration;
-            lld.setSecondsToRemainHere(pathDurationInSeconds);
+
+            //FIXME changed
+//            lld.setSecondsToRemainHere(pathDurationInSeconds);
+            lld.setSecondsToRemainHere(pointDuration);
 
             locationLogDetailList.add(lld);
 
@@ -129,7 +132,10 @@ public class PathUtils {
             // Añadimos los segundos correspondientes a la distancia recorrida entre puntos.
             pathDurationInSeconds += pointDuration;
             // Indicamos cuántos segundos deben pasar para estar en esta posición.
-            lld.setSecondsToRemainHere(pathDurationInSeconds);
+
+            //FIXME changed
+//            lld.setSecondsToRemainHere(pathDurationInSeconds);
+            lld.setSecondsToRemainHere(pointDuration);
 
             locationLogDetailList.add(lld);
 
@@ -286,8 +292,7 @@ public class PathUtils {
                         ///////////////////
 
                         // Procesamos el JSON obtenido de OpenStreetMap con las localizaciones y las velocidades de SmartDriver.
-                        Type listType = new TypeToken<ArrayList<PositionSimulatedSpeed>>() {
-                        }.getType();
+                        Type listType = new TypeToken<ArrayList<PositionSimulatedSpeed>>() { }.getType();
                         List<PositionSimulatedSpeed> pssList = new Gson().fromJson(json, listType);
                         PathUtils.createPathOpenStreetMaps(pssList, ll);
                     }
@@ -352,7 +357,10 @@ public class PathUtils {
             lld.setSpeed(i * speedFragment + lld1.getSpeed());
 //            lld.setHeartRate((int) (i * heartRateFragment + lld1.getHeartRate()));
 //            lld.setRrTime((int) (i * rrFragment + lld1.getRrTime()));
-            lld.setSecondsToRemainHere((int) (i * secondsToBeHereFragment + lld1.getSecondsToRemainHere()));
+
+            //FIXME changed
+//            lld.setSecondsToRemainHere((int) (i * secondsToBeHereFragment + lld1.getSecondsToRemainHere()));
+            lld.setSecondsToRemainHere((int) (i * secondsToBeHereFragment));
 
             lldListBetween.add(lld);
         }
