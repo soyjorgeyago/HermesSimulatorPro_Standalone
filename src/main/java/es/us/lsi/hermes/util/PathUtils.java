@@ -68,7 +68,7 @@ public class PathUtils {
             // Añadimos los segundos correspondientes a la distancia recorrida entre puntos.
             // Indicamos cuántos segundos deben pasar para estar en esta posición.
             pathDurationInSeconds += pointDuration;
-            lld.setSecondsToBeHere(pointDuration);
+            lld.setSecondsToRemainHere(pointDuration);
 
             locationLogDetailList.add(lld);
 
@@ -129,7 +129,7 @@ public class PathUtils {
             // Añadimos los segundos correspondientes a la distancia recorrida entre puntos.
             pathDurationInSeconds += pointDuration;
             // Indicamos cuántos segundos deben pasar para estar en esta posición.
-            lld.setSecondsToBeHere(pointDuration);
+            lld.setSecondsToRemainHere(pointDuration);
 
             locationLogDetailList.add(lld);
 
@@ -328,10 +328,10 @@ public class PathUtils {
         List<LocationLogDetail> lldListBetween = new ArrayList<>();
 
         // To get 1 intermediate point each second.
-        int numberOfInnerLocations = lld2.getSecondsToBeHere() - lld1.getSecondsToBeHere();
+        int numberOfInnerLocations = lld2.getSecondsToRemainHere() - lld1.getSecondsToRemainHere();
 
-        double latitudeFragment = (double) (lld2.getLatitude() - lld1.getLatitude()) / numberOfInnerLocations;
-        double longitudeFragment = (double) (lld2.getLongitude() - lld1.getLongitude()) / numberOfInnerLocations;
+        double latitudeFragment = (lld2.getLatitude() - lld1.getLatitude()) / numberOfInnerLocations;
+        double longitudeFragment = (lld2.getLongitude() - lld1.getLongitude()) / numberOfInnerLocations;
         double heartRateFragment = (double) (lld2.getHeartRate() - lld1.getHeartRate()) / numberOfInnerLocations;
         double rrFragment = (double) (lld2.getRrTime() - lld1.getRrTime()) / numberOfInnerLocations;
         double speedFragment = (double) (lld2.getSpeed() - lld1.getSpeed()) / numberOfInnerLocations;
@@ -344,11 +344,11 @@ public class PathUtils {
             lld.setSpeed((int) (i * speedFragment + lld1.getSpeed()));
             lld.setHeartRate((int) (i * heartRateFragment + lld1.getHeartRate()));
             lld.setRrTime((int) (i * rrFragment + lld1.getRrTime()));
-            lld.setSecondsToBeHere(1);
+            lld.setSecondsToRemainHere(1);
 
             lldListBetween.add(lld);
         }
-        lld2.setSecondsToBeHere(1);
+        lld2.setSecondsToRemainHere(1);
         lldListBetween.add(lld2);
 
         return lldListBetween;

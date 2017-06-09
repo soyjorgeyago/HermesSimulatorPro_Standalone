@@ -14,6 +14,7 @@ public class DriverParameters implements ICSVBean {
         final SecureRandom random = new SecureRandom();
         this.speedRandomFactor = 0.5d + (random.nextDouble() * 1.0d);
         this.hrRandomFactor = 0.9d + (random.nextDouble() * 0.2d);
+        initCSV();
     }
 
     public DriverParameters(double speedRandomFactor, double hrRandomFactor) {

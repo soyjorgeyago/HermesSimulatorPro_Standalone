@@ -161,7 +161,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
             double speed = lld.getSpeed() * speedRandomFactor;
 
             pathPointsSpeed[i] = (int) speed;
-            pathPointsSecondsToBeHere[i] = ((int) (Math.ceil(lld.getSecondsToBeHere() / speedRandomFactor)));
+            pathPointsSecondsToBeHere[i] = ((int) (Math.ceil(lld.getSecondsToRemainHere() / speedRandomFactor)));
 
             // Apply HR random factor.
             pathPointsHR[i] = lld.getRrTime() * hrRandomFactor;
@@ -233,11 +233,15 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
             }
 
             // Get the driver's current position on the path
-            LocationLogDetail currentLocationLogDetail;
+            LocationLogDetail currentLocationLogDetail = SimulatorController.getPath(pathId).get(getCurrentPosition());
 
             relaxing = true;       // Relaxed by default
 
             LOG.log(Level.FINE, "SimulatedSmartDriver.run() - El usuario de SmartDriver se encuentra en: ({0}, {1})", new Object[]{currentLocationLogDetail.getLatitude(), currentLocationLogDetail.getLongitude()});
+
+            //FIXME
+            System.out.println("Elapsed " + getPointToPointElapsedSeconds());
+            System.out.println("Remaining " + pathPointsSecondsToBeHere[getCurrentPosition()]);
 
             // Check if we can continue to next location
             if (getPointToPointElapsedSeconds() >= pathPointsSecondsToBeHere[getCurrentPosition()]) {
@@ -247,7 +251,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
                     finishOrRepeat();
                 } else {
                     // Update the current location
-                    currentLocationLogDetail = updateCurrentPosition();
+                    currentLocationLogDetail = updateCurrentPosition(currentLocationLogDetail);
 
                     //FIXME por Raul
 //                    resetPointToPointElapsedSeconds();
@@ -356,7 +360,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
             // Notificamos que ha terminado el SmartDriver actual.
             SimulatorController.smartDriverHasFinished(this.getSha());
 
-            LOG.log(Level.FINE, "SimulatedSmartDriver.run() - El usuario ha llegado a su destino en: {0}", DurationFormatUtils.formatDuration(getElapsedSeconds(), "HH:mm:ss", true));
+            LOG.log(Level.FINE, "SimulatedSmartDriver.run() - El usuario ha llegado a su destino en: {0}", DurationFormatUtils.formatDuration(getPointToPointElapsedSeconds(), "HH:mm:ss", true));
             finish();
 
             // When we reach the end in an infinite simulation, turn around and repeat the process
@@ -367,8 +371,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         }
     }
 
-    private LocationLogDetail updateCurrentPosition(){
-        LocationLogDetail currentLocationLogDetail = SimulatorController.getPath(pathId).get(getCurrentPosition());
+    private LocationLogDetail updateCurrentPosition(LocationLogDetail currentLocationLogDetail){
 
         // No hemos llegado al destino, avanzamos de posición.
         int previousPosition = getCurrentPosition();
@@ -377,7 +380,6 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
             resetPointToPointElapsedSeconds();
         }
 
-        currentLocationLogDetail = SimulatorController.getPath(pathId).get(getCurrentPosition());
 
         LocationLogDetail previousLocationLogDetail = SimulatorController.getPath(pathId).get(previousPosition);
 
@@ -442,7 +444,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         rs.setTime(System.currentTimeMillis());
         rs.setLatitude(currentLocationLogDetail.getLatitude());
         rs.setLongitude(currentLocationLogDetail.getLongitude());
-        int tDiff = (currentLocationLogDetail.getSecondsToBeHere() - previousLocationLogDetail.getSecondsToBeHere());
+        int tDiff = (currentLocationLogDetail.getSecondsToRemainHere() - previousLocationLogDetail.getSecondsToRemainHere());
         rs.setSpeed(tDiff > 0 ? distance * 3.6 / tDiff : previousLocationLogDetail.getSpeed());
         rs.setHeartRate(currentLocationLogDetail.getHeartRate());
         rs.setRrTime(currentLocationLogDetail.getRrTime());
@@ -454,113 +456,6 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         locationChanged = true;
 
         return currentLocationLogDetail;
-    }
-
-
-    private LocationLogDetail update2CurrentPosition() {
-        int previousPosition = getCurrentPosition();
-
-        // Set the new position (index and direction based)
-//        setCurrentPosition(previousPosition + direction);
-        if(direction > 0) {
-            for (int i = getCurrentPosition() + 1; i < getLocationLog().getLocationLogDetailList().size(); i++) {
-                if (getLocationLogDetailByPos(i).getSecondsToRemainHere() != 0) {
-                    setCurrentPosition(i);
-                    break;
-                }
-            }
-        } else {
-            for (int i = getCurrentPosition() - 1; i >= 0; i--) {
-                if (getLocationLogDetailByPos(i).getSecondsToRemainHere() != 0) {
-                    setCurrentPosition(i);
-                    break;
-                }
-            }
-        }
-
-        LOG.log(Level.FINE, "SimulatedSmartDriver.run() - Avanzamos de posición: {0}", getCurrentPosition());
-        LocationLogDetail newCurrentPosition = getLocationLogDetailByPos(getCurrentPosition());
-
-        LocationLogDetail previousLocationLogDetail = getLocationLogDetailByPos(previousPosition);
-        LOG.log(Level.FINE, "SimulatedSmartDriver.run() - El usuario de SmartDriver se encuentra en: ({0}, {1})",
-                new Object[]{newCurrentPosition.getLatitude(), newCurrentPosition.getLongitude()});
-
-
-        // TODO: Upgrade: ¿Criterios que puedan alterar el estrés?
-        // If the current position has a previous one, calculate the difference in bearing and stress the driver.
-        if ((previousPosition > 1 && direction > 0) || (previousPosition < (pathPointsCount-1) && direction < 0)) {
-            LocationLogDetail antePreviousLocationLogDetail = getLocationLogDetailByPos(previousPosition - direction);
-            double currentBearing = Util.bearing(previousLocationLogDetail.getLatitude(),
-                    previousLocationLogDetail.getLongitude(), newCurrentPosition.getLatitude(),
-                    newCurrentPosition.getLongitude());
-            double previousBearing = Util.bearing(antePreviousLocationLogDetail.getLatitude(),
-                    antePreviousLocationLogDetail.getLongitude(), previousLocationLogDetail.getLatitude(),
-                    previousLocationLogDetail.getLongitude());
-
-            // Si hay una desviación brusca de la trayectoria, suponemos una componente de estrés.
-            stressForDeviation(Math.abs(currentBearing - previousBearing));
-        }
-
-        // Si hay un salto grande de velocidad, suponemos una componente de estrés.
-        stressForSpeed(Math.abs(newCurrentPosition.getSpeed() - previousLocationLogDetail.getSpeed()));
-
-        // Analizamos el ritmo cardíaco,
-        // Medimos las unidades de estrés y dibujamos el marker del color correspondiente (verde -> sin estrés, amarillo -> ligeramente estresado, rojo -> estresado)
-        if (stressLoad != 0) {
-            // Si se está calmando, le subimos el intervalo RR y si se está estresando, le bajamos el intervalo RR.
-            if (relaxing) {
-                rrTime = rrTime - ((rrTime - Constants.RR_TIME) / stressLoad);
-            } else if (stressLoad < 5) {
-                rrTime = rrTime - (minRrTime / stressLoad);
-            } else {
-                // Establecemos un mínimo R-R en función de la edad del conductor.
-                rrTime = minRrTime;
-            }
-        }
-
-        // Calculamos el ritmo cardíaco a partir del intervalo RR.
-        heartRate = (int) Math.ceil(60.0d / (rrTime / 1000.0d));
-
-        // Calculate the distance between checkpoints
-        double distance = Util.distanceHaversine(previousLocationLogDetail.getLatitude(),
-                previousLocationLogDetail.getLongitude(), newCurrentPosition.getLatitude(),
-                newCurrentPosition.getLongitude());
-
-        // Acumulamos la distancia recorrida y analizamos el PKE (Positive Kinetic Energy)
-        sectionDistance += distance;
-        cummulativePositiveSpeeds += analyzePKE(newCurrentPosition, previousLocationLogDetail);
-
-        //FIXME - Review, esto no va debajo de la modificacion de speed y similares??
-        // Creamos un elementos de tipo 'RoadSection', para añadirlo al 'DataSection' que se envía a 'Ztreamy' cada 500 metros.
-        RoadSection rs = new RoadSection();
-        rs.setTime(System.currentTimeMillis());
-        rs.setLatitude(newCurrentPosition.getLatitude());
-        rs.setLongitude(newCurrentPosition.getLongitude());
-        int tDiff = Math.abs(newCurrentPosition.getSecondsToRemainHere() - previousLocationLogDetail.getSecondsToRemainHere());
-        rs.setSpeed(tDiff > 0 ? distance * 3.6 / tDiff : previousLocationLogDetail.getSpeed());
-        rs.setHeartRate(heartRate);
-        rs.setRrTime(rrTime);
-        rs.setAccuracy(0);
-
-        roadSectionList.add(rs);
-
-        // Location updated, seconds to remain here updated
-        locationChanged = true;
-        //FIXME triple check
-//        secondsToRemainHere = getLocationLogDetailByPos(getCurrentPosition()).getSecondsToRemainHere() - newCurrentPosition.getSecondsToRemainHere();
-        secondsToRemainHere = newCurrentPosition.getSecondsToRemainHere();
-
-        heartRate = (int) (newCurrentPosition.getHeartRate() * hrRandomFactor);
-        speed = newCurrentPosition.getSpeed() * speedRandomFactor;
-
-        if (speed < Constants.MIN_SPEED) {
-            speed = Constants.MIN_SPEED;
-            secondsToRemainHere = (int) (Math.ceil(secondsToRemainHere * (speed / Constants.MIN_SPEED)));
-        } else {
-            secondsToRemainHere = (int) (Math.ceil(secondsToRemainHere / speedRandomFactor));
-        }
-
-        return newCurrentPosition;
     }
 
     private void stressForDeviation(double bearingDiff) {
@@ -651,6 +546,10 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         smartDriverLocation.setTimeStamp(Constants.dfISO8601.format(new Date()));
 
         HashMap<String, Object> bodyObject = new HashMap<>();
+
+        //FIXME
+        System.out.println("I " + id + " A " + smartDriverLocation + " T " + pathPointsSecondsToBeHere[getCurrentPosition()]);
+
         bodyObject.put("Location", smartDriverLocation);
         increaseGenerated();
 
