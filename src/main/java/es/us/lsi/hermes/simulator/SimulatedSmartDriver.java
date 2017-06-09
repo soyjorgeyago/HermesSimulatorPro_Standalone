@@ -1,12 +1,12 @@
 package es.us.lsi.hermes.simulator;
 
 import com.google.gson.Gson;
-import es.us.lsi.hermes.location.LocationLog;
 import es.us.lsi.hermes.location.detail.LocationLogDetail;
 import es.us.lsi.hermes.kafka.Kafka;
 import es.us.lsi.hermes.smartDriver.DataSection;
 import es.us.lsi.hermes.smartDriver.RoadSection;
 import es.us.lsi.hermes.util.Constants;
+import es.us.lsi.hermes.util.DriverParameters;
 import es.us.lsi.hermes.util.HermesException;
 import es.us.lsi.hermes.util.Util;
 import es.us.lsi.hermes.ztreamy.Ztreamy;
@@ -16,7 +16,6 @@ import java.net.MalformedURLException;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -44,6 +43,8 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         NORMAL_VEHICLE_LOCATION, RECOVERED_VEHICLE_LOCATION, NORMAL_DATA_SECTION, RECOVERED_DATA_SECTION
     }
 
+    private final int streamServer;
+
     // Ztreamy
     private PublisherHC publisher;
 
@@ -54,18 +55,15 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
     // Parámetros para la simulación.
     private int stressLoad; // Indicará el nivel de carga de estrés.
     private boolean relaxing; // Indicará si el usuario está relajándose tras una carga de estrés.
-    private static final double MIN_SPEED = 10.0d; // Velocidad mínima de los SmartDrivers.
-    // Lista de hitos del recorrido por las que pasará el SmartDriver.
-    private List<LocationLogDetail> localLocationLogDetailList;
 
     private boolean locationChanged;
 
     private double sectionDistance;
     private double cummulativePositiveSpeeds;
-    private final List<RoadSection> roadSectionList;
     private int ztreamySecondsCount;
     private int secondsBetweenRetries;
     private final int minRrTime;
+    private final List<RoadSection> roadSectionList;
 
     private double speedRandomFactor;
     private double hrRandomFactor;
@@ -79,38 +77,18 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
     // Identificador único del SmartDriver.
     private final String sha;
 
-    private final int streamServer;
     private SurroundingVehiclesConsumer surroundingVehiclesConsumer = null;
 
-    private boolean infiniteSimulation;
+    private final boolean infiniteSimulation;
     private final int retries;
-
     private boolean paused;
 
-    public SimulatedSmartDriver() {
-        this.id = 0;
-        this.locationChanged = false;
-        this.sectionDistance = 0.0d;
-        this.roadSectionList = new ArrayList<>();
-        this.cummulativePositiveSpeeds = 0.0d;
-        this.ztreamySecondsCount = 0;
-        this.stressLoad = 0;
-        this.minRrTime = 0;
-        this.sha = "";
-        this.infiniteSimulation = false;
-        this.pendingVehicleLocations = new ArrayList<>();
-        this.pendingDataSections = new ArrayList<>();
-        this.localLocationLogDetailList = new ArrayList<>();
-        this.speedRandomFactor = 0;
-        this.hrRandomFactor = 0;
-        this.smartDriverKafkaProducer = null;
-        this.publisher = null;
-        this.retries = 0;
-        this.streamServer = 0;
-        this.paused = false;
-
-        init();
-    }
+    private int pathId;
+    private final DriverParameters driverParameters;
+    private final int[] pathPointsSecondsToBeHere;
+    private final int[] pathPointsSpeed;
+    private final double[] pathPointsHR;
+    private int direction;
 
     /**
      * Constructor para cada instancia de 'SmartDriver'.
@@ -128,12 +106,11 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
      * @throws MalformedURLException
      * @throws HermesException
      */
-    public SimulatedSmartDriver(long id, LocationLog ll, boolean infiniteSimulation, int streamServer, int retries, double speedRandomFactor, double hrRandomFactor) throws MalformedURLException, HermesException {
+    public SimulatedSmartDriver(long id, int pathId, DriverParameters dp, boolean infiniteSimulation, int streamServer, int retries, double speedRandomFactor, double hrRandomFactor) throws MalformedURLException, HermesException {
         final SecureRandom random = new SecureRandom();
         this.id = id;
         this.locationChanged = false;
         this.sectionDistance = 0.0d;
-        this.roadSectionList = new ArrayList<>();
         this.cummulativePositiveSpeeds = 0.0d;
         this.ztreamySecondsCount = 0;
         this.secondsBetweenRetries = 0;
@@ -145,39 +122,34 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         this.streamServer = streamServer;
         this.retries = retries;
         this.paused = false;
+        this.pathId = pathId;
+        this.direction = 1;
+        this.driverParameters = dp;
+        this.roadSectionList = new ArrayList<>();
         this.pendingVehicleLocations = new ArrayList<>();
         this.pendingDataSections = new ArrayList<>();
-        this.localLocationLogDetailList = new ArrayList<>();
 
 //        // TODO: Probar otros timeouts más altos.
         if (PresetSimulation.isKafkaProducerPerSmartDriver()) {
             this.surroundingVehiclesConsumer = new SurroundingVehiclesConsumer(this);
         }
 
-        if (speedRandomFactor == -1 && hrRandomFactor == -1) {
-            this.speedRandomFactor = 0.5d + (random.nextDouble() * 1.0d);
-            this.hrRandomFactor = 0.9d + (random.nextDouble() * 0.2d);
-        } else {
-            this.speedRandomFactor = speedRandomFactor;
-            this.hrRandomFactor = hrRandomFactor;
-        }
+        this.speedRandomFactor = speedRandomFactor;
+        this.hrRandomFactor = hrRandomFactor;
 
-        for (int i = 0; i < ll.getLocationLogDetailList().size(); i++) {
-            LocationLogDetail lldOriginal = (LocationLogDetail) ll.getLocationLogDetailList().get(i);
-            LocationLogDetail lld = new LocationLogDetail(lldOriginal.getLatitude(), lldOriginal.getLongitude(), lldOriginal.getSpeed(), lldOriginal.getHeartRate(), lldOriginal.getRrTime(), lldOriginal.getSecondsToBeHere());
+        List<LocationLogDetail> lldlist = SimulatorController.getPath(pathId);
+        this.pathPointsSecondsToBeHere = new int[lldlist.size()];
+        this.pathPointsSpeed = new int[lldlist.size()];
+        this.pathPointsHR = new double[lldlist.size()];
+        for (int i = 0; i < lldlist.size(); i++) {
+            LocationLogDetail lld = lldlist.get(i);
+            double speed = lld.getSpeed() * speedRandomFactor;
 
-            lld.setSpeed(lld.getSpeed() * speedRandomFactor);
-            lld.setHeartRate((int) (lld.getHeartRate() * hrRandomFactor));
+            pathPointsSpeed[i] = (int) speed;
+            pathPointsSecondsToBeHere[i] = ((int) (Math.ceil(lld.getSecondsToBeHere() / speedRandomFactor)));
 
-            // Make sure the speed is bigger or equal to MIN_SPEED.
-            if (lld.getSpeed() < MIN_SPEED) {
-                lld.setSpeed(MIN_SPEED);
-                lld.setSecondsToBeHere((int) (Math.ceil(lld.getSecondsToBeHere() * (lld.getSpeed() / MIN_SPEED))));
-            } else {
-                lld.setSecondsToBeHere((int) (Math.ceil(lld.getSecondsToBeHere() / speedRandomFactor)));
-            }
-
-            localLocationLogDetailList.add(lld);
+            // Apply HR random factor.
+            pathPointsHR[i] = lld.getRrTime() * hrRandomFactor;
         }
 
         init();
@@ -261,7 +233,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
 //                // Se ha cumplido el tiempo, paramos la ejecución.
 //                finish();
 //            } else {
-            LocationLogDetail currentLocationLogDetail = localLocationLogDetailList.get(getCurrentPosition());
+            LocationLogDetail currentLocationLogDetail = SimulatorController.getPath(pathId).get(getCurrentPosition());
 
             double distance;
             double bearing;
@@ -269,47 +241,34 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
             relaxing = true;
 
             LOG.log(Level.FINE, "SimulatedSmartDriver.run() - El usuario de SmartDriver se encuentra en: ({0}, {1})", new Object[]{currentLocationLogDetail.getLatitude(), currentLocationLogDetail.getLongitude()});
-            LOG.log(Level.FINE, "SimulatedSmartDriver.run() - Elemento actual: {0} de {1}", new Object[]{getCurrentPosition(), localLocationLogDetailList.size()});
 
-            // Comprobamos si ha pasado suficiente tiempo como para pasar a la siguiente localización.
-            if (getElapsedSeconds() >= currentLocationLogDetail.getSecondsToBeHere()) {
-                // Comprobamos si hemos llegado al destino.
-                if (getCurrentPosition() == localLocationLogDetailList.size() - 1) {
+            // Check if we can continue to next location
+            if (getPointToPointElapsedSeconds() >= pathPointsSecondsToBeHere[getCurrentPosition()]) {
+                // ¿Have we reached the destination?
+                if ((direction > 0 && getCurrentPosition() == pathPointsSecondsToBeHere.length - 1)
+                        || (direction < 0 && getCurrentPosition() == 0)) {
                     if (!infiniteSimulation) {
-                        // Notificamos que ha terminado el SmartDriver actual.
+                        // The simulated driver thread is finished.
                         SimulatorController.smartDriverHasFinished(this.getSha());
 
-                        LOG.log(Level.FINE, "SimulatedSmartDriver.run() - El usuario ha llegado a su destino en: {0}", DurationFormatUtils.formatDuration(getElapsedSeconds(), "HH:mm:ss", true));
+                        LOG.log(Level.FINE, "SimulatedSmartDriver.run() - El usuario ha llegado a su destino en: {0}", DurationFormatUtils.formatDuration(getDriverSimulationTimeInSeconds(), "HH:mm:ss", true));
                         finish();
                     } else {
-                        // Hemos llegado al final, pero es una simulación infinita. Le damos la vuelta al recorrido y seguimos.
-                        Collections.reverse(localLocationLogDetailList);
-                        int size = localLocationLogDetailList.size();
-                        for (int i = 0; i < size / 2; i++) {
-                            LocationLogDetail lld1 = localLocationLogDetailList.get(i);
-                            LocationLogDetail lld2 = localLocationLogDetailList.get(size - 1 - i);
-                            int stbh1 = lld1.getSecondsToBeHere();
-                            lld1.setSecondsToBeHere(lld2.getSecondsToBeHere());
-                            lld2.setSecondsToBeHere(stbh1);
-                        }
-                        setCurrentPosition(0);
-                        resetElapsedSeconds();
+                        // We have reached the end of the path, but as it is an infinite simulation, we go back.
+                        direction *= -1;
+                        resetPointToPointElapsedSeconds();
                     }
                 } else {
                     // No hemos llegado al destino, avanzamos de posición.
                     int previousPosition = getCurrentPosition();
-                    for (int i = getCurrentPosition(); i < localLocationLogDetailList.size(); i++) {
-                        setCurrentPosition(i);
-                        if (localLocationLogDetailList.get(i).getSecondsToBeHere() > getElapsedSeconds()) {
-                            break;
-                        }
+                    setCurrentPosition(previousPosition + direction);
+                    if (getPointToPointElapsedSeconds() >= pathPointsSecondsToBeHere[getCurrentPosition()]) {
+                        resetPointToPointElapsedSeconds();
                     }
 
-                    LOG.log(Level.FINE, "SimulatedSmartDriver.run() - Avanzamos de posición: {0}", getCurrentPosition());
-                    currentLocationLogDetail = localLocationLogDetailList.get(getCurrentPosition());
-                    LOG.log(Level.FINE, "SimulatedSmartDriver.run() - El usuario de SmartDriver se encuentra en: ({0}, {1})", new Object[]{currentLocationLogDetail.getLatitude(), currentLocationLogDetail.getLongitude()});
+                    currentLocationLogDetail = SimulatorController.getPath(pathId).get(getCurrentPosition());
 
-                    LocationLogDetail previousLocationLogDetail = localLocationLogDetailList.get(previousPosition);
+                    LocationLogDetail previousLocationLogDetail = SimulatorController.getPath(pathId).get(previousPosition);
 
                     // Calculamos la distancia recorrida.
                     distance = Util.distanceHaversine(previousLocationLogDetail.getLatitude(), previousLocationLogDetail.getLongitude(), currentLocationLogDetail.getLatitude(), currentLocationLogDetail.getLongitude());
@@ -319,16 +278,15 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
 
                     // TODO: ¿Criterios que puedan alterar el estrés?
                     if (previousPosition > 1) {
-                        LocationLogDetail antePreviousLocationLogDetail = localLocationLogDetailList.get(previousPosition - 1);
+                        LocationLogDetail antePreviousLocationLogDetail = SimulatorController.getPath(pathId).get(previousPosition - 1);
                         double previousBearing = Util.bearing(antePreviousLocationLogDetail.getLatitude(), antePreviousLocationLogDetail.getLongitude(), previousLocationLogDetail.getLatitude(), previousLocationLogDetail.getLongitude());
                         double bearingDiff = Math.abs(bearing - previousBearing);
 
                         // Si hay una desviación brusca de la trayectoria, suponemos una componente de estrés.
                         stressForDeviation(bearingDiff);
-
                     }
 
-                    double speedDiff = Math.abs(currentLocationLogDetail.getSpeed() - previousLocationLogDetail.getSpeed());
+                    double speedDiff = Math.abs(pathPointsSpeed[getCurrentPosition()] - pathPointsSpeed[getCurrentPosition() - 1]);
 
                     // Si hay un salto grande de velocidad, suponemos una componente de estrés.
                     stressForSpeed(speedDiff);
@@ -341,10 +299,10 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
                         // Si se está calmando, le subimos el intervalo RR y si se está estresando, le bajamos el intervalo RR.
                         if (relaxing) {
                             if (stressLoad > 0) {
-                                currentLocationLogDetail.setRrTime(previousLocationLogDetail.getRrTime() - ((previousLocationLogDetail.getRrTime() - currentLocationLogDetail.getRrTime()) / stressLoad));
+                                pathPointsHR[getCurrentPosition()] = pathPointsHR[getCurrentPosition() - 1] - ((pathPointsHR[getCurrentPosition() - 1] - pathPointsHR[getCurrentPosition()]) / stressLoad);
                             }
                         } else if (stressLoad < 5) {
-                            currentLocationLogDetail.setRrTime(previousLocationLogDetail.getRrTime() - (minRrTime / stressLoad));
+                            pathPointsHR[getCurrentPosition()] = pathPointsHR[getCurrentPosition() - 1] - (minRrTime / stressLoad);
                         } else {
                             // Establecemos un mínimo R-R en función de la edad del conductor.
                             currentLocationLogDetail.setRrTime(minRrTime);
@@ -519,12 +477,12 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
                 }
             }
 
-            increaseElapsedSeconds();
+            increaseDriverSimulationTime();
             ztreamySecondsCount++;
             if (!pendingVehicleLocations.isEmpty() || !pendingDataSections.isEmpty()) {
                 secondsBetweenRetries++;
             }
-            LOG.log(Level.FINE, "SimulatedSmartDriver.run() - Elapsed simulation time: {0}", DurationFormatUtils.formatDuration(getElapsedSeconds(), "HH:mm:ss", true));
+            LOG.log(Level.FINE, "SimulatedSmartDriver.run() - Elapsed simulation time: {0}", DurationFormatUtils.formatDuration(getDriverSimulationTimeInSeconds(), "HH:mm:ss", true));
         } catch (InterruptedException ex) {
             LOG.log(Level.INFO, "SimulatedSmartDriver.run() - Interrupted!");
         }
@@ -996,7 +954,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
                 }
             } else {
                 increaseNotOks();
-                LOG.log(Level.SEVERE, "onCompletion() - Unable to send message to Kafka", exception);
+                LOG.log(Level.SEVERE, "onCompletion() - Unable to send " + type.name() + " message to Kafka", exception);
 
                 switch (type) {
                     case RECOVERED_VEHICLE_LOCATION:

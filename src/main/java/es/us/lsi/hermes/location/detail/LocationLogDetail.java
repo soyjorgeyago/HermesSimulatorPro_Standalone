@@ -13,7 +13,7 @@ public class LocationLogDetail implements Serializable, ICSVBean {
     private static final long serialVersionUID = 1L;
     private double latitude;
     private double longitude;
-    private double speed;
+    private int speed;
     private int heartRate;
     private int rrTime;
     private int secondsToBeHere;
@@ -21,23 +21,22 @@ public class LocationLogDetail implements Serializable, ICSVBean {
     public LocationLogDetail() {
         this.latitude = 0.0d;
         this.longitude = 0.0d;
-        this.speed = 0.0d;
+        this.speed = 0;
         this.heartRate = 0;
         this.rrTime = 0;
         this.secondsToBeHere = 0;
         initCSV();
     }
 
-    public LocationLogDetail(double lat, double lng, Double speed) {
+    public LocationLogDetail(double lat, double lng, int speed) {
         this.latitude = lat;
         this.longitude = lng;
         this.rrTime = Constants.RR_TIME;
         this.heartRate = (int) Math.ceil(60.0d / (Constants.RR_TIME / 1000.0d));
-        if(speed != null)
-            this.speed = speed;
+        this.speed = speed;
     }
 
-    public LocationLogDetail(double latitude, double longitude, double speed, int heartRate, int rrTime, int secondsToBeHere) {
+    public LocationLogDetail(double latitude, double longitude, int speed, int heartRate, int rrTime, int secondsToBeHere) {
         this.latitude = latitude;
         this.longitude = longitude;
         this.speed = speed;
@@ -62,11 +61,11 @@ public class LocationLogDetail implements Serializable, ICSVBean {
         this.longitude = longitude;
     }
 
-    public double getSpeed() {
+    public int getSpeed() {
         return speed;
     }
 
-    public void setSpeed(double speed) {
+    public void setSpeed(int speed) {
         this.speed = speed;
     }
 
@@ -110,16 +109,14 @@ public class LocationLogDetail implements Serializable, ICSVBean {
 //
 //        return sb.toString();
 //    }
-
     // ------------------------- CSV IMP/EXP -------------------------
-
     private CellProcessor[] cellProcessors;
     private String[] fields;
     private String[] headers;
 
     @Override
     public void initCSV() {
-        cellProcessors = new CellProcessor[]{new ParseDouble(), new ParseDouble(), new ParseDouble(), new ParseInt(), new ParseInt()};
+        cellProcessors = new CellProcessor[]{new ParseDouble(), new ParseDouble(), new ParseInt(), new ParseInt(), new ParseInt()};
 
         headers = new String[]{"Latitude", "Longitude", "Speed", "SecondsToBeHere", "RrTime"};
 

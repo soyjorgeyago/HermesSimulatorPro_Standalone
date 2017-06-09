@@ -8,7 +8,7 @@ public class VehicleLocation implements Serializable {
     private Double longitude;
     private Integer stress;
     private Double latitude;
-    private Double speed;
+    private int speed;
     private Integer accuracy;
 
     public String getTimeStamp() {
@@ -43,11 +43,11 @@ public class VehicleLocation implements Serializable {
         this.latitude = latitude;
     }
 
-    public Double getSpeed() {
+    public int getSpeed() {
         return speed;
     }
 
-    public void setSpeed(Double speed) {
+    public void setSpeed(int speed) {
         this.speed = speed;
     }
 

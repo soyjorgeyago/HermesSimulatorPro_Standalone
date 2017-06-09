@@ -10,7 +10,8 @@ import java.util.logging.Logger;
 
 public final class Constants {
 
-    private Constants() { }
+    private Constants() {
+    }
 
     private static final Logger LOG = Logger.getLogger(Constants.class.getName());
 
@@ -44,7 +45,12 @@ public final class Constants {
     public enum Paths_Generation_Method {
         GOOGLE, OPENSTREETMAP
     }
-    
+
+    // Drivers starting mode.
+    public enum SmartDrivers_Starting_Mode {
+        ALEATORY, LINEAL, SAME_TIME
+    }
+
     public static String getBundleValue(String key) {
         return BUNDLE.getString(key);
     }
@@ -54,7 +60,6 @@ public final class Constants {
     }
 
     // Simulated Smart Driver ----------------------------------------------
-
     // Parámetros recogidos de SmartDriver.
     public static final int SEND_INTERVAL_SECONDS = 10;
     public static final int SEND_INTERVAL_METERS = 500;

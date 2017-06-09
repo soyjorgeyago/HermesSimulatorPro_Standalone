@@ -5,6 +5,7 @@ import es.us.lsi.hermes.csv.ICSVBean;
 import es.us.lsi.hermes.csv.SimulatorStatus;
 import es.us.lsi.hermes.location.LocationLog;
 import es.us.lsi.hermes.kafka.Kafka;
+import es.us.lsi.hermes.location.detail.LocationLogDetail;
 import es.us.lsi.hermes.util.*;
 import java.io.Serializable;
 import java.net.MalformedURLException;
@@ -76,14 +77,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     private static Stream_Server streamServer = Stream_Server.KAFKA;
 
     private static Date scheduledDate;
-
-    // Mecanismos de inicio de los conductores.
-    public enum SmartDrivers_Starting_Mode {
-        ALEATORY, LINEAL, SAME_TIME
-    }
-
-    // Por defecto, establecemos que el inicio de los usuarios siga una progresión lineal.
-    private static SmartDrivers_Starting_Mode startingMode = SmartDrivers_Starting_Mode.LINEAL;
 
     private static ScheduledThreadPoolExecutor threadPool;
 
@@ -206,9 +199,9 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 for (SimulatedSmartDriver ssd : simulatedSmartDriverHashMap.values()) {
                     if (!ssd.isPaused()) {
                         totalDelaysMs += ssd.getCurrentDelayMs();
-                        if (ssd.getElapsedSeconds() < leastElapsedTime) {
+                        if (ssd.getDriverSimulationTimeInSeconds() < leastElapsedTime) {
                             mostRecentSmartDriver = ssd;
-                            leastElapsedTime = mostRecentSmartDriver.getElapsedSeconds();
+                            leastElapsedTime = mostRecentSmartDriver.getDriverSimulationTimeInSeconds();
                         }
                     } else {
                         pausedSimulatedSmartDrivers.add(ssd);
@@ -327,7 +320,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 timeRate.equals(Time_Rate.X1),
                 PresetSimulation.isRetryOnFail(),
                 PresetSimulation.getIntervalBetweenRetriesInSeconds(),
-                startingMode.name(),
+                PresetSimulation.getStartingMode().name(),
                 PresetSimulation.getDriversByPath() * locationLogList.size(),
                 PresetSimulation.getPathsAmount(),
                 locationLogList.size(),
@@ -351,21 +344,29 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
                 LOG.log(Level.FINE, "executeSimulation() - Cada 10 segundos, se iniciarán {0} SmartDrivers en el trayecto {1}", new Object[]{smartDriversBunch, i});
 
-                List<ICSVBean> simulatedSmartDrivers = new ArrayList<>();
+                List<ICSVBean> driverParameters = new ArrayList<>();
                 for (int j = 0; j < PresetSimulation.getDriversByPath(); j++) {
 
-                    DriverParameters dp = new DriverParameters(1, 1);
+                    DriverParameters dp;
                     if (PresetSimulation.isLoadPathsAndDriversFromHdd() && loadedDriverParameters != null) {
                         dp = loadedDriverParameters.get(i).get(j);
+                    } else {
+                        if (PresetSimulation.isRandomizeEachSmartDriverBehaviour()) {
+                            // Aleatory values.
+                            dp = new DriverParameters();
+                        } else {
+                            // Same preset values.
+                            dp = new DriverParameters(1, 1);
+                        }
                     }
 
-                    initSimulatedSmartDriver(id, ll, smartDriversBunch, dp.getSpeedRandomFactor(), dp.getHrRandomFactor());
-                    simulatedSmartDrivers.add(dp);
+                    initSimulatedSmartDriver(id, i, dp, smartDriversBunch, dp.getSpeedRandomFactor(), dp.getHrRandomFactor());
+                    driverParameters.add(dp);
                     id++;
                 }
 
                 if (!PresetSimulation.isLoadPathsAndDriversFromHdd()) {
-                    CSVUtils.createDriversDataFile(String.valueOf(i + 1), simulatedSmartDrivers);
+                    CSVUtils.createDriversDataFile(String.valueOf(i + 1), driverParameters);
                 }
             }
 
@@ -380,14 +381,14 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         }
     }
 
-    private void initSimulatedSmartDriver(long id, LocationLog ll, int smartDriversBunch, double speedRandomFactor, double hrRandomFactor) throws MalformedURLException, HermesException {
+    private void initSimulatedSmartDriver(long id, int pathId, DriverParameters dp, int smartDriversBunch, double speedRandomFactor, double hrRandomFactor) throws MalformedURLException, HermesException {
 
-        SimulatedSmartDriver ssd = new SimulatedSmartDriver(id, ll, PresetSimulation.isLoopingSimulation(), streamServer.ordinal() % 2, retries, speedRandomFactor, hrRandomFactor);
+        SimulatedSmartDriver ssd = new SimulatedSmartDriver(id, pathId, dp, PresetSimulation.isLoopingSimulation(), streamServer.ordinal() % 2, retries, speedRandomFactor, hrRandomFactor);
         simulatedSmartDriverHashMap.put(ssd.getSha(), ssd);
 
         long delay = 0L;
         // Aplicamos el modo de inicio seleccionado a los SmartDrivers que creamos.
-        switch (startingMode) {
+        switch (PresetSimulation.getStartingMode()) {
             case ALEATORY:
                 Random rand = new Random();
                 delay = rand.nextInt(Constants.MAX_INITIAL_DELAY);
@@ -398,10 +399,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 delay = 10000 * (int) (id / smartDriversBunch);
                 break;
             case SAME_TIME:
-                break;
-            default:
-                // Por defecto se establecerá un inicio aleatorio.
-                startingMode = SmartDrivers_Starting_Mode.ALEATORY;
                 break;
         }
         // Aplicamos un pequeño retraso más el aplicado por el modo se inicio.
@@ -570,19 +567,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         scheduledDate = null;
     }
 
-    public int getStartingMode() {
-        return startingMode.ordinal();
-    }
-
-    public void setStartingMode(int sm) {
-        try {
-            startingMode = SmartDrivers_Starting_Mode.values()[sm];
-        } catch (Exception ex) {
-            // Si no fuera un valor válido, establecemos un valor por defecto.
-            startingMode = SmartDrivers_Starting_Mode.ALEATORY;
-        }
-    }
-
     private static void stopShutdownTimer() {
         if (emergencyScheduler != null) {
             emergencyScheduler.cancel(true);
@@ -624,6 +608,16 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
     public static long getStartSimulationTime() {
         return startSimulationTime;
+    }
+
+    public static List<LocationLogDetail> getPath(int pathId) {
+        try {
+            return locationLogList.get(pathId).getLocationLogDetailList();
+        } catch (Exception ex) {
+            LOG.log(Level.SEVERE, "getPath() - Error getting path {0}", pathId);
+        }
+
+        return new ArrayList();
     }
 
     class EmergencyShutdown implements Runnable {
