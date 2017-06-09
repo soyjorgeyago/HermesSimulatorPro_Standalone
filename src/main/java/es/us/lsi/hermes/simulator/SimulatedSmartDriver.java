@@ -50,12 +50,12 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
 
     private double sectionDistance;
     private double cummulativePositiveSpeeds;
-    
+
     // FIXME: Pass to MonitorizedDriver
     private int secondsCount;
     // FIXME: Pass to MonitorizedDriver
     private int secondsBetweenRetries;
-    
+
     private final int minRrTime;
     private final List<RoadSection> roadSectionList;
 
@@ -78,9 +78,10 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
     private boolean paused;
 
     private final int pathId;
-    private final DriverParameters driverParameters;
-    private final int[] pathPointsSecondsToBeHere;
+    private final double[] pathPointsSecondsToBeHere;
+    // FIXME: Removable?
     private final int[] pathPointsSpeed;
+    // FIXME: Removable?
     private final double[] pathPointsHR;
     private int direction;
 
@@ -117,7 +118,6 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         this.paused = false;
         this.pathId = pathId;
         this.direction = 1;
-        this.driverParameters = dp;
         this.roadSectionList = new ArrayList<>();
         this.pendingVehicleLocations = new ArrayList<>();
         this.pendingDataSections = new ArrayList<>();
@@ -131,18 +131,14 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         this.hrRandomFactor = hrRandomFactor;
 
         List<LocationLogDetail> lldlist = SimulatorController.getPath(pathId);
-        this.pathPointsSecondsToBeHere = new int[lldlist.size()];
+        this.pathPointsSecondsToBeHere = new double[lldlist.size()];
         this.pathPointsSpeed = new int[lldlist.size()];
         this.pathPointsHR = new double[lldlist.size()];
         for (int i = 0; i < lldlist.size(); i++) {
             LocationLogDetail lld = lldlist.get(i);
-            double speed = lld.getSpeed() * speedRandomFactor;
-
-            pathPointsSpeed[i] = (int) speed;
-            pathPointsSecondsToBeHere[i] = ((int) (Math.ceil(lld.getSecondsToBeHere() / speedRandomFactor)));
-
-            // Apply HR random factor.
-            pathPointsHR[i] = lld.getRrTime() * hrRandomFactor;
+            pathPointsSpeed[i] = (int) (Math.round(lld.getSpeed() * speedRandomFactor));
+            pathPointsSecondsToBeHere[i] = lld.getSecondsToBeHere() / speedRandomFactor;
+            pathPointsHR[i] = (int) (Math.round(lld.getRrTime() * hrRandomFactor));
         }
 
         init();
@@ -202,6 +198,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
                 throw new RuntimeException("Finished SmartDriver");
             }
 
+            // Check if there is a simulation time defined.
             if ((PresetSimulation.getMaxSimulationTimeMs() > 0)
                     && ((System.currentTimeMillis() - SimulatorController.getStartSimulationTime()) >= PresetSimulation.getMaxSimulationTimeMs())) {
                 // It has been reached the simulation time.
@@ -209,13 +206,6 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
                 return;
             }
 
-            // Lo primero que comprobamos es si se ha cumplido el tiempo máximo de simulación.
-            // Cada hilo comprobará el tiempo que lleva ejecutándose.
-            // JYFR: PRUEBA
-//            if ((System.currentTimeMillis() - SimulatorController.startSimulationTime) >= SimulatorController.MAX_SIMULATION_TIME) {
-//                // Se ha cumplido el tiempo, paramos la ejecución.
-//                finish();
-//            } else {
             LocationLogDetail currentLocationLogDetail = SimulatorController.getPath(pathId).get(getCurrentPosition());
 
             double distance;
@@ -225,7 +215,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
 
             LOG.log(Level.FINE, "SimulatedSmartDriver.run() - El usuario de SmartDriver se encuentra en: ({0}, {1})", new Object[]{currentLocationLogDetail.getLatitude(), currentLocationLogDetail.getLongitude()});
 
-            // Check if we can continue to next location
+            // Check if we can continue to next location.
             if (getPointToPointElapsedSeconds() >= pathPointsSecondsToBeHere[getCurrentPosition()]) {
                 // ¿Have we reached the destination?
                 if ((direction > 0 && getCurrentPosition() == pathPointsSecondsToBeHere.length - 1)
@@ -242,12 +232,16 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
                         resetPointToPointElapsedSeconds();
                     }
                 } else {
-                    // No hemos llegado al destino, avanzamos de posición.
                     int previousPosition = getCurrentPosition();
-                    setCurrentPosition(previousPosition + direction);
-                    if (getPointToPointElapsedSeconds() >= pathPointsSecondsToBeHere[getCurrentPosition()]) {
-                        resetPointToPointElapsedSeconds();
+
+                    double jumpSeconds = 0.0d;
+                    // We haven't reached the end, move to the corresponding next location.
+                    while (getPointToPointElapsedSeconds() > jumpSeconds) {
+                        setCurrentPosition(getCurrentPosition() + direction);
+                        jumpSeconds += pathPointsSecondsToBeHere[getCurrentPosition()];
                     }
+                    
+                    resetPointToPointElapsedSeconds();
 
                     currentLocationLogDetail = SimulatorController.getPath(pathId).get(getCurrentPosition());
 
