@@ -1,8 +1,14 @@
 package es.us.lsi.hermes.util;
 
+import es.us.lsi.hermes.simulator.SimulatorController;
+import static es.us.lsi.hermes.util.Constants.PROPERTIES_SERVER;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
 import java.net.InetAddress;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.net.UnknownHostException;
 import java.util.Map;
 import java.util.Properties;
@@ -93,6 +99,50 @@ public class Util {
      * @return Loaded properties file.
      */
     public static Properties initProperties(String propertiesFileName) {
+
+        Properties result = new Properties();
+
+        if (!SimulatorController.isLocalMode()) {
+            // Get from server.
+            result = getFromServer(propertiesFileName);
+        }
+
+        if (result.isEmpty()) {
+            // Get from local drive.
+            result = getFromLocal(propertiesFileName);
+        }
+
+        return result;
+    }
+
+    private static Properties getFromServer(String propertiesFileName) {
+        Properties result = new Properties();
+        Reader reader = null;
+        String propertiesInServer = Constants.PROPERTIES_SERVER + propertiesFileName;
+
+        try {
+            // Try to get files from Internet.
+            URL propertiesInServerUrl = new URL(propertiesInServer);
+            InputStream in = propertiesInServerUrl.openStream();
+            reader = new InputStreamReader(in, "UTF-8");
+            result.load(reader);
+        } catch (MalformedURLException ex) {
+            LOG.log(Level.SEVERE, "getFromServer() - Invalid URL: {0}", propertiesInServer);
+        } catch (IOException e) {
+            LOG.log(Level.SEVERE, "getFromServer() - Unable to get properties file: " + propertiesFileName + " from the server. Using the local version", e);
+        } finally {
+            if (reader != null) {
+                try {
+                    reader.close();
+                } catch (IOException ex) {
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private static Properties getFromLocal(String propertiesFileName) {
         Properties result = new Properties();
 
         try {
@@ -100,9 +150,9 @@ public class Util {
             InputStream input = classLoader.getResourceAsStream(propertiesFileName);
             result.load(input);
         } catch (IOException ex) {
-            LOG.log(Level.SEVERE, "initProperties() - Error loading properties file: " + propertiesFileName, ex);
+            LOG.log(Level.SEVERE, "getFromLocal() - Error loading properties file: " + propertiesFileName, ex);
         } catch (NullPointerException ex) {
-            LOG.log(Level.SEVERE, "initProperties() - File \'{0}\' not found", propertiesFileName);
+            LOG.log(Level.SEVERE, "getFromLocal() - File \'{0}\' not found", propertiesFileName);
         }
 
         return result;
@@ -128,7 +178,7 @@ public class Util {
             }
         } catch (UnknownHostException ex) {
         }
-        
+
         return "Unknown";
     }
 }

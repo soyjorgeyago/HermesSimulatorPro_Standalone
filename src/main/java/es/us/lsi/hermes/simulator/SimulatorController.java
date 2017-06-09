@@ -9,7 +9,6 @@ import es.us.lsi.hermes.location.detail.LocationLogDetail;
 import es.us.lsi.hermes.util.*;
 import java.io.Serializable;
 import java.net.MalformedURLException;
-import java.nio.file.Path;
 import java.text.MessageFormat;
 import java.util.*;
 import java.util.concurrent.*;
@@ -24,24 +23,6 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 public class SimulatorController implements Serializable, ISimulatorControllerObserver {
 
     private static final Logger LOG = Logger.getLogger(SimulatorController.class.getName());
-
-    // Ratio de ejecución para la simulación.
-    private enum Time_Rate {
-        X1(1000), X10(100), X100(10), X1000(1);
-        private final int milliseconds;
-
-        Time_Rate(int ms) {
-            this.milliseconds = ms;
-        }
-
-        public int getMilliseconds() {
-            return milliseconds;
-        }
-    }
-    // Por defecto será en tiempo real.
-    private static Time_Rate timeRate = Time_Rate.X1;
-
-    private static Constants.Paths_Generation_Method pathsGenerationMethod;
 
     private static List<LocationLog> locationLogList = new ArrayList<>();
 
@@ -61,10 +42,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     private static ScheduledFuture statusMonitorScheduler;
     private static String statusString;
 
-    // Directorio temporal para almacenar los archivos generados.
-    // TODO: Still necessary?
-    private static Path tempFolder;
-
     private static Date scheduledDate;
 
     private static ScheduledThreadPoolExecutor threadPool;
@@ -77,9 +54,11 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     private static volatile KafkaProducer<String, String> kafkaMonitoringProducer;
     private static Properties kafkaProducerProperties;
     private static Properties kafkaMonitoringProducerProperties;
+    private static boolean localMode;
 
-    public SimulatorController() {
-        LOG.log(Level.INFO, "SimulatorController() - Simulator controller init.");
+    public SimulatorController(boolean localMode) {
+        this.localMode = localMode;
+        LOG.log(Level.INFO, "SimulatorController() - Simulator controller init. LOCAL MODE: {0}", localMode);
 
         // Attribute initialization.
         initAttributes();
@@ -110,10 +89,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         LOG.log(Level.INFO, "initPresetSimulation() - It will be loaded the configuration set in the 'PresetSimulation.properties' file.");
         LOG.log(Level.INFO, "initPresetSimulation() - Default rule: If the property is not set in the properties file or is not valid, it will be get the inner default behaviour.");
 
-        // Default rule: If the property is not set in the properties file or is not valid, it will be get the inner default behaviour.
-        // Tiene que haber una coherencia entre trayectos y conductores, para no saturar el sistema.
-        setPathsGenerationMethod(PresetSimulation.getPathsGenerationMethod());
-
         // Use preset paths and drivers saved previously or get new ones.
         if (PresetSimulation.isLoadPathsAndDriversFromHdd()) {
             locationLogList = CSVUtils.loadPathsFromFolder();
@@ -140,15 +115,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
     public void configChanged() {
         currentState = State.CONFIG_CHANGED;
-    }
-
-    public void setPathsGenerationMethod(int value) {
-        try {
-            pathsGenerationMethod = Constants.Paths_Generation_Method.values()[value];
-        } catch (Exception ex) {
-            // Si no fuera un valor válido, establecemos un valor por defecto.
-            pathsGenerationMethod = Constants.Paths_Generation_Method.GOOGLE;
-        }
     }
 
     public boolean isButtonStartStopEnabled() {
@@ -277,7 +243,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         kafkaProducer = new KafkaProducer<>(kafkaProducerProperties);
         kafkaMonitoringProducer = new KafkaProducer<>(kafkaMonitoringProducerProperties);
 
-        tempFolder = StorageUtils.createTempFolder();
         startSimulationTime = System.currentTimeMillis();
         LOG.log(Level.INFO, "executeSimulation() - Comienzo de la simulación: {0}", Constants.dfISO8601.format(startSimulationTime));
         LOG.log(Level.INFO, "executeSimulation() - Se inicia el consumidor de análisis de vehículos cercanos");
@@ -294,9 +259,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
         // Creation of simulated Smart Drivers.
         String simulationSummary = MessageFormat.format(
-                "\n-> Simulation speed: {0}."
-                + "\n-> Real time execution: {1}"
-                + "\n-> ¿Retry failed messages?: {2}"
+                "\n-> ¿Retry failed messages?: {2}"
                 + "\n-> Seconds between retries: {3}"
                 + "\n-> SmartDrivers start mode: {4}"
                 + "\n-> Paths requested: {6}" + (pathNumberWarnings ? " Path generated {7} - WARNING" : "")
@@ -304,8 +267,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 + "\n-> Number of threads that will be created: {5}"
                 + "\n-> Maximum simulation time: {9}"
                 + "\n-> Paths and Drivers from disk: {10}",
-                timeRate.name(),
-                timeRate.equals(Time_Rate.X1),
                 PresetSimulation.isRetryOnFail(),
                 PresetSimulation.getIntervalBetweenRetriesInSeconds(),
                 PresetSimulation.getStartingMode().name(),
@@ -392,7 +353,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         // Aplicamos un pequeño retraso más el aplicado por el modo se inicio.
         long totalDelay = 100 + id + delay;
         LOG.log(Level.FINE, "SmartDriver {0} con inicio en {1}", new Object[]{id, totalDelay});
-        threadPool.scheduleAtFixedRate(ssd, totalDelay, timeRate.getMilliseconds(), TimeUnit.MILLISECONDS);
+        threadPool.scheduleAtFixedRate(ssd, totalDelay, 1000, TimeUnit.MILLISECONDS);
     }
 
     private void resetSimulation() {
@@ -414,19 +375,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         initAttributes();
 
         initThreadPool();
-    }
-
-    public int getSimulatedSpeed() {
-        return timeRate.ordinal();
-    }
-
-    public void setSimulatedSpeed(int tr) {
-        try {
-            timeRate = Time_Rate.values()[tr];
-        } catch (Exception ex) {
-            // Si no fuera un valor válido, establecemos un valor por defecto.
-            timeRate = Time_Rate.X1;
-        }
     }
 
     public static void smartDriverHasFinished(String id) {
@@ -490,10 +438,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 // https://issues.streamsets.com/browse/SDC-4925
             }
         }
-    }
-
-    public static Path getTempFolder() {
-        return tempFolder;
     }
 
     public static boolean isConfigLock() {
@@ -573,6 +517,10 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
     public static long getStartSimulationTime() {
         return startSimulationTime;
+    }
+
+    public static boolean isLocalMode() {
+        return localMode;
     }
 
     public static List<LocationLogDetail> getPath(int pathId) {

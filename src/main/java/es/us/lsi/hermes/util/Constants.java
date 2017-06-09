@@ -9,7 +9,7 @@ import java.util.ResourceBundle;
 import java.util.logging.Logger;
 
 public final class Constants {
-
+    
     private Constants() {
     }
 
@@ -68,4 +68,6 @@ public final class Constants {
 
     public static final String DATA_SECTION = "Data Section";
     public static final String VEHICLE_LOCATION = "Vehicle Location";
+
+    public static final String PROPERTIES_SERVER = "http://madeirasic.us.es/hermes/";
 }

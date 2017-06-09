@@ -43,7 +43,7 @@ public class PresetSimulation {
 
     static {
         LOG.log(Level.INFO, "PresetSimulation() - Preset configuration init.");
-
+        
         PRESET_SIMULATION_PROPERTIES = Util.initProperties("PresetSimulation.properties");
         validate();
     }

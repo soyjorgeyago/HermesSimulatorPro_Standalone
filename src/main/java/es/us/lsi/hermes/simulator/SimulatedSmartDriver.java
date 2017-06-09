@@ -79,7 +79,6 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
 
     private final int pathId;
     private final double[] pathPointsSecondsToBeHere;
-    // FIXME: Removable?
     private final int[] pathPointsSpeed;
     // FIXME: Removable?
     private final double[] pathPointsHR;
