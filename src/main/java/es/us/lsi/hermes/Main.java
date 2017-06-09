@@ -8,8 +8,12 @@ public class Main {
      * @param args the command line arguments
      */
     public static void main(String[] args) {
+        boolean localMode = false;
 
-        SimulatorController sc = new SimulatorController();
+        if (args.length > 0 && args[0].equalsIgnoreCase("LOCAL")) {
+            localMode = true;
+        }
+        SimulatorController sc = new SimulatorController(localMode);
         sc.simulate();
     }
 }

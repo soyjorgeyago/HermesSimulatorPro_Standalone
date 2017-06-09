@@ -1,7 +1,6 @@
 package es.us.lsi.hermes.util;
 
 import es.us.lsi.hermes.simulator.PresetSimulation;
-import es.us.lsi.hermes.simulator.SimulatorController;
 import joptsimple.internal.Strings;
 import java.io.File;
 import java.io.IOException;
@@ -89,7 +88,8 @@ public class StorageUtils {
                 folder = CSVUtils.PERMANENT_FOLDER_PATHS;
                 break;
             default:
-                folder = SimulatorController.getTempFolder();
+                folder = createTempFolder();
+                break;
         }
         String eventsFileNameCSV = fileNameHeader + fileNameWithExtension;
 

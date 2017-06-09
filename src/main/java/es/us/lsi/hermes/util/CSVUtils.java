@@ -121,7 +121,7 @@ public class CSVUtils {
             parameters.setCompressionLevel(Zip4jConstants.DEFLATE_LEVEL_ULTRA);
 
             // Creamos un archivo múltiple si supera los 25MB.
-            File[] temporalFolderFiles = SimulatorController.getTempFolder().toFile().listFiles();
+            File[] temporalFolderFiles = StorageUtils.createTempFolder().toFile().listFiles();
             if (temporalFolderFiles != null) {
                 zipFile.createZipFile(new ArrayList<>(Arrays.asList(temporalFolderFiles)), parameters, true, Constants.ZIP_FILE_SIZE);
             }
