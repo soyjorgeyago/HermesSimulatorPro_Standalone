@@ -1,16 +1,9 @@
 package es.us.lsi.hermes.util;
 
-import es.us.lsi.hermes.csv.ICSVBean;
 import es.us.lsi.hermes.location.LocationLog;
 import es.us.lsi.hermes.location.detail.LocationLogDetail;
 import es.us.lsi.hermes.simulator.PresetSimulation;
 import es.us.lsi.hermes.simulator.SimulatorController;
-import net.lingala.zip4j.core.ZipFile;
-import net.lingala.zip4j.exception.ZipException;
-import net.lingala.zip4j.model.ZipParameters;
-import net.lingala.zip4j.util.Zip4jConstants;
-import org.supercsv.cellprocessor.ParseDouble;
-import org.supercsv.cellprocessor.ParseInt;
 import org.supercsv.cellprocessor.ift.CellProcessor;
 import org.supercsv.io.CsvBeanReader;
 import org.supercsv.io.CsvBeanWriter;
@@ -20,7 +13,6 @@ import org.supercsv.prefs.CsvPreference;
 import java.io.*;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -32,28 +24,17 @@ public class CSVUtils {
     static final Path PERMANENT_FOLDER_PATHS = StorageUtils.createCsvFolders("Paths"),
             PERMANENT_FOLDER_DRIVERS = StorageUtils.createCsvFolders("Drivers");
 
-    public static void createDriversDataFile(String fileNameHeader, List<ICSVBean> driversList) {
+    public static void createDriversDataFile(String fileNameHeader, List<DriverParameters> driversList) {
         File driversFile = StorageUtils.generateCsvFile(fileNameHeader, "_driver.csv", "drivers");
-        exportToCSV(CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, false, driversFile, driversList);
+        exportToCSV(CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, false, driversFile, DriverParameters.getHeaders(), DriverParameters.getFields(), DriverParameters.getProcessors(), driversList);
     }
 
     static void createRouteDataFile(String fileNameHeader, List<LocationLogDetail> locationList) {
         File routesFile = StorageUtils.generateCsvFile(fileNameHeader, "_path.csv", "paths");
-        List<ICSVBean> convertedList = new ArrayList<ICSVBean>(locationList);
-        exportToCSV(CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, false, routesFile, convertedList);
+        exportToCSV(CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, false, routesFile,  LocationLogDetail.getHeaders(), LocationLogDetail.getFields(), LocationLogDetail.getProcessors(), locationList);
     }
 
-    private static void createStatusDataFile(String formattedCurrentTime, List<ICSVBean> statusList) {
-        File statusFile = StorageUtils.generateCsvFile(formattedCurrentTime, "_status.csv", null);
-        exportToCSV(CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, false, statusFile, statusList);
-    }
-
-    private static void createEventsDataFile(String formattedCurrentTime, List<ICSVBean> eventList) {
-        File eventsFile = StorageUtils.generateCsvFile(formattedCurrentTime, "_events.csv", null);
-        exportToCSV(CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, false, eventsFile, eventList);
-    }
-
-    private static void exportToCSV(CsvPreference csvPreference, boolean ignoreHeaders, File file, List<ICSVBean> itemList) {
+    private static void exportToCSV(CsvPreference csvPreference, boolean ignoreHeaders, File file, String[] headers, String[] fields, CellProcessor[] cellProcessors, List<?> itemList) {
 
         // Integrity check
         if (itemList == null || itemList.isEmpty()) {
@@ -66,21 +47,14 @@ public class CSVUtils {
         try {
             beanWriter = new CsvBeanWriter(new FileWriter(file), csvPreference);
 
-            ICSVBean bean = itemList.get(0);
-            // Seleccionamos los atributos que vamos a exportar.
-            final String[] fields = bean.getFields();
-
-            // Aplicamos las características de los campos.
-            final CellProcessor[] processors = bean.getProcessors();
-
             // If requested: Set the headers.
             if (!ignoreHeaders) {
-                beanWriter.writeHeader(bean.getHeaders() != null ? bean.getHeaders() : fields);
+                beanWriter.writeHeader(headers != null ? headers : fields);
             }
 
             // Procesamos los elementos.
-            for (final ICSVBean element : itemList) {
-                beanWriter.write(element, fields, processors);
+            for (final Object element : itemList) {
+                beanWriter.write(element, fields, cellProcessors);
             }
 
         } catch (IOException ex) {
@@ -98,50 +72,13 @@ public class CSVUtils {
         }
     }
 
-    public static ArrayList generateZippedCSV(List<ICSVBean> csvEventList, List<ICSVBean> csvStatusList) {
-        ArrayList zipFilesPathsList = new ArrayList();
-
-        try {
-            String formattedCurrentTime = Constants.dfFile.format(System.currentTimeMillis());
-
-            if (csvEventList != null && !csvEventList.isEmpty()) {
-                // Creamos un archivo temporal para el CSV con los datos de los eventos.
-                createEventsDataFile(formattedCurrentTime, csvEventList);
-            }
-
-            // Creamos un archivo temporal para el CSV con los estados de la simulación.
-            createStatusDataFile(formattedCurrentTime, csvStatusList);
-
-            // Creamos el archivo ZIP.
-            ZipFile zipFile = new ZipFile(formattedCurrentTime + ".zip");
-
-            // Inicializamos los parámetros de compresión del ZIP.
-            ZipParameters parameters = new ZipParameters();
-            parameters.setCompressionMethod(Zip4jConstants.COMP_DEFLATE);
-            parameters.setCompressionLevel(Zip4jConstants.DEFLATE_LEVEL_ULTRA);
-
-            // Creamos un archivo múltiple si supera los 25MB.
-            File[] temporalFolderFiles = StorageUtils.createTempFolder().toFile().listFiles();
-            if (temporalFolderFiles != null) {
-                zipFile.createZipFile(new ArrayList<>(Arrays.asList(temporalFolderFiles)), parameters, true, Constants.ZIP_FILE_SIZE);
-            }
-
-            zipFilesPathsList = zipFile.getSplitZipFiles();
-        } catch (ZipException ex) {
-            LOG.log(Level.SEVERE, "generateZippedCSV() - Error al crear el ZIP con los datos de todos los eventos y los estados del simulador", ex);
-        }
-
-        return zipFilesPathsList;
-    }
-
     public static List<LocationLog> loadPathsFromFolder() {
         if (PERMANENT_FOLDER_PATHS == null) {
             return null;
         }
 
         List<List<LocationLogDetail>> pathsLoaded = loadAllPathFiles(PERMANENT_FOLDER_PATHS,
-                CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, PresetSimulation.getPathsAmount(), new CellProcessor[]{
-            new ParseDouble(), new ParseDouble(), new ParseDouble(), new ParseInt(), new ParseInt()});
+                CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, PresetSimulation.getPathsAmount(), LocationLogDetail.getProcessors());
 
         if (pathsLoaded.isEmpty()) {
             LOG.log(Level.SEVERE, "No CSV files found under the directory: {0}", PERMANENT_FOLDER_PATHS);
@@ -193,7 +130,7 @@ public class CSVUtils {
         return loadedItems;
     }
     
-    private static List<List<DriverParameters>> loadLimitedFilesContentFromFolder(Path folder, CsvPreference csvPreference, int maxFiles, int maxByFile, CellProcessor[] cellProcessors, ICSVBean c) {
+    private static List<List<DriverParameters>> loadXSimulatedDriversFromFolder(Path folder, CsvPreference csvPreference, int maxFiles, int maxByFile) {
         File[] temporalFolderFiles = folder.toFile().listFiles();
         List<List<DriverParameters>> loadedItems = new ArrayList<>();
 
@@ -201,7 +138,7 @@ public class CSVUtils {
         if (temporalFolderFiles != null) {
             for (File aux : temporalFolderFiles) {
                 if (aux.getName().contains(".csv")) {
-                    loadedItems.add(loadLimitedCsvFile(aux, csvPreference, cellProcessors, maxByFile));
+                    loadedItems.add(loadLimitedCsvFile(aux, csvPreference, DriverParameters.getProcessors(), maxByFile));
                     csvCounter++;
                 }
 
@@ -288,6 +225,6 @@ public class CSVUtils {
             return null;
         }
 
-        return loadLimitedFilesContentFromFolder(PERMANENT_FOLDER_DRIVERS, CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, PresetSimulation.getPathsAmount(), PresetSimulation.getDriversByPath(), new CellProcessor[]{new ParseDouble(), new ParseDouble()}, new DriverParameters());
+        return loadXSimulatedDriversFromFolder(PERMANENT_FOLDER_DRIVERS, CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, PresetSimulation.getPathsAmount(), PresetSimulation.getDriversByPath());
     }
 }

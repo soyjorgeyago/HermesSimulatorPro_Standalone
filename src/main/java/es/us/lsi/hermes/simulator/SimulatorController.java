@@ -1,7 +1,6 @@
 package es.us.lsi.hermes.simulator;
 
 import com.google.gson.Gson;
-import es.us.lsi.hermes.csv.ICSVBean;
 import es.us.lsi.hermes.csv.SimulatorStatus;
 import es.us.lsi.hermes.location.LocationLog;
 import es.us.lsi.hermes.kafka.Kafka;
@@ -178,7 +177,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                     currentMeanSmartDriversDelayMs = (int) Math.ceil(totalDelaysMs / activeSmartDrivers);
                 }
                 statusString = MessageFormat.format("ESTADO: Tramas generadas={0}|Envíos realizados={1}|Oks={2}|NoOks={3}|Errores={4}|Recuperados={5}|No reenviados finalmente={6}|Hilos restantes={7}|Máximo retraso temporal total={8}ms|Retraso temporal actual={9}ms", generated, sent, oks, notOks, errors, recovered, pending, threadPool.getQueue().size(), maxSmartDriversDelayMs, currentMeanSmartDriversDelayMs);
-                LOG.log(Level.FINE, "logCurrentStatus() - " + statusString);
+                LOG.log(Level.FINE, "logCurrentStatus() - {0}", statusString);
 
                 String json = new Gson().toJson(new SimulatorStatus(System.currentTimeMillis(), generated, sent, oks, notOks, errors, recovered, pending, activeSmartDrivers, currentMeanSmartDriversDelayMs, pausedSimulatedSmartDrivers.size()));
                 LOG.log(Level.FINE, "statusMonitorTimer() - Simulation status JSON: {0}", json);
@@ -259,14 +258,14 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
         // Creation of simulated Smart Drivers.
         String simulationSummary = MessageFormat.format(
-                "\n-> ¿Retry failed messages?: {2}"
-                + "\n-> Seconds between retries: {3}"
-                + "\n-> SmartDrivers start mode: {4}"
-                + "\n-> Paths requested: {6}" + (pathNumberWarnings ? " Path generated {7} - WARNING" : "")
-                + "\n-> Drivers per paths requested: {8}"
-                + "\n-> Number of threads that will be created: {5}"
-                + "\n-> Maximum simulation time: {9}"
-                + "\n-> Paths and Drivers from disk: {10}",
+                "\n-> ¿Retry failed messages?: {0}"
+                + "\n-> Seconds between retries: {1}"
+                + "\n-> SmartDrivers start mode: {2}"
+                + "\n-> Paths requested: {4}" + (pathNumberWarnings ? " Path generated {5} - WARNING" : "")
+                + "\n-> Drivers per paths requested: {6}"
+                + "\n-> Number of threads that will be created: {3}"
+                + "\n-> Maximum simulation time: {7}"
+                + "\n-> Paths and Drivers from disk: {8}",
                 PresetSimulation.isRetryOnFail(),
                 PresetSimulation.getIntervalBetweenRetriesInSeconds(),
                 PresetSimulation.getStartingMode().name(),
@@ -293,7 +292,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
                 LOG.log(Level.FINE, "executeSimulation() - Cada 10 segundos, se iniciarán {0} SmartDrivers en el trayecto {1}", new Object[]{smartDriversBunch, i});
 
-                List<ICSVBean> driverParameters = new ArrayList<>();
+                List<DriverParameters> driverParameters = new ArrayList<>();
                 for (int j = 0; j < PresetSimulation.getDriversByPath(); j++) {
 
                     DriverParameters dp;
