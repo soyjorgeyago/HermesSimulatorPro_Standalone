@@ -1,7 +1,6 @@
 package es.us.lsi.hermes.util;
 
 import es.us.lsi.hermes.simulator.SimulatorController;
-import static es.us.lsi.hermes.util.Constants.PROPERTIES_SERVER;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -29,18 +28,13 @@ public class Util {
     }
 
     public static String minutesToTimeString(int minutes) {
-
         long hours = TimeUnit.MINUTES.toHours(minutes);
         long remainMinutes = minutes - TimeUnit.HOURS.toMinutes(hours);
         return String.format("%02d:%02d", hours, remainMinutes);
     }
 
     public static boolean isValidEmail(String email) {
-        if (email == null || email.length() == 0) {
-            return false;
-        }
-
-        return email.matches(EMAIL_PATTERN);
+        return email != null && email.length() != 0 && email.matches(EMAIL_PATTERN);
     }
 
     public static boolean isAlphaNumeric(String s) {
@@ -128,13 +122,14 @@ public class Util {
             result.load(reader);
         } catch (MalformedURLException ex) {
             LOG.log(Level.SEVERE, "getFromServer() - Invalid URL: {0}", propertiesInServer);
-        } catch (IOException e) {
-            LOG.log(Level.SEVERE, "getFromServer() - Unable to get properties file: " + propertiesFileName + " from the server. Using the local version", e);
+        } catch (IOException ex) {
+            LOG.log(Level.SEVERE, "getFromServer() - Unable to get properties file: " + propertiesFileName + " from the server. Using the local version", ex);
         } finally {
             if (reader != null) {
                 try {
                     reader.close();
                 } catch (IOException ex) {
+                    LOG.log(Level.SEVERE, "getFromServer() - Unable to close the reader.", ex);
                 }
             }
         }
@@ -172,13 +167,14 @@ public class Util {
             } else if (env.containsKey("HOSTNAME")) {
                 return env.get("HOSTNAME");
             } else {
-                InetAddress addr;
-                addr = InetAddress.getLocalHost();
-                return (addr.getHostName());
+                return (InetAddress.getLocalHost().getHostName());
             }
         } catch (UnknownHostException ex) {
+            return "Unknown";
         }
+    }
 
-        return "Unknown";
+    public static int getHrFromRr(int rrTime){
+        return (int) Math.ceil(60.0d / (rrTime / 1000.0d));
     }
 }

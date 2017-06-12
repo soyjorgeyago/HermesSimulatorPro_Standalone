@@ -473,7 +473,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     public void update(String id, int surroundingSize) {
         SimulatedSmartDriver ssd = simulatedSmartDriverHashMap.get(id);
         if (ssd != null) {
-            ssd.stressBySurrounding(surroundingSize);
+            ssd.stressForSurrounding(surroundingSize);
         }
     }
 

@@ -332,8 +332,6 @@ public class PathUtils {
 
         double latitudeFragment = (lld2.getLatitude() - lld1.getLatitude()) / numberOfInnerLocations;
         double longitudeFragment = (lld2.getLongitude() - lld1.getLongitude()) / numberOfInnerLocations;
-        double heartRateFragment = (double) (lld2.getHeartRate() - lld1.getHeartRate()) / numberOfInnerLocations;
-        double rrFragment = (double) (lld2.getRrTime() - lld1.getRrTime()) / numberOfInnerLocations;
         double speedFragment = (double) (lld2.getSpeed() - lld1.getSpeed()) / numberOfInnerLocations;
 
         for (int i = 0; i < numberOfInnerLocations; i++) {
@@ -342,8 +340,6 @@ public class PathUtils {
             lld.setLatitude(i * latitudeFragment + lld1.getLatitude());
             lld.setLongitude(i * longitudeFragment + lld1.getLongitude());
             lld.setSpeed((int) (i * speedFragment + lld1.getSpeed()));
-            lld.setHeartRate((int) (i * heartRateFragment + lld1.getHeartRate()));
-            lld.setRrTime((int) (i * rrFragment + lld1.getRrTime()));
             lld.setSecondsToRemainHere(1);
 
             lldListBetween.add(lld);
