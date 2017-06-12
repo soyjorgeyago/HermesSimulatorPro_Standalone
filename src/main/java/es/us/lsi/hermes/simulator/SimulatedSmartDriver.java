@@ -57,11 +57,10 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
     // FIXME: Pass to MonitorizedDriver
     private int secondsBetweenRetries;
 
-    private final int minRrTime;
     private final List<RoadSection> roadSectionList;
 
+    //FIXME local or dynamically calculated speed
     private double speedRandomFactor;
-    private double hrRandomFactor;
 
     // Listas con los 'VehicleLocation' y 'DataSection' que han fallado en su envío correspondiente, para poder reintentar su envío.
     private final List<ExtendedEvent> pendingVehicleLocations;
@@ -86,8 +85,9 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
     private final int pathId;
     private final double[] pathPointsSecondsToBeHere;
     private final int[] pathPointsSpeed;
-    // FIXME: Removable?
-    private final double[] pathPointsHR;
+
+    private int rrTime;
+    private final int MAX_RR, MIN_RR;
     private int direction;
 
     /**
@@ -118,8 +118,6 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         this.secondsCount = 0;
         this.secondsBetweenRetries = 0;
         this.stressLoad = 0; // Suponemos que inicialmente no está estresado.
-        int age = ThreadLocalRandom.current().nextInt(18, 65 + 1); // Simularemos conductores de distintas edades (entre 18 y 65 años), para establecer el ritmo cardíaco máximo en la simulación.
-        this.minRrTime = (int) Math.ceil(60000.0d / (220 - age)); // Mínimo R-R, que establecerá el ritmo cardíaco máximo.
         this.sha = new String(Hex.encodeHex(DigestUtils.sha256(random + "@sim.com")));
         this.infiniteSimulation = infiniteSimulation;
         this.retries = retries;
@@ -129,6 +127,12 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         this.roadSectionList = new ArrayList<>();
         this.pendingVehicleLocations = new ArrayList<>();
         this.pendingDataSections = new ArrayList<>();
+
+        int age = ThreadLocalRandom.current().nextInt(18, 65 + 1); // Drivers between 18 and 65 years.
+        this.rrTime = (int) (Constants.RR_TIME * hrRandomFactor);
+        this.MIN_RR = (int) Math.ceil(60000.0d / (220 - age)); // Min R-R, to establish the max HR.
+        this.MAX_RR = (int) Math.ceil(240000.0d / (220 - age)); // Max R-R, to establish the min HR.
+
         //FIXME por Raul
 //        this.pathIndex = pathIndex;
 //        this.pathPointsCount = pathPointsCount;
@@ -139,18 +143,15 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         }
 
         this.speedRandomFactor = speedRandomFactor;
-        this.hrRandomFactor = hrRandomFactor;
 
         //FIXME por Jorge
-        List<LocationLogDetail> lldlist = SimulatorController.getPath(pathId);
-        this.pathPointsSecondsToBeHere = new double[lldlist.size()];
-        this.pathPointsSpeed = new int[lldlist.size()];
-        this.pathPointsHR = new double[lldlist.size()];
-        for (int i = 0; i < lldlist.size(); i++) {
-            LocationLogDetail lld = lldlist.get(i);
-            pathPointsSpeed[i] = (int) (Math.round(lld.getSpeed() * speedRandomFactor));
-            pathPointsSecondsToBeHere[i] = lld.getSecondsToRemainHere() / speedRandomFactor;
-            pathPointsHR[i] = (int) (Math.round(lld.getRrTime() * hrRandomFactor));
+        List<LocationLogDetail> path = SimulatorController.getPath(pathId);
+        this.pathPointsSecondsToBeHere = new double[path.size()];
+        this.pathPointsSpeed = new int[path.size()];
+        for (int position = 0; position < path.size(); position++) {
+            LocationLogDetail location = path.get(position);
+            pathPointsSpeed[position] = (int) (Math.round(location.getSpeed() * speedRandomFactor));
+            pathPointsSecondsToBeHere[position] = location.getSecondsToRemainHere() / speedRandomFactor;
         }
 
         init();
@@ -395,33 +396,16 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         // Si hay un salto grande de velocidad, suponemos una componente de estrés.
         stressForSpeed(speedDiff);
 
-        // Analizamos el ritmo cardíaco,
-        // Medimos las unidades de estrés y dibujamos el marker del color correspondiente (verde -> sin estrés, amarillo -> ligeramente estresado, rojo -> estresado)
-        if (stressLoad == 0) {
-            // No hay estrés.
+        // If the user is calming down, decrease the HR, else, increase it. (stress based increment and decrement)
+        if (relaxing) {
+            rrTime -= 20 * (5 - stressLoad);
+            if(rrTime < MIN_RR)
+                rrTime = MIN_RR;
         } else {
-            // Si se está calmando, le subimos el intervalo RR y si se está estresando, le bajamos el intervalo RR.
-            if (relaxing) {
-                if (stressLoad > 0) {
-                    pathPointsHR[getCurrentPosition()] = pathPointsHR[getCurrentPosition() - 1] - ((pathPointsHR[getCurrentPosition() - 1] - pathPointsHR[getCurrentPosition()]) / stressLoad);
-                }
-            } else if (stressLoad < 5) {
-                pathPointsHR[getCurrentPosition()] = pathPointsHR[getCurrentPosition() - 1] - (minRrTime / stressLoad);
-            } else {
-                // Establecemos un mínimo R-R en función de la edad del conductor.
-                currentLocationLogDetail.setRrTime(minRrTime);
-            }
-
-            if (stressLoad < 5) {
-                // Existe una situación de estrés 'ligero'.
-                // Para que Víctor pueda detectar una situación de estrés, debe haber una diferencia de 50ms en el RR.
-            } else {
-                //  Estrés elevado.
-            }
+            rrTime += 20 * stressLoad;
+            if(rrTime > MAX_RR)
+                rrTime = MAX_RR;
         }
-
-        // Calculamos el ritmo cardíaco a partir del intervalo RR.
-        currentLocationLogDetail.setHeartRate((int) Math.ceil(60.0d / (currentLocationLogDetail.getRrTime() / 1000.0d)));
 
         // Acumulamos la distancia recorrida.
         sectionDistance += distance;
@@ -436,8 +420,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         rs.setLongitude(currentLocationLogDetail.getLongitude());
         int tDiff = (currentLocationLogDetail.getSecondsToRemainHere() - previousLocationLogDetail.getSecondsToRemainHere());
         rs.setSpeed(tDiff > 0 ? distance * 3.6 / tDiff : previousLocationLogDetail.getSpeed());
-        rs.setHeartRate(currentLocationLogDetail.getHeartRate());
-        rs.setRrTime(currentLocationLogDetail.getRrTime());
+        rs.setHeartRate(Util.getHrFromRr(rrTime));
         rs.setAccuracy(0);
 
         roadSectionList.add(rs);
@@ -492,7 +475,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         }
     }
 
-    public void stressBySurrounding(int surroundingVehicles) {
+    void stressForSurrounding(int surroundingVehicles) {
         // Graduación del estrés por cambios de la velocidad
         if (surroundingVehicles < 10) {
             //  Es una variación de velocidad moderada.
@@ -717,30 +700,6 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         }
     }
 
-    public double getSpeedRandomFactor() {
-        return speedRandomFactor;
-    }
-
-    public double getHrRandomFactor() {
-        return hrRandomFactor;
-    }
-
-    //FIXME por Raul
-//    private LocationLog getLocationLog(){
-//        return SimulatorController.getLocationLogList().get(pathIndex);
-//    }
-//    private LocationLogDetail getLocationLogDetailByPos(int pos){
-//        return getLocationLog().getLocationLogDetailList().get(pos);
-//    }
-
-    public void setSpeedRandomFactor(double speedRandomFactor) {
-        this.speedRandomFactor = speedRandomFactor;
-    }
-
-    public void setHrRandomFactor(double hrRandomFactor) {
-        this.hrRandomFactor = hrRandomFactor;
-    }
-
     public synchronized void pauseSmartDriver() throws InterruptedException {
         paused = true;
     }
@@ -861,7 +820,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
     @Override
     public void update(String id, int surroundingSize) {
         if (id.equals(sha)) {
-            stressBySurrounding(surroundingSize);
+            stressForSurrounding(surroundingSize);
         }
     }
 }
