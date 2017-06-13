@@ -23,7 +23,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
     private static final Logger LOG = Logger.getLogger(SimulatorController.class.getName());
 
-    private static List<LocationLog> locationLogList = new ArrayList<>();
 
     private static long startSimulationTime = 0L;
     private static long endSimulationTime = 0L;
@@ -34,18 +33,15 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     private static State currentState = State.READY_TO_SIMULATE;
 
     private static volatile SurroundingVehiclesConsumer surroundingVehiclesConsumer;
-    private static ConcurrentHashMap<String, SimulatedSmartDriver> simulatedSmartDriverHashMap = new ConcurrentHashMap<>();
 
-    private static ScheduledFuture emergencyScheduler;
-    private static ScheduledFuture simulationScheduler;
-    private static ScheduledFuture statusMonitorScheduler;
+    private static ConcurrentHashMap<String, SimulatedSmartDriver> simulatedSmartDriverHashMap = new ConcurrentHashMap<>();
+    private static List<LocationLog> locationLogList = new ArrayList<>();
+
+    private static ScheduledFuture emergencyScheduler, simulationScheduler, statusMonitorScheduler;
+    private static ScheduledThreadPoolExecutor threadPool;
     private static String statusString;
 
     private static Date scheduledDate;
-
-    private static ScheduledThreadPoolExecutor threadPool;
-
-    private static int retries = 5;
 
     // Kafka
     private static AtomicLong kafkaRecordId;
@@ -56,7 +52,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     private static boolean localMode;
 
     public SimulatorController(boolean localMode) {
-        this.localMode = localMode;
+        SimulatorController.localMode = localMode;
         LOG.log(Level.INFO, "SimulatorController() - Simulator controller init. LOCAL MODE: {0}", localMode);
 
         // Attribute initialization.
@@ -96,7 +92,9 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         }
 
         // Initialize path related attributes to perform the simulation
-        setupVariablesWithPaths(locationLogList.size());
+        if(locationLogList != null) {
+            setupVariablesWithPaths(locationLogList.size());
+        }
     }
 
     private void setupVariablesWithPaths(int locationLogListSize) {
@@ -176,7 +174,11 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 if (activeSmartDrivers > 0) {
                     currentMeanSmartDriversDelayMs = (int) Math.ceil(totalDelaysMs / activeSmartDrivers);
                 }
-                statusString = MessageFormat.format("ESTADO: Tramas generadas={0}|Envíos realizados={1}|Oks={2}|NoOks={3}|Errores={4}|Recuperados={5}|No reenviados finalmente={6}|Hilos restantes={7}|Máximo retraso temporal total={8}ms|Retraso temporal actual={9}ms", generated, sent, oks, notOks, errors, recovered, pending, threadPool.getQueue().size(), maxSmartDriversDelayMs, currentMeanSmartDriversDelayMs);
+                statusString = MessageFormat.format("ESTADO: Tramas generadas={0}|Envíos realizados={1}" +
+                        "|Oks={2}|NoOks={3}|Errores={4}|Recuperados={5}|No reenviados finalmente={6}" +
+                        "|Hilos restantes={7}|Máximo retraso temporal total={8}ms|Retraso temporal actual={9}ms",
+                        generated, sent, oks, notOks, errors, recovered, pending, threadPool.getQueue().size(),
+                        maxSmartDriversDelayMs, currentMeanSmartDriversDelayMs);
                 LOG.log(Level.FINE, "logCurrentStatus() - {0}", statusString);
 
                 String json = new Gson().toJson(new SimulatorStatus(System.currentTimeMillis(), generated, sent, oks, notOks, errors, recovered, pending, activeSmartDrivers, currentMeanSmartDriversDelayMs, pausedSimulatedSmartDrivers.size()));
@@ -292,9 +294,11 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 int pathPointsCount = locationLogList.get(pathIndex).getLocationLogDetailList().size();
 
                 // Para el caso del modo de inicio LINEAL, si hay más de 10 SmartDrivers, se toma el 10% para repartir su inicio durante 50 segundos.
-                int smartDriversBunch = PresetSimulation.getDriversByPath() > 10 ? (int) (PresetSimulation.getDriversByPath() * 0.10) : 1;
+                int smartDriversBunch = PresetSimulation.getDriversByPath() > 10 ?
+                        (int) (PresetSimulation.getDriversByPath() * 0.1) : 1;
 
-                LOG.log(Level.FINE, "executeSimulation() - Cada 10 segundos, se iniciarán {0} SmartDrivers en el trayecto {1}", new Object[]{smartDriversBunch, pathIndex});
+                LOG.log(Level.FINE, "executeSimulation() - Cada 10 segundos, se iniciarán {0} SmartDrivers en " +
+                        "el trayecto {1}", new Object[]{smartDriversBunch, pathIndex});
 
                 List<DriverParameters> driverParameters = new ArrayList<>();
                 for (int driverIndex = 0; driverIndex < PresetSimulation.getDriversByPath(); driverIndex++) {
@@ -315,8 +319,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                     //FIXME por Raul
 //                    initSimulatedSmartDriver(id, pathIndex, pathPointsCount, smartDriversBunch,
 //                            driverParams.getSpeedRandomFactor(), driverParams.getHrRandomFactor());
-                    initSimulatedSmartDriver(id, pathIndex, driverParams, smartDriversBunch,
-                            driverParams.getSpeedRandomFactor(), driverParams.getHrRandomFactor());
+                    initSimulatedSmartDriver(id, pathIndex, driverParams, smartDriversBunch);
                     driverParameters.add(driverParams);
                     id++;
                 }
@@ -337,13 +340,10 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         }
     }
 
-    private void initSimulatedSmartDriver(long id, int pathId, DriverParameters dp, int smartDriversBunch, double speedRandomFactor, double hrRandomFactor) throws MalformedURLException, HermesException {
-//    //FIXME por Raul
-//    private void initSimulatedSmartDriver(long id, int pathIndex, int pathPointsCount, int smartDriversBunch, double speedRandomFactor, double hrRandomFactor) throws MalformedURLException, HermesException {
+    private void initSimulatedSmartDriver(long id, int pathId, DriverParameters dp, int smartDriversBunch)
+            throws MalformedURLException, HermesException {
 
-        SimulatedSmartDriver ssd = new SimulatedSmartDriver(id, pathId, dp, PresetSimulation.isLoopingSimulation(), retries, speedRandomFactor, hrRandomFactor);
-        //FIXME por Raul
-//        SimulatedSmartDriver ssd = new SimulatedSmartDriver(id, pathIndex, pathPointsCount, PresetSimulation.isLoopingSimulation(), streamServer.ordinal() % 2, retries, speedRandomFactor, hrRandomFactor);
+        SimulatedSmartDriver ssd = new SimulatedSmartDriver(id, pathId, dp);
 
         simulatedSmartDriverHashMap.put(ssd.getSha(), ssd);
 
@@ -472,7 +472,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     public void update(String id, int surroundingSize) {
         SimulatedSmartDriver ssd = simulatedSmartDriverHashMap.get(id);
         if (ssd != null) {
-            ssd.stressForSurrounding(surroundingSize);
+            ssd.stressDueToSurrounding(surroundingSize);
         }
     }
 
@@ -505,14 +505,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
     public static boolean isKafkaProducerPerSmartDriver() {
         return PresetSimulation.isKafkaProducerPerSmartDriver();
-    }
-
-    public int getRetries() {
-        return retries;
-    }
-
-    public void setRetries(int r) {
-        retries = r;
     }
 
     public static long getNextKafkaRecordId() {
@@ -553,7 +545,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         // Tiempo máximo de simulación.
         private final long duration;
 
-        public EmergencyShutdown(long start, long duration) {
+        EmergencyShutdown(long start, long duration) {
             this.startSimulationTime = start;
             this.duration = duration;
         }

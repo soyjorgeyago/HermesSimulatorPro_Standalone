@@ -50,7 +50,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
     private boolean locationChanged;
 
     private double sectionDistance;
-    private double cummulativePositiveSpeeds;
+    private double cumulativePositiveSpeeds;
 
     // FIXME: Pass to MonitorizedDriver
     private int secondsCount;
@@ -66,29 +66,18 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
     private final List<ExtendedEvent> pendingVehicleLocations;
     private final List<ExtendedEvent> pendingDataSections;
 
-    // Identificador del 'FutureTask' correspondiente al hilo del SmartDriver.
-    private final long id;
-    // Identificador único del SmartDriver.
-    private final String sha;
-
-    //FIXME por Raul
-//    private final int pathIndex;
-//    private final int pathPointsCount;
+    private final long id;      // Identificador del 'FutureTask' correspondiente al hilo del SmartDriver.
+    private final String sha;   // Identificador único del SmartDriver.
 
     private SurroundingVehiclesConsumer surroundingVehiclesConsumer = null;
-
-    private final boolean infiniteSimulation;
-    private final int retries;
     private boolean paused;
 
-    //FIXME por Jorge
     private final int pathId;
     private final double[] pathPointsSecondsToBeHere;
-    private final int[] pathPointsSpeed;
-
     private int rrTime;
     private final int MAX_RR, MIN_RR;
     private int direction;
+    private int speed;
 
     /**
      * Constructor para cada instancia de 'SmartDriver'.
@@ -97,61 +86,49 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
 //     * @param ll Contendrá los datos de la ruta que debe seguir.
 //     * @param randomBehaviour Indicará si tendrá una componente aleatoria en su
      * comportamiento. no.
-     * @param infiniteSimulation Indicará si se debe parar la simulación o
+//     * @param infiniteSimulation Indicará si se debe parar la simulación o
      * volver de vuelta cada SmartDriver, cuando llegue a su destino.
 //     * @param streamServer Indicará el servidor de tramas que recibirá la
      * información de la simulación.
-     * @param retries Indicará el número de reintentos de envío de una trama
+//     * @param retries Indicará el número de reintentos de envío de una trama
      * fallida, antes de descartarla.
      *
 //     * @throws MalformedURLException
 //     * @throws HermesException
      */
-    public SimulatedSmartDriver(long id, int pathId, DriverParameters dp, boolean infiniteSimulation, int retries, double speedRandomFactor, double hrRandomFactor) throws MalformedURLException, HermesException {
-    //FIXME por Raul
-//    public SimulatedSmartDriver(long id, int pathIndex, int pathPointsCount, boolean infiniteSimulation, int streamServer, int retries, double speedRandomFactor, double hrRandomFactor) throws MalformedURLException, HermesException {
+    public SimulatedSmartDriver(long id, int pathId, DriverParameters dp) throws MalformedURLException, HermesException {
         final SecureRandom random = new SecureRandom();
         this.id = id;
         this.locationChanged = false;
         this.sectionDistance = 0.0d;
-        this.cummulativePositiveSpeeds = 0.0d;
+        this.cumulativePositiveSpeeds = 0.0d;
         this.secondsCount = 0;
         this.secondsBetweenRetries = 0;
         this.stressLoad = 0; // Suponemos que inicialmente no está estresado.
         this.sha = new String(Hex.encodeHex(DigestUtils.sha256(random + "@sim.com")));
-        this.infiniteSimulation = infiniteSimulation;
-        this.retries = retries;
         this.paused = false;
         this.pathId = pathId;
         this.direction = 1;
         this.roadSectionList = new ArrayList<>();
         this.pendingVehicleLocations = new ArrayList<>();
         this.pendingDataSections = new ArrayList<>();
+        this.speedRandomFactor = dp.getSpeedRandomFactor();
+        this.speed = 0;
 
         int age = ThreadLocalRandom.current().nextInt(18, 65 + 1); // Drivers between 18 and 65 years.
-        this.rrTime = (int) (Constants.RR_TIME * hrRandomFactor);
+        this.rrTime = (int) (Constants.RR_TIME * dp.getHrRandomFactor());
         this.MIN_RR = (int) Math.ceil(60000.0d / (220 - age)); // Min R-R, to establish the max HR.
         this.MAX_RR = (int) Math.ceil(240000.0d / (220 - age)); // Max R-R, to establish the min HR.
-
-        //FIXME por Raul
-//        this.pathIndex = pathIndex;
-//        this.pathPointsCount = pathPointsCount;
 
 //        // TODO: Probar otros timeouts más altos.
         if (PresetSimulation.isKafkaProducerPerSmartDriver()) {
             this.surroundingVehiclesConsumer = new SurroundingVehiclesConsumer(this);
         }
 
-        this.speedRandomFactor = speedRandomFactor;
-
-        //FIXME por Jorge
         List<LocationLogDetail> path = SimulatorController.getPath(pathId);
         this.pathPointsSecondsToBeHere = new double[path.size()];
-        this.pathPointsSpeed = new int[path.size()];
         for (int position = 0; position < path.size(); position++) {
-            LocationLogDetail location = path.get(position);
-            pathPointsSpeed[position] = (int) (Math.round(location.getSpeed() * speedRandomFactor));
-            pathPointsSecondsToBeHere[position] = location.getSecondsToRemainHere() / speedRandomFactor;
+            pathPointsSecondsToBeHere[position] = path.get(position).getSecondsToRemainHere() / speedRandomFactor;
         }
 
         init();
@@ -239,9 +216,6 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
                 } else {
                     // Update the current location
                     currentLocationLogDetail = updateCurrentPosition(currentLocationLogDetail);
-
-                    //FIXME por Raul
-//                    resetPointToPointElapsedSeconds();
                 }
             }
 
@@ -335,16 +309,8 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         }
     }
 
-
-    //FIXME por Raul
-//    private int rrTime;
-//    private int heartRate;
-//    private int direction = 1;  // Controls the direction to iterate over the path.
-//    private int secondsToRemainHere = -1;
-//    private double speed = -1;
-
     private void finishOrRepeat() {
-        if (!infiniteSimulation) {
+        if (!PresetSimulation.isLoopingSimulation()) {
             // Notificamos que ha terminado el SmartDriver actual.
             SimulatorController.smartDriverHasFinished(this.getSha());
 
@@ -388,13 +354,13 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
             double bearingDiff = Math.abs(bearing - previousBearing);
 
             // Si hay una desviación brusca de la trayectoria, suponemos una componente de estrés.
-            stressForDeviation(bearingDiff);
+            stressDueToDeviation(bearingDiff);
         }
 
-        double speedDiff = Math.abs(pathPointsSpeed[getCurrentPosition()] - pathPointsSpeed[getCurrentPosition() - 1]);
+        double speedDiff = Math.abs(Math.round(currentLocationLogDetail.getSpeed() * speedRandomFactor) - speed);
 
         // Si hay un salto grande de velocidad, suponemos una componente de estrés.
-        stressForSpeed(speedDiff);
+        stressDueToSpeed(speedDiff);
 
         // If the user is calming down, decrease the HR, else, increase it. (stress based increment and decrement)
         if (relaxing) {
@@ -411,27 +377,29 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         sectionDistance += distance;
 
         // Hacemos el análisis del PKE (Positive Kinetic Energy)
-        cummulativePositiveSpeeds += analyzePKE(currentLocationLogDetail, previousLocationLogDetail);
+        cumulativePositiveSpeeds += analyzePKE(currentLocationLogDetail, previousLocationLogDetail);
 
         // Creamos un elementos de tipo 'RoadSection', para añadirlo al 'DataSection' que se envía a 'Ztreamy' cada 500 metros.
         RoadSection rs = new RoadSection();
         rs.setTime(System.currentTimeMillis());
         rs.setLatitude(currentLocationLogDetail.getLatitude());
         rs.setLongitude(currentLocationLogDetail.getLongitude());
+        //TODO - Check - Not using the updated values
         int tDiff = (currentLocationLogDetail.getSecondsToRemainHere() - previousLocationLogDetail.getSecondsToRemainHere());
-        rs.setSpeed(tDiff > 0 ? distance * 3.6 / tDiff : previousLocationLogDetail.getSpeed());
+        rs.setSpeed(tDiff > 0 ? distance * 3.6 / tDiff : speed);
         rs.setHeartRate(Util.getHrFromRr(rrTime));
         rs.setAccuracy(0);
 
         roadSectionList.add(rs);
 
-        // Hemos cambiado de localización.
+        // Mark location as changed and update the speed value
         locationChanged = true;
+        speed = (int) Math.round(currentLocationLogDetail.getSpeed() * speedRandomFactor);
 
         return currentLocationLogDetail;
     }
 
-    private void stressForDeviation(double bearingDiff) {
+    private void stressDueToDeviation(double bearingDiff) {
         // Graduación del estrés por el cambio de trayectoria
         if (bearingDiff < 25.0d) {
             // Es un tramo 'fácil'.
@@ -453,7 +421,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         }
     }
 
-    private void stressForSpeed(double speedDiff) {
+    private void stressDueToSpeed(double speedDiff) {
         // Graduación del estrés por cambios de la velocidad
         if (speedDiff < 30.0d) {
             //  Es una variación de velocidad moderada.
@@ -475,7 +443,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         }
     }
 
-    void stressForSurrounding(int surroundingVehicles) {
+    void stressDueToSurrounding(int surroundingVehicles) {
         // Graduación del estrés por cambios de la velocidad
         if (surroundingVehicles < 10) {
             //  Es una variación de velocidad moderada.
@@ -510,9 +478,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         VehicleLocation smartDriverLocation = new VehicleLocation();
         smartDriverLocation.setLatitude(currentLocationLogDetail.getLatitude());
         smartDriverLocation.setLongitude(currentLocationLogDetail.getLongitude());
-        smartDriverLocation.setSpeed(currentLocationLogDetail.getSpeed());
-        //FIXME por Raul
-//        smartDriverLocation.setSpeed(speed);
+        smartDriverLocation.setSpeed(speed);
         smartDriverLocation.setAccuracy(0);
         smartDriverLocation.setStress(stressLoad);
         // Asignamos el momento actual del envío de la trama a Ztreamy al LocationLogDetail.
@@ -527,7 +493,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         increaseGenerated();
 
         ExtendedEvent event = new ExtendedEvent(sha, "application/json", Constants.SIMULATOR_APPLICATION_ID,
-                Constants.VEHICLE_LOCATION, bodyObject, retries);
+                Constants.VEHICLE_LOCATION, bodyObject, Constants.RETRIES);
 
         increaseSent();
         try {
@@ -611,7 +577,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         dataSection.setMaxSpeed(speedStats.getN() > 0 ? speedStats.getMax() : 0.0d);
         dataSection.setMedianSpeed(speedStats.getN() > 0 ? (!Double.isNaN(speedStats.getPercentile(50)) ? speedStats.getPercentile(50) : 0.0d) : 0.0d);
         dataSection.setMinSpeed(speedStats.getN() > 0 ? speedStats.getMin() : 0.0d);
-        dataSection.setPke(sectionDistance > 0.0d ? (cummulativePositiveSpeeds / sectionDistance) : 0.0d);
+        dataSection.setPke(sectionDistance > 0.0d ? (cumulativePositiveSpeeds / sectionDistance) : 0.0d);
 
         List<Integer> rrSectionList = new ArrayList<>();
         for (double rr : rrStats.getValues()) {
@@ -629,7 +595,8 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         bodyObject.put(Constants.DATA_SECTION, dataSection);
         increaseGenerated();
 
-        ExtendedEvent event = new ExtendedEvent(sha, "application/json", Constants.SIMULATOR_APPLICATION_ID, Constants.DATA_SECTION, bodyObject, retries);
+        ExtendedEvent event = new ExtendedEvent(sha, "application/json", Constants.SIMULATOR_APPLICATION_ID,
+                Constants.DATA_SECTION, bodyObject, Constants.RETRIES);
 
         increaseSent();
         try {
@@ -659,7 +626,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         } finally {
             // Reiniciamos los acumulados.
             roadSectionList.clear();
-            cummulativePositiveSpeeds = 0.0d;
+            cumulativePositiveSpeeds = 0.0d;
             sectionDistance = 0.0d;
         }
     }
@@ -779,14 +746,14 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
 
                 switch (type) {
                     case RECOVERED_VEHICLE_LOCATION:
-                        if (retries != -1) {
-                            // The elements are already in the pending to send list. One retry is subtracted.
+                        // The elements are already in the pending to send list. One retry is subtracted.
+                        if (Constants.RETRIES != -1) {
                             decreasePendingVehicleLocationsRetries();
                         }
                         break;
                     case RECOVERED_DATA_SECTION:
-                        if (retries != -1) {
-                            // The elements are already in the pending to send list. One retry is subtracted.
+                        // The elements are already in the pending to send list. One retry is subtracted.
+                        if (Constants.RETRIES != -1) {
                             decreasePendingDataSectionsRetries();
                         }
                         break;
@@ -799,8 +766,8 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
                         break;
                     case NORMAL_DATA_SECTION:
                         increaseErrors();
+                        // If fails to send the 'DataSection' stream, it is stored in order to be sent later.
                         if (PresetSimulation.isRetryOnFail()) {
-                            // If fails to send the 'DataSection' stream, it is stored in order to be sent later.
                             pendingDataSections.addAll(Arrays.asList(events));
                         }
                         break;
@@ -820,7 +787,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
     @Override
     public void update(String id, int surroundingSize) {
         if (id.equals(sha)) {
-            stressForSurrounding(surroundingSize);
+            stressDueToSurrounding(surroundingSize);
         }
     }
 }
