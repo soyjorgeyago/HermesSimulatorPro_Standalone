@@ -5,6 +5,7 @@ import es.us.lsi.hermes.location.detail.LocationLogDetail;
 import es.us.lsi.hermes.kafka.Kafka;
 import es.us.lsi.hermes.smartDriver.DataSection;
 import es.us.lsi.hermes.smartDriver.RoadSection;
+import es.us.lsi.hermes.smartDriver.VehicleLocation;
 import es.us.lsi.hermes.util.Constants;
 import es.us.lsi.hermes.util.DriverParameters;
 import es.us.lsi.hermes.util.HermesException;
@@ -56,11 +57,10 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
     // FIXME: Pass to MonitorizedDriver
     private int secondsBetweenRetries;
 
-    private final int minRrTime;
     private final List<RoadSection> roadSectionList;
 
+    //FIXME local or dynamically calculated speed
     private double speedRandomFactor;
-    private double hrRandomFactor;
 
     // Listas con los 'VehicleLocation' y 'DataSection' que han fallado en su envío correspondiente, para poder reintentar su envío.
     private final List<ExtendedEvent> pendingVehicleLocations;
@@ -71,36 +71,45 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
     // Identificador único del SmartDriver.
     private final String sha;
 
+    //FIXME por Raul
+//    private final int pathIndex;
+//    private final int pathPointsCount;
+
     private SurroundingVehiclesConsumer surroundingVehiclesConsumer = null;
 
     private final boolean infiniteSimulation;
     private final int retries;
     private boolean paused;
 
+    //FIXME por Jorge
     private final int pathId;
     private final double[] pathPointsSecondsToBeHere;
     private final int[] pathPointsSpeed;
-    // FIXME: Removable?
-    private final double[] pathPointsHR;
+
+    private int rrTime;
+    private final int MAX_RR, MIN_RR;
     private int direction;
 
     /**
      * Constructor para cada instancia de 'SmartDriver'.
      *
-     * @param ll Contendrá los datos de la ruta que debe seguir.
-     * @param randomBehaviour Indicará si tendrá una componente aleatoria en su
+//     TODO Update
+//     * @param ll Contendrá los datos de la ruta que debe seguir.
+//     * @param randomBehaviour Indicará si tendrá una componente aleatoria en su
      * comportamiento. no.
      * @param infiniteSimulation Indicará si se debe parar la simulación o
      * volver de vuelta cada SmartDriver, cuando llegue a su destino.
-     * @param streamServer Indicará el servidor de tramas que recibirá la
+//     * @param streamServer Indicará el servidor de tramas que recibirá la
      * información de la simulación.
      * @param retries Indicará el número de reintentos de envío de una trama
      * fallida, antes de descartarla.
      *
-     * @throws MalformedURLException
-     * @throws HermesException
+//     * @throws MalformedURLException
+//     * @throws HermesException
      */
     public SimulatedSmartDriver(long id, int pathId, DriverParameters dp, boolean infiniteSimulation, int retries, double speedRandomFactor, double hrRandomFactor) throws MalformedURLException, HermesException {
+    //FIXME por Raul
+//    public SimulatedSmartDriver(long id, int pathIndex, int pathPointsCount, boolean infiniteSimulation, int streamServer, int retries, double speedRandomFactor, double hrRandomFactor) throws MalformedURLException, HermesException {
         final SecureRandom random = new SecureRandom();
         this.id = id;
         this.locationChanged = false;
@@ -109,8 +118,6 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         this.secondsCount = 0;
         this.secondsBetweenRetries = 0;
         this.stressLoad = 0; // Suponemos que inicialmente no está estresado.
-        int age = ThreadLocalRandom.current().nextInt(18, 65 + 1); // Simularemos conductores de distintas edades (entre 18 y 65 años), para establecer el ritmo cardíaco máximo en la simulación.
-        this.minRrTime = (int) Math.ceil(60000.0d / (220 - age)); // Mínimo R-R, que establecerá el ritmo cardíaco máximo.
         this.sha = new String(Hex.encodeHex(DigestUtils.sha256(random + "@sim.com")));
         this.infiniteSimulation = infiniteSimulation;
         this.retries = retries;
@@ -121,23 +128,30 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         this.pendingVehicleLocations = new ArrayList<>();
         this.pendingDataSections = new ArrayList<>();
 
+        int age = ThreadLocalRandom.current().nextInt(18, 65 + 1); // Drivers between 18 and 65 years.
+        this.rrTime = (int) (Constants.RR_TIME * hrRandomFactor);
+        this.MIN_RR = (int) Math.ceil(60000.0d / (220 - age)); // Min R-R, to establish the max HR.
+        this.MAX_RR = (int) Math.ceil(240000.0d / (220 - age)); // Max R-R, to establish the min HR.
+
+        //FIXME por Raul
+//        this.pathIndex = pathIndex;
+//        this.pathPointsCount = pathPointsCount;
+
 //        // TODO: Probar otros timeouts más altos.
         if (PresetSimulation.isKafkaProducerPerSmartDriver()) {
             this.surroundingVehiclesConsumer = new SurroundingVehiclesConsumer(this);
         }
 
         this.speedRandomFactor = speedRandomFactor;
-        this.hrRandomFactor = hrRandomFactor;
 
-        List<LocationLogDetail> lldlist = SimulatorController.getPath(pathId);
-        this.pathPointsSecondsToBeHere = new double[lldlist.size()];
-        this.pathPointsSpeed = new int[lldlist.size()];
-        this.pathPointsHR = new double[lldlist.size()];
-        for (int i = 0; i < lldlist.size(); i++) {
-            LocationLogDetail lld = lldlist.get(i);
-            pathPointsSpeed[i] = (int) (Math.round(lld.getSpeed() * speedRandomFactor));
-            pathPointsSecondsToBeHere[i] = lld.getSecondsToBeHere() / speedRandomFactor;
-            pathPointsHR[i] = (int) (Math.round(lld.getRrTime() * hrRandomFactor));
+        //FIXME por Jorge
+        List<LocationLogDetail> path = SimulatorController.getPath(pathId);
+        this.pathPointsSecondsToBeHere = new double[path.size()];
+        this.pathPointsSpeed = new int[path.size()];
+        for (int position = 0; position < path.size(); position++) {
+            LocationLogDetail location = path.get(position);
+            pathPointsSpeed[position] = (int) (Math.round(location.getSpeed() * speedRandomFactor));
+            pathPointsSecondsToBeHere[position] = location.getSecondsToRemainHere() / speedRandomFactor;
         }
 
         init();
@@ -205,196 +219,46 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
                 return;
             }
 
+            // Get the driver's current position on the path
             LocationLogDetail currentLocationLogDetail = SimulatorController.getPath(pathId).get(getCurrentPosition());
 
-            double distance;
-            double bearing;
-            // Por defecto, en la simulación se tiende al estado relajado.
-            relaxing = true;
+            relaxing = true;       // Relaxed by default
 
             LOG.log(Level.FINE, "SimulatedSmartDriver.run() - El usuario de SmartDriver se encuentra en: ({0}, {1})", new Object[]{currentLocationLogDetail.getLatitude(), currentLocationLogDetail.getLongitude()});
 
-            // Check if we can continue to next location.
+            //FIXME
+            System.out.println("Elapsed " + getPointToPointElapsedSeconds());
+            System.out.println("Remaining " + pathPointsSecondsToBeHere[getCurrentPosition()]);
+
+            // Check if we can continue to next location
             if (getPointToPointElapsedSeconds() >= pathPointsSecondsToBeHere[getCurrentPosition()]) {
                 // ¿Have we reached the destination?
                 if ((direction > 0 && getCurrentPosition() == pathPointsSecondsToBeHere.length - 1)
                         || (direction < 0 && getCurrentPosition() == 0)) {
-                    if (!infiniteSimulation) {
-                        // The simulated driver thread is finished.
-                        SimulatorController.smartDriverHasFinished(this.getSha());
-
-                        LOG.log(Level.FINE, "SimulatedSmartDriver.run() - El usuario ha llegado a su destino en: {0}", DurationFormatUtils.formatDuration(getDriverSimulationTimeInSeconds(), "HH:mm:ss", true));
-                        finish();
-                    } else {
-                        // We have reached the end of the path, but as it is an infinite simulation, we go back.
-                        direction *= -1;
-                        resetPointToPointElapsedSeconds();
-                    }
+                    finishOrRepeat();
                 } else {
-                    int previousPosition = getCurrentPosition();
+                    // Update the current location
+                    currentLocationLogDetail = updateCurrentPosition(currentLocationLogDetail);
 
-                    double jumpSeconds = 0.0d;
-                    // We haven't reached the end, move to the corresponding next location.
-                    while (getPointToPointElapsedSeconds() > jumpSeconds) {
-                        setCurrentPosition(getCurrentPosition() + direction);
-                        jumpSeconds += pathPointsSecondsToBeHere[getCurrentPosition()];
-                    }
-                    
-                    resetPointToPointElapsedSeconds();
-
-                    currentLocationLogDetail = SimulatorController.getPath(pathId).get(getCurrentPosition());
-
-                    LocationLogDetail previousLocationLogDetail = SimulatorController.getPath(pathId).get(previousPosition);
-
-                    // Calculamos la distancia recorrida.
-                    distance = Util.distanceHaversine(previousLocationLogDetail.getLatitude(), previousLocationLogDetail.getLongitude(), currentLocationLogDetail.getLatitude(), currentLocationLogDetail.getLongitude());
-
-                    // Calculamos la orientación para simular estrés al entrar en una curva.
-                    bearing = Util.bearing(previousLocationLogDetail.getLatitude(), previousLocationLogDetail.getLongitude(), currentLocationLogDetail.getLatitude(), currentLocationLogDetail.getLongitude());
-
-                    // TODO: ¿Criterios que puedan alterar el estrés?
-                    if (previousPosition > 1) {
-                        LocationLogDetail antePreviousLocationLogDetail = SimulatorController.getPath(pathId).get(previousPosition - 1);
-                        double previousBearing = Util.bearing(antePreviousLocationLogDetail.getLatitude(), antePreviousLocationLogDetail.getLongitude(), previousLocationLogDetail.getLatitude(), previousLocationLogDetail.getLongitude());
-                        double bearingDiff = Math.abs(bearing - previousBearing);
-
-                        // Si hay una desviación brusca de la trayectoria, suponemos una componente de estrés.
-                        stressForDeviation(bearingDiff);
-                    }
-
-                    double speedDiff = Math.abs(pathPointsSpeed[getCurrentPosition()] - pathPointsSpeed[getCurrentPosition() - 1]);
-
-                    // Si hay un salto grande de velocidad, suponemos una componente de estrés.
-                    stressForSpeed(speedDiff);
-
-                    // Analizamos el ritmo cardíaco,
-                    // Medimos las unidades de estrés y dibujamos el marker del color correspondiente (verde -> sin estrés, amarillo -> ligeramente estresado, rojo -> estresado)
-                    if (stressLoad == 0) {
-                        // No hay estrés.
-                    } else {
-                        // Si se está calmando, le subimos el intervalo RR y si se está estresando, le bajamos el intervalo RR.
-                        if (relaxing) {
-                            if (stressLoad > 0) {
-                                pathPointsHR[getCurrentPosition()] = pathPointsHR[getCurrentPosition() - 1] - ((pathPointsHR[getCurrentPosition() - 1] - pathPointsHR[getCurrentPosition()]) / stressLoad);
-                            }
-                        } else if (stressLoad < 5) {
-                            pathPointsHR[getCurrentPosition()] = pathPointsHR[getCurrentPosition() - 1] - (minRrTime / stressLoad);
-                        } else {
-                            // Establecemos un mínimo R-R en función de la edad del conductor.
-                            currentLocationLogDetail.setRrTime(minRrTime);
-                        }
-
-                        if (stressLoad < 5) {
-                            // Existe una situación de estrés 'ligero'.
-                            // Para que Víctor pueda detectar una situación de estrés, debe haber una diferencia de 50ms en el RR.
-                        } else {
-                            //  Estrés elevado.
-                        }
-                    }
-
-                    // Calculamos el ritmo cardíaco a partir del intervalo RR.
-                    currentLocationLogDetail.setHeartRate((int) Math.ceil(60.0d / (currentLocationLogDetail.getRrTime() / 1000.0d)));
-
-                    // Acumulamos la distancia recorrida.
-                    sectionDistance += distance;
-
-                    // Hacemos el análisis del PKE (Positive Kinetic Energy)
-                    cummulativePositiveSpeeds += analyzePKE(currentLocationLogDetail, previousLocationLogDetail);
-
-                    // Creamos un elementos de tipo 'RoadSection', para añadirlo al 'DataSection' que se envía a 'Ztreamy' cada 500 metros.
-                    RoadSection rs = new RoadSection();
-                    rs.setTime(System.currentTimeMillis());
-                    rs.setLatitude(currentLocationLogDetail.getLatitude());
-                    rs.setLongitude(currentLocationLogDetail.getLongitude());
-                    int tDiff = (currentLocationLogDetail.getSecondsToBeHere() - previousLocationLogDetail.getSecondsToBeHere());
-                    rs.setSpeed(tDiff > 0 ? distance * 3.6 / tDiff : previousLocationLogDetail.getSpeed());
-                    rs.setHeartRate(currentLocationLogDetail.getHeartRate());
-                    rs.setRrTime(currentLocationLogDetail.getRrTime());
-                    rs.setAccuracy(0);
-
-                    roadSectionList.add(rs);
-
-                    // Hemos cambiado de localización.
-                    locationChanged = true;
+                    //FIXME por Raul
+//                    resetPointToPointElapsedSeconds();
                 }
             }
 
+            // If it's time to send (every 10 seconds) and the location has changed, do so.
             if (locationChanged && isTimeToSend()) {
-                // Sólo si cambiamos de posición y han pasado más de 10 segundos, se envía información a 'Ztreamy'.
                 sendEvery10SecondsIfLocationChanged(currentLocationLogDetail);
-            } else if (PresetSimulation.isRetryOnFail() && !pendingVehicleLocations.isEmpty()) {
-
-                // Vemos si ha pasado suficiente tiempo entre reintentos.
-                if (isTimeToRetry()) {
-                    /////////////////////////////////////////////////////
-                    // REINTENTO DE ENVÍO DE VEHICLE LOCATION FALLIDOS //
-                    /////////////////////////////////////////////////////
-
-                    // Aprovechamos que no toca envío de 'VehicleLocation' para probar a enviar los que hubieran fallado.
-                    increaseSent();
-                    ExtendedEvent[] events = new ExtendedEvent[pendingVehicleLocations.size()];
-
-                    // Kafka
-                    try {
-                        String json = new Gson().toJson(events);
-                        if (SimulatorController.isKafkaProducerPerSmartDriver()) {
-                            smartDriverKafkaProducer.send(new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION,
-                                    smartDriverKafkaRecordId,
-                                    json
-                            ), new KafkaCallBack(System.currentTimeMillis(), smartDriverKafkaRecordId, events, Event_Type.RECOVERED_VEHICLE_LOCATION));
-                            smartDriverKafkaRecordId++;
-                        } else {
-                            long id = SimulatorController.getNextKafkaRecordId();
-                            SimulatorController.getKafkaProducer().send(new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION,
-                                    id,
-                                    json
-                            ), new KafkaCallBack(System.currentTimeMillis(), id, events, Event_Type.RECOVERED_VEHICLE_LOCATION));
-                        }
-                    } catch (Exception ex) {
-                        LOG.log(Level.SEVERE, "*Reintento* - Error: {0} - No se han podido reenviar los {1} 'VehicleLocation' pendientes", new Object[]{ex.getMessage(), pendingVehicleLocations.size()});
-                    } finally {
-                        secondsBetweenRetries = 0;
-                    }
-                }
+                // If the simulation allows retries, we have pending data and it's time to send, do so.
+            } else if (PresetSimulation.isRetryOnFail() && !pendingVehicleLocations.isEmpty() && isTimeToRetry()) {
+                retryPendingVehicleLocations();
             }
 
-            // Se enviará un resumen cada 500 metros.
+            // If the driver has made 500m, send the DataSection
             if (sectionDistance >= Constants.SEND_INTERVAL_METERS) {
                 sendDataSection();
-            } else if (PresetSimulation.isRetryOnFail() && !pendingDataSections.isEmpty()) {
-
-                // Vemos si ha pasado suficiente tiempo entre reintentos.
-                if (isTimeToRetry()) {
-                    /////////////////////////////////////////////////
-                    // REINTENTO DE ENVÍO DE DATA SECTION FALLIDOS //
-                    /////////////////////////////////////////////////
-
-                    // Aprovechamos que no toca envío de 'DataSection' para probar a enviar los que hubieran fallado.
-                    increaseSent();
-                    ExtendedEvent[] events = new ExtendedEvent[pendingDataSections.size()];
-
-                    // Kafka
-                    try {
-                        String json = new Gson().toJson(events);
-                        if (SimulatorController.isKafkaProducerPerSmartDriver()) {
-                            smartDriverKafkaProducer.send(new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION,
-                                    smartDriverKafkaRecordId,
-                                    json
-                            ), new KafkaCallBack(System.currentTimeMillis(), smartDriverKafkaRecordId, events, Event_Type.RECOVERED_DATA_SECTION));
-                            smartDriverKafkaRecordId++;
-                        } else {
-                            long id = SimulatorController.getNextKafkaRecordId();
-                            SimulatorController.getKafkaProducer().send(new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION,
-                                    id,
-                                    json
-                            ), new KafkaCallBack(System.currentTimeMillis(), id, events, Event_Type.RECOVERED_DATA_SECTION));
-                        }
-                    } catch (Exception ex) {
-                        LOG.log(Level.SEVERE, "*Reintento* - Error: {0} - No se han podido reenviar los {1} 'DataSection' pendientes", new Object[]{ex.getMessage(), pendingDataSections.size()});
-                    } finally {
-                        secondsBetweenRetries = 0;
-                    }
-                }
+                // If the simulation allows retries, we have pending data and it's time to send, do so.
+            } else if (PresetSimulation.isRetryOnFail() && !pendingDataSections.isEmpty() && isTimeToRetry()) {
+                retryPendingDataSections();
             }
 
             increaseDriverSimulationTime();
@@ -403,9 +267,168 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
                 secondsBetweenRetries++;
             }
             LOG.log(Level.FINE, "SimulatedSmartDriver.run() - Elapsed simulation time: {0}", DurationFormatUtils.formatDuration(getDriverSimulationTimeInSeconds(), "HH:mm:ss", true));
-        } catch (InterruptedException ex) {
+
+        } catch(InterruptedException ex){
             LOG.log(Level.INFO, "SimulatedSmartDriver.run() - Interrupted!");
         }
+    }
+
+    private void retryPendingVehicleLocations() {
+        /////////////////////////////////////////////////////
+        // REINTENTO DE ENVÍO DE VEHICLE LOCATION FALLIDOS //
+        /////////////////////////////////////////////////////
+
+        // Aprovechamos que no toca envío de 'VehicleLocation' para probar a enviar los que hubieran fallado.
+        increaseSent();
+        ExtendedEvent[] events = new ExtendedEvent[pendingVehicleLocations.size()];
+
+        // Kafka
+        try {
+            String json = new Gson().toJson(events);
+            if (SimulatorController.isKafkaProducerPerSmartDriver()) {
+                smartDriverKafkaProducer.send(
+                        new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION, smartDriverKafkaRecordId, json),
+                        new KafkaCallBack(System.currentTimeMillis(), smartDriverKafkaRecordId, events,
+                                Event_Type.RECOVERED_VEHICLE_LOCATION));
+                smartDriverKafkaRecordId++;
+            } else {
+                long id = SimulatorController.getNextKafkaRecordId();
+                SimulatorController.getKafkaProducer().send(
+                        new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION, id, json),
+                        new KafkaCallBack(System.currentTimeMillis(), id, events,
+                                Event_Type.RECOVERED_VEHICLE_LOCATION));
+            }
+        } catch (Exception ex) {
+            LOG.log(Level.SEVERE, "*Reintento* - Error: {0} - No se han podido reenviar los {1} 'VehicleLocation' pendientes", new Object[]{ex.getMessage(), pendingVehicleLocations.size()});
+        } finally {
+            secondsBetweenRetries = 0;
+        }
+    }
+
+    private void retryPendingDataSections() {
+        /////////////////////////////////////////////////
+        // REINTENTO DE ENVÍO DE DATA SECTION FALLIDOS //
+        /////////////////////////////////////////////////
+
+        // Aprovechamos que no toca envío de 'DataSection' para probar a enviar los que hubieran fallado.
+        increaseSent();
+        ExtendedEvent[] events = new ExtendedEvent[pendingDataSections.size()];
+        try {
+            String json = new Gson().toJson(events);
+            if (SimulatorController.isKafkaProducerPerSmartDriver()) {
+                smartDriverKafkaProducer.send(
+                        new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION, smartDriverKafkaRecordId, json),
+                        new KafkaCallBack(System.currentTimeMillis(), smartDriverKafkaRecordId, events,
+                        Event_Type.RECOVERED_DATA_SECTION));
+                smartDriverKafkaRecordId++;
+            } else {
+                long id = SimulatorController.getNextKafkaRecordId();
+                SimulatorController.getKafkaProducer().send(
+                        new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION, id, json),
+                        new KafkaCallBack(System.currentTimeMillis(), id, events,
+                        Event_Type.RECOVERED_DATA_SECTION));
+            }
+        } catch (Exception ex) {
+            LOG.log(Level.SEVERE, "*Reintento* - Error: {0} - No se han podido reenviar los {1} 'DataSection' pendientes", new Object[]{ex.getMessage(), pendingDataSections.size()});
+        } finally {
+            secondsBetweenRetries = 0;
+        }
+    }
+
+
+    //FIXME por Raul
+//    private int rrTime;
+//    private int heartRate;
+//    private int direction = 1;  // Controls the direction to iterate over the path.
+//    private int secondsToRemainHere = -1;
+//    private double speed = -1;
+
+    private void finishOrRepeat() {
+        if (!infiniteSimulation) {
+            // Notificamos que ha terminado el SmartDriver actual.
+            SimulatorController.smartDriverHasFinished(this.getSha());
+
+            LOG.log(Level.FINE, "SimulatedSmartDriver.run() - El usuario ha llegado a su destino en: {0}", DurationFormatUtils.formatDuration(getPointToPointElapsedSeconds(), "HH:mm:ss", true));
+            finish();
+
+            // When we reach the end in an infinite simulation, turn around and repeat the process
+        } else {
+            // We have reached the end of the path, but as it is an infinite simulation, we go back.
+            direction *= -1;
+            resetPointToPointElapsedSeconds();
+        }
+    }
+
+    private LocationLogDetail updateCurrentPosition(LocationLogDetail currentLocationLogDetail){
+
+        int previousPosition = getCurrentPosition();
+
+        double jumpSeconds = 0.0d;
+        // We haven't reached the end, move to the corresponding next location.
+        while (getPointToPointElapsedSeconds() > jumpSeconds) {
+            setCurrentPosition(getCurrentPosition() + direction);
+            jumpSeconds += pathPointsSecondsToBeHere[getCurrentPosition()];
+        }
+
+        resetPointToPointElapsedSeconds();
+
+        LocationLogDetail previousLocationLogDetail = SimulatorController.getPath(pathId).get(previousPosition);
+
+        double distance, bearing;
+        // Calculamos la distancia recorrida.
+        distance = Util.distanceHaversine(previousLocationLogDetail.getLatitude(), previousLocationLogDetail.getLongitude(), currentLocationLogDetail.getLatitude(), currentLocationLogDetail.getLongitude());
+
+        // Calculamos la orientación para simular estrés al entrar en una curva.
+        bearing = Util.bearing(previousLocationLogDetail.getLatitude(), previousLocationLogDetail.getLongitude(), currentLocationLogDetail.getLatitude(), currentLocationLogDetail.getLongitude());
+
+        // TODO: ¿Criterios que puedan alterar el estrés?
+        if (previousPosition > 1) {
+            LocationLogDetail antePreviousLocationLogDetail = SimulatorController.getPath(pathId).get(previousPosition - 1);
+            double previousBearing = Util.bearing(antePreviousLocationLogDetail.getLatitude(), antePreviousLocationLogDetail.getLongitude(), previousLocationLogDetail.getLatitude(), previousLocationLogDetail.getLongitude());
+            double bearingDiff = Math.abs(bearing - previousBearing);
+
+            // Si hay una desviación brusca de la trayectoria, suponemos una componente de estrés.
+            stressForDeviation(bearingDiff);
+        }
+
+        double speedDiff = Math.abs(pathPointsSpeed[getCurrentPosition()] - pathPointsSpeed[getCurrentPosition() - 1]);
+
+        // Si hay un salto grande de velocidad, suponemos una componente de estrés.
+        stressForSpeed(speedDiff);
+
+        // If the user is calming down, decrease the HR, else, increase it. (stress based increment and decrement)
+        if (relaxing) {
+            rrTime -= 20 * (5 - stressLoad);
+            if(rrTime < MIN_RR)
+                rrTime = MIN_RR;
+        } else {
+            rrTime += 20 * stressLoad;
+            if(rrTime > MAX_RR)
+                rrTime = MAX_RR;
+        }
+
+        // Acumulamos la distancia recorrida.
+        sectionDistance += distance;
+
+        // Hacemos el análisis del PKE (Positive Kinetic Energy)
+        cummulativePositiveSpeeds += analyzePKE(currentLocationLogDetail, previousLocationLogDetail);
+
+        // Creamos un elementos de tipo 'RoadSection', para añadirlo al 'DataSection' que se envía a 'Ztreamy' cada 500 metros.
+        RoadSection rs = new RoadSection();
+        rs.setTime(System.currentTimeMillis());
+        rs.setLatitude(currentLocationLogDetail.getLatitude());
+        rs.setLongitude(currentLocationLogDetail.getLongitude());
+        int tDiff = (currentLocationLogDetail.getSecondsToRemainHere() - previousLocationLogDetail.getSecondsToRemainHere());
+        rs.setSpeed(tDiff > 0 ? distance * 3.6 / tDiff : previousLocationLogDetail.getSpeed());
+        rs.setHeartRate(Util.getHrFromRr(rrTime));
+        rs.setAccuracy(0);
+
+        roadSectionList.add(rs);
+
+        // Hemos cambiado de localización.
+        locationChanged = true;
+
+        return currentLocationLogDetail;
     }
 
     private void stressForDeviation(double bearingDiff) {
@@ -452,7 +475,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         }
     }
 
-    public void stressBySurrounding(int surroundingVehicles) {
+    void stressForSurrounding(int surroundingVehicles) {
         // Graduación del estrés por cambios de la velocidad
         if (surroundingVehicles < 10) {
             //  Es una variación de velocidad moderada.
@@ -484,36 +507,43 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
 
     private void sendEvery10SecondsIfLocationChanged(LocationLogDetail currentLocationLogDetail) {
         // Creamos un objeto de tipo 'VehicleLocation' de los que 'SmartDriver' envía al servidor de tramas.
-        es.us.lsi.hermes.smartDriver.VehicleLocation smartDriverLocation = new es.us.lsi.hermes.smartDriver.VehicleLocation();
+        VehicleLocation smartDriverLocation = new VehicleLocation();
         smartDriverLocation.setLatitude(currentLocationLogDetail.getLatitude());
         smartDriverLocation.setLongitude(currentLocationLogDetail.getLongitude());
         smartDriverLocation.setSpeed(currentLocationLogDetail.getSpeed());
+        //FIXME por Raul
+//        smartDriverLocation.setSpeed(speed);
         smartDriverLocation.setAccuracy(0);
         smartDriverLocation.setStress(stressLoad);
         // Asignamos el momento actual del envío de la trama a Ztreamy al LocationLogDetail.
         smartDriverLocation.setTimeStamp(Constants.dfISO8601.format(new Date()));
 
         HashMap<String, Object> bodyObject = new HashMap<>();
+
+        //FIXME
+        System.out.println("I " + id + " A " + smartDriverLocation + " T " + pathPointsSecondsToBeHere[getCurrentPosition()]);
+
         bodyObject.put("Location", smartDriverLocation);
         increaseGenerated();
 
-        ExtendedEvent event = new ExtendedEvent(sha, "application/json", Constants.SIMULATOR_APPLICATION_ID, Constants.VEHICLE_LOCATION, bodyObject, retries);
+        ExtendedEvent event = new ExtendedEvent(sha, "application/json", Constants.SIMULATOR_APPLICATION_ID,
+                Constants.VEHICLE_LOCATION, bodyObject, retries);
 
         increaseSent();
         try {
             String json = new Gson().toJson(event);
             if (SimulatorController.isKafkaProducerPerSmartDriver()) {
-                smartDriverKafkaProducer.send(new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION,
-                        smartDriverKafkaRecordId,
-                        json
-                ), new KafkaCallBack(System.currentTimeMillis(), smartDriverKafkaRecordId, new ExtendedEvent[]{event}, Event_Type.NORMAL_VEHICLE_LOCATION));
+                smartDriverKafkaProducer.send(
+                        new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION, smartDriverKafkaRecordId, json),
+                        new KafkaCallBack(System.currentTimeMillis(), smartDriverKafkaRecordId,
+                        new ExtendedEvent[]{event}, Event_Type.NORMAL_VEHICLE_LOCATION));
                 smartDriverKafkaRecordId++;
             } else {
                 long id = SimulatorController.getNextKafkaRecordId();
-                SimulatorController.getKafkaProducer().send(new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION,
-                        id,
-                        json
-                ), new KafkaCallBack(System.currentTimeMillis(), id, new ExtendedEvent[]{event}, Event_Type.NORMAL_VEHICLE_LOCATION));
+                SimulatorController.getKafkaProducer().send(
+                        new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION, id, json),
+                        new KafkaCallBack(System.currentTimeMillis(), id,
+                        new ExtendedEvent[]{event}, Event_Type.NORMAL_VEHICLE_LOCATION));
             }
         } catch (Exception ex) {
             if (!hasFinished()) {
@@ -534,11 +564,11 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         // Creamos un objeto de tipo 'DataSection' de los que 'SmartDriver' envía al servidor de tramas.
         DataSection dataSection = new DataSection();
 
-        DescriptiveStatistics speedStats = new DescriptiveStatistics();
-        DescriptiveStatistics heartRateStats = new DescriptiveStatistics();
-        DescriptiveStatistics rrStats = new DescriptiveStatistics();
-        DescriptiveStatistics accelerationStats = new DescriptiveStatistics();
-        DescriptiveStatistics decelerationStats = new DescriptiveStatistics();
+        DescriptiveStatistics speedStats = new DescriptiveStatistics(),
+                heartRateStats = new DescriptiveStatistics(),
+                rrStats = new DescriptiveStatistics(),
+                accelerationStats = new DescriptiveStatistics(),
+                decelerationStats = new DescriptiveStatistics();
         RoadSection rdPrevious = roadSectionList.get(0);
         speedStats.addValue(rdPrevious.getSpeed());
         rrStats.addValue(rdPrevious.getRrTime());
@@ -560,6 +590,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
                 }
             } else if (acceleration < 0.0d) {
                 decelerationStats.addValue(acceleration);
+                //FIXME - Review - According to Intellij, always false
                 if (numHighDecelerations < Constants.HIGH_DECELERATION_THRESHOLD) {
                     numHighDecelerations++;
                 }
@@ -581,7 +612,8 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         dataSection.setMedianSpeed(speedStats.getN() > 0 ? (!Double.isNaN(speedStats.getPercentile(50)) ? speedStats.getPercentile(50) : 0.0d) : 0.0d);
         dataSection.setMinSpeed(speedStats.getN() > 0 ? speedStats.getMin() : 0.0d);
         dataSection.setPke(sectionDistance > 0.0d ? (cummulativePositiveSpeeds / sectionDistance) : 0.0d);
-        List<Integer> rrSectionList = new ArrayList();
+
+        List<Integer> rrSectionList = new ArrayList<>();
         for (double rr : rrStats.getValues()) {
             rrSectionList.add((int) rr);
         }
@@ -603,17 +635,17 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         try {
             String json = new Gson().toJson(event);
             if (SimulatorController.isKafkaProducerPerSmartDriver()) {
-                smartDriverKafkaProducer.send(new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION,
-                        smartDriverKafkaRecordId,
-                        json
-                ), new KafkaCallBack(System.currentTimeMillis(), smartDriverKafkaRecordId, new ExtendedEvent[]{event}, Event_Type.NORMAL_DATA_SECTION));
+                smartDriverKafkaProducer.send(
+                        new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION, smartDriverKafkaRecordId, json),
+                        new KafkaCallBack(System.currentTimeMillis(), smartDriverKafkaRecordId,
+                        new ExtendedEvent[]{event}, Event_Type.NORMAL_DATA_SECTION));
                 smartDriverKafkaRecordId++;
             } else {
                 long id = SimulatorController.getNextKafkaRecordId();
-                SimulatorController.getKafkaProducer().send(new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION,
-                        id,
-                        json
-                ), new KafkaCallBack(System.currentTimeMillis(), id, new ExtendedEvent[]{event}, Event_Type.NORMAL_DATA_SECTION));
+                SimulatorController.getKafkaProducer().send(
+                        new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION, id, json),
+                        new KafkaCallBack(System.currentTimeMillis(), id,
+                        new ExtendedEvent[]{event}, Event_Type.NORMAL_DATA_SECTION));
             }
         } catch (Exception ex) {
             if (!hasFinished()) {
@@ -666,22 +698,6 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         } catch (Exception ex) {
             // No need to capture
         }
-    }
-
-    public double getSpeedRandomFactor() {
-        return speedRandomFactor;
-    }
-
-    public double getHrRandomFactor() {
-        return hrRandomFactor;
-    }
-
-    public void setSpeedRandomFactor(double speedRandomFactor) {
-        this.speedRandomFactor = speedRandomFactor;
-    }
-
-    public void setHrRandomFactor(double hrRandomFactor) {
-        this.hrRandomFactor = hrRandomFactor;
     }
 
     public synchronized void pauseSmartDriver() throws InterruptedException {
@@ -804,7 +820,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
     @Override
     public void update(String id, int surroundingSize) {
         if (id.equals(sha)) {
-            stressBySurrounding(surroundingSize);
+            stressForSurrounding(surroundingSize);
         }
     }
 }
