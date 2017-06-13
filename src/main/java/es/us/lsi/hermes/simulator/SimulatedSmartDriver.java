@@ -73,7 +73,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
     private boolean paused;
 
     private final int pathId;
-    private final double[] pathPointsSecondsToBeHere;
+    private final double[] pathPointsSecondsToRemainHere;
     private int rrTime;
     private final int MAX_RR, MIN_RR;
     private int direction;
@@ -126,9 +126,9 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         }
 
         List<LocationLogDetail> path = SimulatorController.getPath(pathId);
-        this.pathPointsSecondsToBeHere = new double[path.size()];
+        this.pathPointsSecondsToRemainHere = new double[path.size()];
         for (int position = 0; position < path.size(); position++) {
-            pathPointsSecondsToBeHere[position] = path.get(position).getSecondsToRemainHere() / speedRandomFactor;
+            pathPointsSecondsToRemainHere[position] = path.get(position).getSecondsToRemainHere() / speedRandomFactor;
         }
 
         init();
@@ -205,12 +205,12 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
 
             //FIXME
             System.out.println("Elapsed " + getPointToPointElapsedSeconds());
-            System.out.println("Remaining " + pathPointsSecondsToBeHere[getCurrentPosition()]);
+            System.out.println("Remaining " + pathPointsSecondsToRemainHere[getCurrentPosition()]);
 
             // Check if we can continue to next location
-            if (getPointToPointElapsedSeconds() >= pathPointsSecondsToBeHere[getCurrentPosition()]) {
+            if (getPointToPointElapsedSeconds() >= pathPointsSecondsToRemainHere[getCurrentPosition()]) {
                 // ¿Have we reached the destination?
-                if ((direction > 0 && getCurrentPosition() == pathPointsSecondsToBeHere.length - 1)
+                if ((direction > 0 && getCurrentPosition() == pathPointsSecondsToRemainHere.length - 1)
                         || (direction < 0 && getCurrentPosition() == 0)) {
                     finishOrRepeat();
                 } else {
@@ -333,7 +333,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         // We haven't reached the end, move to the corresponding next location.
         while (getPointToPointElapsedSeconds() > jumpSeconds) {
             setCurrentPosition(getCurrentPosition() + direction);
-            jumpSeconds += pathPointsSecondsToBeHere[getCurrentPosition()];
+            jumpSeconds += pathPointsSecondsToRemainHere[getCurrentPosition()];
         }
 
         resetPointToPointElapsedSeconds();
@@ -487,7 +487,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         HashMap<String, Object> bodyObject = new HashMap<>();
 
         //FIXME
-        System.out.println("I " + id + " A " + smartDriverLocation + " T " + pathPointsSecondsToBeHere[getCurrentPosition()]);
+        System.out.println("I " + id + " A " + smartDriverLocation + " T " + pathPointsSecondsToRemainHere[getCurrentPosition()]);
 
         bodyObject.put("Location", smartDriverLocation);
         increaseGenerated();
