@@ -42,6 +42,9 @@ public final class Constants {
     // Path generation request amount per second. It is a Google limitation.
     public static final int REQUEST_PACK_SIZE = 10;
 
+    // Times to retry sending.
+    public static final int RETRIES = 5;
+
     public enum Paths_Generation_Method {
         GOOGLE, OPENSTREETMAP
     }
