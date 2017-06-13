@@ -1,13 +1,12 @@
 package es.us.lsi.hermes.location.detail;
 
-import es.us.lsi.hermes.csv.ICSVBean;
 import org.supercsv.cellprocessor.ParseDouble;
 import org.supercsv.cellprocessor.ParseInt;
 import org.supercsv.cellprocessor.ift.CellProcessor;
 
 import java.io.Serializable;
 
-public class LocationLogDetail implements Serializable, ICSVBean {
+public class LocationLogDetail implements Serializable {
 
     private static final long serialVersionUID = 1L;
     private double latitude;
@@ -20,7 +19,6 @@ public class LocationLogDetail implements Serializable, ICSVBean {
         this.longitude = 0.0d;
         this.speed = 0;
         this.secondsToRemainHere = 0;
-        initCSV();
     }
 
     public LocationLogDetail(double lat, double lng, int speed) {
@@ -67,32 +65,19 @@ public class LocationLogDetail implements Serializable, ICSVBean {
     }
 
     // ------------------------- CSV IMP/EXP -------------------------
+    private static CellProcessor[] cellProcessors = new CellProcessor[]{new ParseDouble(), new ParseDouble(), new ParseInt(), new ParseInt(), new ParseInt()};
+    private static String[] fields = new String[]{"Latitude", "Longitude", "Speed", "SecondsToBeHere", "RrTime"};
+    private static String[] headers = new String[]{"latitude", "longitude", "speed", "secondsToBeHere", "rrTime"};
 
-    private CellProcessor[] cellProcessors;
-    private String[] fields;
-    private String[] headers;
-
-    @Override
-    public void initCSV() {
-        cellProcessors = new CellProcessor[]{new ParseDouble(), new ParseDouble(), new ParseInt(), new ParseInt()};
-
-        headers = new String[]{"Latitude", "Longitude", "Speed", "SecondsToRemainHere"};
-
-        fields = new String[]{"latitude", "longitude", "speed", "secondsToRemainHere"};
-    }
-
-    @Override
-    public CellProcessor[] getProcessors() {
+    public static CellProcessor[] getProcessors() {
         return cellProcessors;
     }
 
-    @Override
-    public String[] getFields() {
+    public static String[] getFields() {
         return fields;
     }
 
-    @Override
-    public String[] getHeaders() {
+    public static String[] getHeaders() {
         return headers;
     }
 }
