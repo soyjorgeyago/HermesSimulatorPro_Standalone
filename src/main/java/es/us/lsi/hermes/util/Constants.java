@@ -71,7 +71,11 @@ public final class Constants {
     public static final String VEHICLE_LOCATION = "Vehicle Location";
     public static final String HERMES_SERVER = "madeirasic.us.es";
     public static final String SERVER_HERMES_FOLDER = "hermes";
-    public static final String SERVER_CSV_FOLDER = "CSV_storage";
-    public static final String SERVER_DRIVERS_FOLDER = "Drivers";
-    public static final String SERVER_PATHS_FOLDER = "Paths";
+    public static final String CSV_FOLDER = "CSV_storage";
+    public static final String DRIVERS_FOLDER = "Drivers";
+    public static final String PATHS_FOLDER = "Paths";
+
+    public static final String DRIVERS_EXTENSION = "_driver.csv";
+    public static final String PATHS_EXTENSION = "_path.csv";
+
 }

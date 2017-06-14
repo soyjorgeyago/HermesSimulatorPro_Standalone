@@ -24,16 +24,16 @@ public class CSVUtils {
 
     private static final Logger LOG = Logger.getLogger(SimulatorController.class.getName());
 
-    static final Path PERMANENT_FOLDER_PATHS = StorageUtils.createCsvFolders("Paths"),
-            PERMANENT_FOLDER_DRIVERS = StorageUtils.createCsvFolders("Drivers");
+    static final Path PERMANENT_FOLDER_PATHS = StorageUtils.createCsvFolders(Constants.PATHS_FOLDER),
+            PERMANENT_FOLDER_DRIVERS = StorageUtils.createCsvFolders(Constants.DRIVERS_FOLDER);
 
     public static void createDriversDataFile(String fileNameHeader, List<DriverParameters> driversList) {
-        File driversFile = StorageUtils.generateCsvFile(fileNameHeader, "_driver.csv", "drivers");
+        File driversFile = StorageUtils.generateCsvFile(fileNameHeader, Constants.DRIVERS_EXTENSION, Constants.DRIVERS_FOLDER);
         exportToCSV(CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, false, driversFile, DriverParameters.getHeaders(), DriverParameters.getFields(), DriverParameters.getProcessors(), driversList);
     }
 
     static void createRouteDataFile(String fileNameHeader, List<LocationLogDetail> locationList) {
-        File routesFile = StorageUtils.generateCsvFile(fileNameHeader, "_path.csv", "paths");
+        File routesFile = StorageUtils.generateCsvFile(fileNameHeader, Constants.PATHS_EXTENSION, Constants.PATHS_FOLDER);
         exportToCSV(CsvPreference.EXCEL_NORTH_EUROPE_PREFERENCE, false, routesFile,  LocationLogDetail.getHeaders(), LocationLogDetail.getFields(), LocationLogDetail.getProcessors(), locationList);
     }
 
@@ -205,9 +205,9 @@ public class CSVUtils {
                     .scheme("http")
                     .host(Constants.HERMES_SERVER)
                     .addPathSegment(Constants.SERVER_HERMES_FOLDER)
-                    .addPathSegment(Constants.SERVER_CSV_FOLDER)
-                    .addPathSegment(isPath ? Constants.SERVER_PATHS_FOLDER : Constants.SERVER_DRIVERS_FOLDER)
-                    .addPathSegment(fileNumber + (isPath ? "_path.csv" : "_driver.csv"))
+                    .addPathSegment(Constants.CSV_FOLDER)
+                    .addPathSegment(isPath ? Constants.PATHS_FOLDER : Constants.DRIVERS_FOLDER)
+                    .addPathSegment(fileNumber + (isPath ? Constants.PATHS_EXTENSION : Constants.DRIVERS_EXTENSION))
                     .build().url();
         }catch (Exception ex){
             LOG.log(Level.SEVERE, "The URL for the path " + fileNumber + " could not be built", ex);

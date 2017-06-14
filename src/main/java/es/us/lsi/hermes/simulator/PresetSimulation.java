@@ -70,7 +70,7 @@ public class PresetSimulation {
         randomizeEachSmartDriverBehaviour = getBooleanValue("randomize.behaviour", true);
         retries = getIntValue("retries", -1, 5, 1);
         loadPathsAndDriversFromHdd = getBooleanValue("hdd.load", false);
-        csvStorageFolder = getPathValue("csv.storage.folder", "CSV_storage");
+        csvStorageFolder = getPathValue("csv.storage.folder", Constants.CSV_FOLDER);
         maxResponseDelayMs = getIntValue("max.response.delay.ms", 10, 10000, 5000);
         maxSimulationTimeInSeconds = getIntValue("max.simulation.time.s", 0);
         if (maxSimulationTimeInSeconds > 0) {
