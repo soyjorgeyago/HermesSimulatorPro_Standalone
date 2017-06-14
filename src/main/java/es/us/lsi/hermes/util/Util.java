@@ -1,5 +1,6 @@
 package es.us.lsi.hermes.util;
 
+import com.squareup.okhttp.HttpUrl;
 import es.us.lsi.hermes.simulator.SimulatorController;
 import java.io.IOException;
 import java.io.InputStream;
@@ -112,11 +113,16 @@ public class Util {
     private static Properties getFromServer(String propertiesFileName) {
         Properties result = new Properties();
         Reader reader = null;
-        String propertiesInServer = Constants.PROPERTIES_SERVER + propertiesFileName;
+        String propertiesInServer = Constants.HERMES_SERVER + propertiesFileName;
 
         try {
             // Try to get files from Internet.
-            URL propertiesInServerUrl = new URL(propertiesInServer);
+            URL propertiesInServerUrl = new HttpUrl.Builder()
+                    .scheme("http")
+                    .host(Constants.HERMES_SERVER)
+                    .addPathSegment(Constants.SERVER_HERMES_FOLDER)
+                    .addPathSegment(propertiesFileName)
+                    .build().url();
             InputStream in = propertiesInServerUrl.openStream();
             reader = new InputStreamReader(in, "UTF-8");
             result.load(reader);

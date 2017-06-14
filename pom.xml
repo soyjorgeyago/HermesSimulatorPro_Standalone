@@ -74,14 +74,6 @@
             <version>0.1.20</version>
         </dependency>
         
-        <!-- Ztreamy (using local repository) -->
-        <dependency>
-            <groupId>ztreamy</groupId>
-            <artifactId>ztreamyPublisher</artifactId>
-            <version>0.5.dev7</version>
-            <type>jar</type>
-        </dependency>
-        
         <!-- Kafka -->
         <dependency>
             <groupId>org.apache.kafka</groupId>

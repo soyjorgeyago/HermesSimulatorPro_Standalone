@@ -1,7 +1,6 @@
 package es.us.lsi.hermes.simulator;
 
 import java.util.Map;
-import ztreamy.Event;
 
 public class ExtendedEvent extends Event {
 

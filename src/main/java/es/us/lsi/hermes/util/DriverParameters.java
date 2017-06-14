@@ -38,6 +38,7 @@ public class DriverParameters implements Serializable {
     }
 
     // ------------------------- CSV IMP/EXP -------------------------
+
     private static CellProcessor[] cellProcessors = new CellProcessor[]{new ParseDouble(), new ParseDouble()};
     private static String[] fields = new String[]{"SpeedRandomFactor", "HrRandomFactor"};
     private static String[] headers = new String[]{"speedRandomFactor", "hrRandomFactor"};

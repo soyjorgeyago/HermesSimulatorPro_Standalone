@@ -86,7 +86,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
         // Use preset paths and drivers saved previously or get new ones.
         if (PresetSimulation.isLoadPathsAndDriversFromHdd()) {
-            locationLogList = CSVUtils.loadPathsFromFolder();
+            locationLogList = CSVUtils.loadAllPaths();
         } else {
             PathUtils.generateSimulatedPaths();
         }
@@ -282,7 +282,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         // Load the driver unique properties from disk if requested
         List<List<DriverParameters>> loadedDriverParameters = null;
         if (PresetSimulation.isLoadPathsAndDriversFromHdd()) {
-            loadedDriverParameters = CSVUtils.loadSimulatedDriversForPath();
+            loadedDriverParameters = CSVUtils.loadDrivers();
         }
 
         try {
@@ -290,8 +290,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
             // Get the smallest of them both, for the cases when we request 5 paths and only 4 are generated
             int pathAmount = Math.min(locationLogList.size(), PresetSimulation.getPathsAmount());
             for (int pathIndex = 0; pathIndex < pathAmount; pathIndex++) {
-                //FIXME por Raul
-                int pathPointsCount = locationLogList.get(pathIndex).getLocationLogDetailList().size();
 
                 // Para el caso del modo de inicio LINEAL, si hay más de 10 SmartDrivers, se toma el 10% para repartir su inicio durante 50 segundos.
                 int smartDriversBunch = PresetSimulation.getDriversByPath() > 10 ?

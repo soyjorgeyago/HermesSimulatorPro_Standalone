@@ -42,9 +42,6 @@ public final class Constants {
     // Path generation request amount per second. It is a Google limitation.
     public static final int REQUEST_PACK_SIZE = 10;
 
-    // Times to retry sending.
-    public static final int RETRIES = 5;
-
     public enum Paths_Generation_Method {
         GOOGLE, OPENSTREETMAP
     }
@@ -72,6 +69,9 @@ public final class Constants {
 
     public static final String DATA_SECTION = "Data Section";
     public static final String VEHICLE_LOCATION = "Vehicle Location";
-
-    public static final String PROPERTIES_SERVER = "http://madeirasic.us.es/hermes/";
+    public static final String HERMES_SERVER = "madeirasic.us.es";
+    public static final String SERVER_HERMES_FOLDER = "hermes";
+    public static final String SERVER_CSV_FOLDER = "CSV_storage";
+    public static final String SERVER_DRIVERS_FOLDER = "Drivers";
+    public static final String SERVER_PATHS_FOLDER = "Paths";
 }

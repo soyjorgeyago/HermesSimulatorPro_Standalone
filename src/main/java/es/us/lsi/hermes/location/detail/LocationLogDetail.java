@@ -65,9 +65,9 @@ public class LocationLogDetail implements Serializable {
     }
 
     // ------------------------- CSV IMP/EXP -------------------------
-    private static CellProcessor[] cellProcessors = new CellProcessor[]{new ParseDouble(), new ParseDouble(), new ParseInt(), new ParseInt(), new ParseInt()};
-    private static String[] fields = new String[]{"Latitude", "Longitude", "Speed", "SecondsToRemainHere", "RrTime"};
-    private static String[] headers = new String[]{"latitude", "longitude", "speed", "secondsToRemainHere", "rrTime"};
+    private static CellProcessor[] cellProcessors = new CellProcessor[]{new ParseDouble(), new ParseDouble(), new ParseInt(), new ParseInt()};
+    private static String[] fields = new String[]{"Latitude", "Longitude", "Speed", "SecondsToRemainHere"};
+    private static String[] headers = new String[]{"latitude", "longitude", "speed", "secondsToRemainHere"};
 
     public static CellProcessor[] getProcessors() {
         return cellProcessors;

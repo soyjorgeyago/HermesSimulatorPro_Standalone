@@ -203,10 +203,6 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
 
             LOG.log(Level.FINE, "SimulatedSmartDriver.run() - El usuario de SmartDriver se encuentra en: ({0}, {1})", new Object[]{currentLocationLogDetail.getLatitude(), currentLocationLogDetail.getLongitude()});
 
-            //FIXME
-            System.out.println("Elapsed " + getPointToPointElapsedSeconds());
-            System.out.println("Remaining " + pathPointsSecondsToRemainHere[getCurrentPosition()]);
-
             // Check if we can continue to next location
             if (getPointToPointElapsedSeconds() >= pathPointsSecondsToRemainHere[getCurrentPosition()]) {
                 // ¿Have we reached the destination?
@@ -486,14 +482,11 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
 
         HashMap<String, Object> bodyObject = new HashMap<>();
 
-        //FIXME
-        System.out.println("I " + id + " A " + smartDriverLocation + " T " + pathPointsSecondsToRemainHere[getCurrentPosition()]);
-
         bodyObject.put("Location", smartDriverLocation);
         increaseGenerated();
 
         ExtendedEvent event = new ExtendedEvent(sha, "application/json", Constants.SIMULATOR_APPLICATION_ID,
-                Constants.VEHICLE_LOCATION, bodyObject, Constants.RETRIES);
+                Constants.VEHICLE_LOCATION, bodyObject, PresetSimulation.getRetries());
 
         increaseSent();
         try {
@@ -596,7 +589,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         increaseGenerated();
 
         ExtendedEvent event = new ExtendedEvent(sha, "application/json", Constants.SIMULATOR_APPLICATION_ID,
-                Constants.DATA_SECTION, bodyObject, Constants.RETRIES);
+                Constants.DATA_SECTION, bodyObject, PresetSimulation.getRetries());
 
         increaseSent();
         try {
@@ -747,13 +740,13 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
                 switch (type) {
                     case RECOVERED_VEHICLE_LOCATION:
                         // The elements are already in the pending to send list. One retry is subtracted.
-                        if (Constants.RETRIES != -1) {
+                        if (PresetSimulation.getRetries() != -1) {
                             decreasePendingVehicleLocationsRetries();
                         }
                         break;
                     case RECOVERED_DATA_SECTION:
                         // The elements are already in the pending to send list. One retry is subtracted.
-                        if (Constants.RETRIES != -1) {
+                        if (PresetSimulation.getRetries() != -1) {
                             decreasePendingDataSectionsRetries();
                         }
                         break;
