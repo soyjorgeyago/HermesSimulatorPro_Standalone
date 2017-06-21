@@ -1,5 +1,6 @@
 package es.us.lsi.hermes.simulator;
 
+import es.us.lsi.hermes.kafka.ExtendedEvent;
 import com.google.gson.Gson;
 import es.us.lsi.hermes.location.detail.LocationLogDetail;
 import es.us.lsi.hermes.kafka.Kafka;
@@ -71,6 +72,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
 
     private SurroundingVehiclesConsumer surroundingVehiclesConsumer = null;
     private boolean paused;
+    private boolean started;
 
     private final int pathId;
     private final double[] pathPointsSecondsToRemainHere;
@@ -82,19 +84,16 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
     /**
      * Constructor para cada instancia de 'SmartDriver'.
      *
-//     TODO Update
-//     * @param ll Contendrá los datos de la ruta que debe seguir.
-//     * @param randomBehaviour Indicará si tendrá una componente aleatoria en su
-     * comportamiento. no.
-//     * @param infiniteSimulation Indicará si se debe parar la simulación o
-     * volver de vuelta cada SmartDriver, cuando llegue a su destino.
-//     * @param streamServer Indicará el servidor de tramas que recibirá la
-     * información de la simulación.
-//     * @param retries Indicará el número de reintentos de envío de una trama
-     * fallida, antes de descartarla.
+     * // TODO Update // * @param ll Contendrá los datos de la ruta que debe
+     * seguir. // * @param randomBehaviour Indicará si tendrá una componente
+     * aleatoria en su comportamiento. no. // * @param infiniteSimulation
+     * Indicará si se debe parar la simulación o volver de vuelta cada
+     * SmartDriver, cuando llegue a su destino. // * @param streamServer
+     * Indicará el servidor de tramas que recibirá la información de la
+     * simulación. // * @param retries Indicará el número de reintentos de envío
+     * de una trama fallida, antes de descartarla.
      *
-//     * @throws MalformedURLException
-//     * @throws HermesException
+     * // * @throws MalformedURLException // * @throws HermesException
      */
     public SimulatedSmartDriver(long id, int pathId, DriverParameters dp) throws MalformedURLException, HermesException {
         final SecureRandom random = new SecureRandom();
@@ -107,6 +106,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         this.stressLoad = 0; // Suponemos que inicialmente no está estresado.
         this.sha = new String(Hex.encodeHex(DigestUtils.sha256(random + "@sim.com")));
         this.paused = false;
+        this.started = false;
         this.pathId = pathId;
         this.direction = 1;
         this.roadSectionList = new ArrayList<>();
@@ -120,11 +120,10 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         this.MIN_RR = (int) Math.ceil(60000.0d / (220 - age)); // Min R-R, to establish the max HR.
         this.MAX_RR = (int) Math.ceil(240000.0d / (220 - age)); // Max R-R, to establish the min HR.
 
-//        // TODO: Probar otros timeouts más altos.
+        // TODO: Probar otros timeouts más altos.
         if (PresetSimulation.isKafkaProducerPerSmartDriver()) {
             this.surroundingVehiclesConsumer = new SurroundingVehiclesConsumer(this);
         }
-
         List<LocationLogDetail> path = SimulatorController.getPath(pathId);
         this.pathPointsSecondsToRemainHere = new double[path.size()];
         for (int position = 0; position < path.size(); position++) {
@@ -177,6 +176,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
 
     @Override
     public void run() {
+        started = true;
         try {
             synchronized (this) {
                 while (paused) {
@@ -238,7 +238,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
             }
             LOG.log(Level.FINE, "SimulatedSmartDriver.run() - Elapsed simulation time: {0}", DurationFormatUtils.formatDuration(getDriverSimulationTimeInSeconds(), "HH:mm:ss", true));
 
-        } catch(InterruptedException ex){
+        } catch (InterruptedException ex) {
             LOG.log(Level.INFO, "SimulatedSmartDriver.run() - Interrupted!");
         }
     }
@@ -289,14 +289,14 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
                 smartDriverKafkaProducer.send(
                         new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION, smartDriverKafkaRecordId, json),
                         new KafkaCallBack(System.currentTimeMillis(), smartDriverKafkaRecordId, events,
-                        Event_Type.RECOVERED_DATA_SECTION));
+                                Event_Type.RECOVERED_DATA_SECTION));
                 smartDriverKafkaRecordId++;
             } else {
                 long id = SimulatorController.getNextKafkaRecordId();
                 SimulatorController.getKafkaProducer().send(
                         new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION, id, json),
                         new KafkaCallBack(System.currentTimeMillis(), id, events,
-                        Event_Type.RECOVERED_DATA_SECTION));
+                                Event_Type.RECOVERED_DATA_SECTION));
             }
         } catch (Exception ex) {
             LOG.log(Level.SEVERE, "*Reintento* - Error: {0} - No se han podido reenviar los {1} 'DataSection' pendientes", new Object[]{ex.getMessage(), pendingDataSections.size()});
@@ -321,7 +321,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         }
     }
 
-    private LocationLogDetail updateCurrentPosition(LocationLogDetail currentLocationLogDetail){
+    private LocationLogDetail updateCurrentPosition(LocationLogDetail currentLocationLogDetail) {
 
         int previousPosition = getCurrentPosition();
 
@@ -361,12 +361,14 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         // If the user is calming down, decrease the HR, else, increase it. (stress based increment and decrement)
         if (relaxing) {
             rrTime -= 20 * (5 - stressLoad);
-            if(rrTime < MIN_RR)
+            if (rrTime < MIN_RR) {
                 rrTime = MIN_RR;
+            }
         } else {
             rrTime += 20 * stressLoad;
-            if(rrTime > MAX_RR)
+            if (rrTime > MAX_RR) {
                 rrTime = MAX_RR;
+            }
         }
 
         // Acumulamos la distancia recorrida.
@@ -495,14 +497,14 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
                 smartDriverKafkaProducer.send(
                         new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION, smartDriverKafkaRecordId, json),
                         new KafkaCallBack(System.currentTimeMillis(), smartDriverKafkaRecordId,
-                        new ExtendedEvent[]{event}, Event_Type.NORMAL_VEHICLE_LOCATION));
+                                new ExtendedEvent[]{event}, Event_Type.NORMAL_VEHICLE_LOCATION));
                 smartDriverKafkaRecordId++;
             } else {
                 long id = SimulatorController.getNextKafkaRecordId();
                 SimulatorController.getKafkaProducer().send(
                         new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION, id, json),
                         new KafkaCallBack(System.currentTimeMillis(), id,
-                        new ExtendedEvent[]{event}, Event_Type.NORMAL_VEHICLE_LOCATION));
+                                new ExtendedEvent[]{event}, Event_Type.NORMAL_VEHICLE_LOCATION));
             }
         } catch (Exception ex) {
             if (!hasFinished()) {
@@ -598,14 +600,14 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
                 smartDriverKafkaProducer.send(
                         new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION, smartDriverKafkaRecordId, json),
                         new KafkaCallBack(System.currentTimeMillis(), smartDriverKafkaRecordId,
-                        new ExtendedEvent[]{event}, Event_Type.NORMAL_DATA_SECTION));
+                                new ExtendedEvent[]{event}, Event_Type.NORMAL_DATA_SECTION));
                 smartDriverKafkaRecordId++;
             } else {
                 long id = SimulatorController.getNextKafkaRecordId();
                 SimulatorController.getKafkaProducer().send(
                         new ProducerRecord<>(Kafka.TOPIC_DATA_SECTION, id, json),
                         new KafkaCallBack(System.currentTimeMillis(), id,
-                        new ExtendedEvent[]{event}, Event_Type.NORMAL_DATA_SECTION));
+                                new ExtendedEvent[]{event}, Event_Type.NORMAL_DATA_SECTION));
             }
         } catch (Exception ex) {
             if (!hasFinished()) {
@@ -676,6 +678,10 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
 
     public synchronized boolean isPaused() {
         return paused;
+    }
+
+    public boolean isStarted() {
+        return started;
     }
 
     class KafkaCallBack implements Callback {

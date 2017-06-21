@@ -6,8 +6,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
+import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.MalformedURLException;
+import java.net.SocketException;
 import java.net.URL;
 import java.net.UnknownHostException;
 import java.util.Map;
@@ -166,6 +168,21 @@ public class Util {
      */
     public static String getComputerName() {
         try {
+            final DatagramSocket socket = new DatagramSocket();
+            socket.connect(InetAddress.getByName("8.8.8.8"), 10002);
+            String ip = socket.getLocalAddress().getHostAddress();
+            if (ip != null) {
+                return ip;
+            }
+
+            InetAddress inetAddress = InetAddress.getLocalHost();
+            ip = inetAddress.getHostAddress();
+            if (ip != null) {
+                return ip;
+            } else {
+                return inetAddress.getHostName();
+            }
+        } catch (UnknownHostException | SocketException ex) {
             Map<String, String> env = System.getenv();
 
             if (env.containsKey("COMPUTERNAME")) {
@@ -173,14 +190,12 @@ public class Util {
             } else if (env.containsKey("HOSTNAME")) {
                 return env.get("HOSTNAME");
             } else {
-                return (InetAddress.getLocalHost().getHostName());
+                return "Unknown";
             }
-        } catch (UnknownHostException ex) {
-            return "Unknown";
         }
     }
 
-    public static int getHrFromRr(int rrTime){
+    public static int getHrFromRr(int rrTime) {
         return (int) Math.ceil(60.0d / (rrTime / 1000.0d));
     }
 }

@@ -39,6 +39,8 @@ public class SurroundingVehiclesConsumer extends ShutdownableThread {
         this.pollTimeout = Long.parseLong(Kafka.getKafkaConsumerProperties().getProperty("consumer.poll.timeout.ms", "1000"));
         this.observer = observer;
         this.gson = new Gson();
+        //        consumer.subscribe(Collections.singletonList(TOPIC_SURROUNDING_VEHICLES + sourceId));
+        kafkaConsumer.subscribe(Collections.singletonList(TOPIC_SURROUNDING_VEHICLES));
     }
 
     public void stopConsumer() {
@@ -48,8 +50,6 @@ public class SurroundingVehiclesConsumer extends ShutdownableThread {
 
     @Override
     public void doWork() {
-//        consumer.subscribe(Collections.singletonList(TOPIC_SURROUNDING_VEHICLES + sourceId));
-        kafkaConsumer.subscribe(Collections.singletonList(TOPIC_SURROUNDING_VEHICLES));
         ConsumerRecords<String, String> records = kafkaConsumer.poll(pollTimeout);
         for (ConsumerRecord<String, String> record : records) {
             LOG.log(Level.FINE, "SurroundingVehiclesConsumer.doWork() - {0}: {1} [{2}] con offset {3}", new Object[]{record.topic(), Constants.dfISO8601.format(record.timestamp()), record.key(), record.offset()});

@@ -23,7 +23,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
     private static final Logger LOG = Logger.getLogger(SimulatorController.class.getName());
 
-
     private static long startSimulationTime = 0L;
     private static long endSimulationTime = 0L;
 
@@ -92,7 +91,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         }
 
         // Initialize path related attributes to perform the simulation
-        if(locationLogList != null) {
+        if (locationLogList != null) {
             setupVariablesWithPaths(locationLogList.size());
         }
     }
@@ -147,6 +146,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 int pending = 0;
                 long maxSmartDriversDelayMs = 0;
                 long currentMeanSmartDriversDelayMs = -1;
+                int started = 0;
 
                 for (SimulatedSmartDriver ssd : simulatedSmartDriverHashMap.values()) {
                     if (!ssd.isPaused()) {
@@ -167,21 +167,24 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                     errors += ssd.getErrors();
                     recovered += ssd.getRecovered();
                     pending += ssd.getPending();
-
+                    if (ssd.isStarted()) {
+                        started++;
+                    }
                 }
 
-                int activeSmartDrivers = threadPool.getQueue().size();
-                if (activeSmartDrivers > 0) {
-                    currentMeanSmartDriversDelayMs = (int) Math.ceil(totalDelaysMs / activeSmartDrivers);
+                int runningThreads = threadPool.getQueue().size();
+                int activeDrivers = started - pausedSimulatedSmartDrivers.size();
+                if (activeDrivers > 0) {
+                    currentMeanSmartDriversDelayMs = (int) Math.ceil(totalDelaysMs / activeDrivers);
                 }
-                statusString = MessageFormat.format("ESTADO: Tramas generadas={0}|Envíos realizados={1}" +
-                        "|Oks={2}|NoOks={3}|Errores={4}|Recuperados={5}|No reenviados finalmente={6}" +
-                        "|Hilos restantes={7}|Máximo retraso temporal total={8}ms|Retraso temporal actual={9}ms",
-                        generated, sent, oks, notOks, errors, recovered, pending, threadPool.getQueue().size(),
+                statusString = MessageFormat.format("ESTADO: Tramas generadas={0}|Envíos realizados={1}"
+                        + "|Oks={2}|NoOks={3}|Errores={4}|Recuperados={5}|No reenviados finalmente={6}"
+                        + "|Hilos restantes={7}|Máximo retraso temporal total={8}ms|Retraso temporal actual={9}ms",
+                        generated, sent, oks, notOks, errors, recovered, pending, runningThreads,
                         maxSmartDriversDelayMs, currentMeanSmartDriversDelayMs);
                 LOG.log(Level.FINE, "logCurrentStatus() - {0}", statusString);
 
-                String json = new Gson().toJson(new SimulatorStatus(System.currentTimeMillis(), generated, sent, oks, notOks, errors, recovered, pending, activeSmartDrivers, currentMeanSmartDriversDelayMs, pausedSimulatedSmartDrivers.size()));
+                String json = new Gson().toJson(new SimulatorStatus(System.currentTimeMillis(), generated, sent, oks, notOks, errors, recovered, pending, runningThreads, currentMeanSmartDriversDelayMs, activeDrivers, pausedSimulatedSmartDrivers.size()));
                 LOG.log(Level.FINE, "statusMonitorTimer() - Simulation status JSON: {0}", json);
                 kafkaMonitoringProducer.send(new ProducerRecord<>(Kafka.TOPIC_SIMULATOR_STATUS, computerNameWithStartTime, json));
 
@@ -289,14 +292,13 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
             long id = 0L;
             // Get the smallest of them both, for the cases when we request 5 paths and only 4 are generated
             int pathAmount = Math.min(locationLogList.size(), PresetSimulation.getPathsAmount());
+            // Para el caso del modo de inicio LINEAL, si hay más de 10 SmartDrivers, se toma el 10% para repartir su inicio durante 100 segundos.
+            int smartDriversBunch = PresetSimulation.getDriversByPath() > 10
+                    ? (int) (PresetSimulation.getDriversByPath() * 0.1) : 1;
+
             for (int pathIndex = 0; pathIndex < pathAmount; pathIndex++) {
-
-                // Para el caso del modo de inicio LINEAL, si hay más de 10 SmartDrivers, se toma el 10% para repartir su inicio durante 50 segundos.
-                int smartDriversBunch = PresetSimulation.getDriversByPath() > 10 ?
-                        (int) (PresetSimulation.getDriversByPath() * 0.1) : 1;
-
-                LOG.log(Level.FINE, "executeSimulation() - Cada 10 segundos, se iniciarán {0} SmartDrivers en " +
-                        "el trayecto {1}", new Object[]{smartDriversBunch, pathIndex});
+                LOG.log(Level.FINE, "executeSimulation() - Cada 10 segundos, se iniciarán {0} SmartDrivers en "
+                        + "el trayecto {1}", new Object[]{smartDriversBunch, pathIndex});
 
                 List<DriverParameters> driverParameters = new ArrayList<>();
                 for (int driverIndex = 0; driverIndex < PresetSimulation.getDriversByPath(); driverIndex++) {
@@ -353,17 +355,14 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 delay = rand.nextInt(Constants.MAX_INITIAL_DELAY);
                 break;
             case LINEAL:
-                // Se repartirá el total de SmartDrivers en 50 segundos.
-                // Para cada trayecto, saldrá el 10% de SmartDrivers cada 10 segundos, con lo que el total habrá salido antes de 100 segundos.
-                delay = 10000 * (int) (id / smartDriversBunch);
+                // Se repartirá el total de conductores linealmente.
+                delay = 1000 * (int) (id / smartDriversBunch) + (id % smartDriversBunch);
                 break;
             case SAME_TIME:
                 break;
         }
-        // Aplicamos un pequeño retraso más el aplicado por el modo se inicio.
-        long totalDelay = 100 + id + delay;
-        LOG.log(Level.FINE, "SmartDriver {0} con inicio en {1}", new Object[]{id, totalDelay});
-        threadPool.scheduleAtFixedRate(ssd, totalDelay, 1000, TimeUnit.MILLISECONDS);
+        LOG.log(Level.FINE, "SmartDriver {0} con inicio en {1} ms", new Object[]{id, delay});
+        threadPool.scheduleAtFixedRate(ssd, delay, 1000, TimeUnit.MILLISECONDS);
     }
 
     private void resetSimulation() {
@@ -388,7 +387,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     }
 
     public static void smartDriverHasFinished(String id) {
-        LOG.log(Level.FINE, "smartDriverHasFinished() - Ha terminado el SmartDriver con id={0}, quedan {1} restantes", new Object[]{id, threadPool.getQueue().size()});
+        LOG.log(Level.FINE, "smartDriverHasFinished() - Ha terminado el SmartDriver con id={0}, quedan {1} hilos en ejecución", new Object[]{id, threadPool.getQueue().size()});
         simulatedSmartDriverHashMap.remove(id);
     }
 
@@ -422,16 +421,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
             resetSimulation();
 
-            // JYFR: PRUEBA
-//            // Comprobamos si hay que ejecutar otra simulación.
-//            if (streamServer.equals(Stream_Server.FIRST_KAFKA_THEN_ZTREAMY) || streamServer.equals(Stream_Server.FIRST_ZTREAMY_THEN_KAFKA)) {
-//                // Planificamos la fecha de inicio para después del tiempo máximo de simulación más 5 minutos para tener margen.
-//                // De este modo, si se planificó una simulación a una hora determinada en varios equipos, todos empezarán la siguiente al mismo tiempo también.
-//                scheduledDate = new Date(startSimulationTime + MAX_SIMULATION_TIME + 300000);
-//                streamServer = Stream_Server.values()[(streamServer.ordinal() - 1) % 2];
-//                LOG.log(Level.INFO, "finishSimulation() - La siguiente simulación será a las: {0}", Constants.dfISO8601.format(scheduledDate));
-//                scheduledSimulation();
-//            }
             if (kafkaProducer != null) {
                 kafkaProducer.flush();
                 kafkaProducer.close();

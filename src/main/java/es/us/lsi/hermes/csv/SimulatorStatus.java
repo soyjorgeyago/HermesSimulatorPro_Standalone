@@ -16,14 +16,15 @@ public class SimulatorStatus implements Serializable{
     private final int recovered;
     private final int pending;
     private final int runningThreads;
-    private final long currentSmartDriversDelay;
-    private final int pausedSmartDrivers;
+    private final long currentDriversDelay;
+    private final int activeDrivers;
+    private final int pausedDrivers;
 
     public SimulatorStatus() {
-        this(System.currentTimeMillis(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        this(System.currentTimeMillis(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     }
 
-    public SimulatorStatus(long timestamp, int generated, int sent, int ok, int notOk, int errors, int recovered, int pending, int runningThreads, long currentSmartDriversDelay, int pausedSmartDrivers) {
+    public SimulatorStatus(long timestamp, int generated, int sent, int ok, int notOk, int errors, int recovered, int pending, int runningThreads, long currentDriversDelay, int activeDrivers, int pausedDrivers) {
         this.timestamp = timestamp;
         this.generated = generated;
         this.sent = sent;
@@ -33,8 +34,9 @@ public class SimulatorStatus implements Serializable{
         this.recovered = recovered;
         this.pending = pending;
         this.runningThreads = runningThreads;
-        this.currentSmartDriversDelay = currentSmartDriversDelay;
-        this.pausedSmartDrivers = pausedSmartDrivers;
+        this.currentDriversDelay = currentDriversDelay;
+        this.activeDrivers = activeDrivers;
+        this.pausedDrivers = pausedDrivers;
     }
 
     public long getTimestamp() {
@@ -73,11 +75,15 @@ public class SimulatorStatus implements Serializable{
         return runningThreads;
     }
 
-    public long getCurrentSmartDriversDelay() {
-        return currentSmartDriversDelay;
+    public long getCurrentDriversDelay() {
+        return currentDriversDelay;
     }
 
-    public int getPausedSmartDrivers() {
-        return pausedSmartDrivers;
+    public int getActiveDrivers() {
+        return activeDrivers;
+    }
+
+    public int getPausedDrivers() {
+        return pausedDrivers;
     }
 }

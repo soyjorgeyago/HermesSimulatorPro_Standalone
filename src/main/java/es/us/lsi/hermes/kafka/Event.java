@@ -1,4 +1,4 @@
-package es.us.lsi.hermes.simulator;
+package es.us.lsi.hermes.kafka;
 
 import com.google.gson.Gson;
 
