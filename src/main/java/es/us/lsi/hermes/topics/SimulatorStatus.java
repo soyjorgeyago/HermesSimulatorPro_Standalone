@@ -1,4 +1,4 @@
-package es.us.lsi.hermes.csv;
+package es.us.lsi.hermes.topics;
 
 import java.io.Serializable;
 

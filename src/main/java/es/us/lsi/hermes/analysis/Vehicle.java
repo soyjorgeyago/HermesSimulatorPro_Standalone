@@ -1,6 +1,6 @@
 package es.us.lsi.hermes.analysis;
 
-import es.us.lsi.hermes.smartDriver.VehicleLocation;
+import es.us.lsi.hermes.topics.VehicleLocation;
 import java.util.List;
 
 public class Vehicle {

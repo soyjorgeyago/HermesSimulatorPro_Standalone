@@ -81,17 +81,7 @@
             <version>0.10.2.1</version>
         </dependency>
     </dependencies>
-    
-    <repositories>
-        <!-- Local repository for 'Ztreamy' libs to be able to use it while it hasn't its own repository -->
-        <repository>
-            <url>file://${basedir}/my-repo</url>
-            <id>my-repo</id>
-            <layout>default</layout>
-            <name>Repository for library Ztreamy</name>
-        </repository>
-    </repositories>
-    
+
     <build>
         <plugins>
             <plugin>

@@ -1,4 +1,4 @@
-package es.us.lsi.hermes.simulator;
+package es.us.lsi.hermes.util.classes;
 
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.logging.Level;
@@ -12,12 +12,12 @@ public class ThreadPoolMonitor implements Runnable {
     private final int seconds;
     private boolean run = true;
 
-    public ThreadPoolMonitor(ThreadPoolExecutor executor, int delay) {
+    ThreadPoolMonitor(ThreadPoolExecutor executor, int delay) {
         this.executor = executor;
         this.seconds = delay;
     }
 
-    public void shutdown() {
+    void shutdown() {
         this.run = false;
     }
 

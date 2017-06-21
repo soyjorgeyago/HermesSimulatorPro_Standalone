@@ -1,6 +1,7 @@
 package es.us.lsi.hermes.util;
 
 import com.squareup.okhttp.HttpUrl;
+import es.us.lsi.hermes.config.Constants;
 import es.us.lsi.hermes.simulator.SimulatorController;
 import java.io.IOException;
 import java.io.InputStream;
@@ -18,15 +19,15 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-public class Util {
+public class Utils {
 
-    private static final Logger LOG = Logger.getLogger(Util.class.getName());
+    private static final Logger LOG = Logger.getLogger(Utils.class.getName());
 
     private static final String EMAIL_PATTERN = "^[_A-Za-z0-9-\\+]+(\\.[_A-Za-z0-9-]+)*@"
             + "[A-Za-z0-9-]+(\\.[A-Za-z0-9]+)*(\\.[A-Za-z]{2,})$";
     private static final String ALPHANUMERIC = "^[a-zA-Z0-9]*$";
 
-    private Util() {
+    private Utils() {
         // Para prevenir la instanciación de la clase.
     }
 

@@ -1,6 +1,6 @@
 package es.us.lsi.hermes.util;
 
-import es.us.lsi.hermes.simulator.PresetSimulation;
+import es.us.lsi.hermes.config.PresetSimulation;
 import joptsimple.internal.Strings;
 import java.io.File;
 import java.io.IOException;
@@ -11,7 +11,7 @@ import java.util.logging.Logger;
 
 public class StorageUtils {
 
-    private static final Logger LOG = Logger.getLogger(Util.class.getName());
+    private static final Logger LOG = Logger.getLogger(Utils.class.getName());
 
     // TODO Review merge
     private static Path createFolder(boolean temporal) {

@@ -1,6 +1,6 @@
 package es.us.lsi.hermes.kafka;
 
-import es.us.lsi.hermes.util.Util;
+import es.us.lsi.hermes.util.Utils;
 import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -10,8 +10,6 @@ public class Kafka {
     private static final Logger LOG = Logger.getLogger(Kafka.class.getName());
 
     public static final String TOPIC_VEHICLE_LOCATION = "VehicleLocation";
-    public static final String TOPIC_DATA_SECTION = "DataSection";
-    public static final String TOPIC_SMARTDRIVER_STATUS = "SmartDriverStatus";
     public static final String TOPIC_SIMULATOR_STATUS = "SimulatorStatus";
 
     private static final Properties KAFKA_PRODUCER_PROPERTIES;
@@ -21,9 +19,9 @@ public class Kafka {
     static {
         LOG.log(Level.INFO, "Kafka() - Kafka init.");
 
-        KAFKA_PRODUCER_PROPERTIES = Util.initProperties("KafkaProducer.properties");
-        KAFKA_CONSUMER_PROPERTIES = Util.initProperties("KafkaConsumer.properties");
-        KAFKA_MONITORING_PRODUCER_PROPERTIES = Util.initProperties("KafkaMonitoringProducer.properties");
+        KAFKA_PRODUCER_PROPERTIES = Utils.initProperties("KafkaProducer.properties");
+        KAFKA_CONSUMER_PROPERTIES = Utils.initProperties("KafkaConsumer.properties");
+        KAFKA_MONITORING_PRODUCER_PROPERTIES = Utils.initProperties("KafkaMonitoringProducer.properties");
     }
 
     public static Properties getKafkaProducerProperties() {

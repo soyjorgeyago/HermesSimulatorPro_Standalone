@@ -1,4 +1,4 @@
-package es.us.lsi.hermes.util;
+package es.us.lsi.hermes.util.classes;
 
 import java.io.Serializable;
 import java.security.SecureRandom;

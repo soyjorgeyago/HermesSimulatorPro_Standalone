@@ -1,10 +1,12 @@
 package es.us.lsi.hermes.simulator;
 
 import com.google.gson.Gson;
-import es.us.lsi.hermes.csv.SimulatorStatus;
+import es.us.lsi.hermes.config.Constants;
+import es.us.lsi.hermes.config.PresetSimulation;
+import es.us.lsi.hermes.topics.SimulatorStatus;
 import es.us.lsi.hermes.location.LocationLog;
 import es.us.lsi.hermes.kafka.Kafka;
-import es.us.lsi.hermes.location.detail.LocationLogDetail;
+import es.us.lsi.hermes.location.LocationLogDetail;
 import es.us.lsi.hermes.util.*;
 import java.io.Serializable;
 import java.net.MalformedURLException;
@@ -15,6 +17,11 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.mail.MessagingException;
+
+import es.us.lsi.hermes.util.classes.DriverParameters;
+import es.us.lsi.hermes.util.classes.Email;
+import es.us.lsi.hermes.util.classes.HermesException;
+import es.us.lsi.hermes.util.classes.ISimulatorControllerObserver;
 import org.apache.commons.lang.time.DurationFormatUtils;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -126,7 +133,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     }
 
     private void startStatusMonitorTimer() {
-        final String computerNameWithStartTime = Util.getComputerName() + "_" + System.currentTimeMillis();
+        final String computerNameWithStartTime = Utils.getComputerName() + "_" + System.currentTimeMillis();
         LOG.log(Level.INFO, "statusMonitorTimer() - Starting simulator status monitor on machine: {0}", computerNameWithStartTime);
         ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
         statusMonitorScheduler = scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
@@ -412,7 +419,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 LOG.log(Level.INFO, "finishSimulation() - {0}", timeSummary);
 
                 String body = "<html><head><title></title></head><body>" + (interrupted ? "<h1 style=\"color:red;\">SIMULACION INTERRUMPIDA</h1>" : "") + "<p>" + statusString.replaceAll("\n", "<br/>") + "</p><p>" + timeSummary + "</p><p>Un saludo.</p></body></html>";
-                Email.generateAndSendEmail(PresetSimulation.getSendResultsToEmail(), "FIN DE SIMULACION " + Util.getComputerName(), body);
+                Email.generateAndSendEmail(PresetSimulation.getSendResultsToEmail(), "FIN DE SIMULACION " + Utils.getComputerName(), body);
             }
         } catch (MessagingException ex) {
             LOG.log(Level.SEVERE, "finishSimulation() - No se ha podido enviar el e-mail con los resultados de la simulación", ex.getCause());

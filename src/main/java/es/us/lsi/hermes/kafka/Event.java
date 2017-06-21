@@ -8,6 +8,7 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 
 public class Event {
+
     private String eventId;
     private String sourceId;
     private String syntax;
@@ -166,7 +167,7 @@ public class Event {
     }
 
     public static void main(String[] args) throws IOException {
-        Event event = new Event(createUUID(), "text/plain", "Ztreamy-test", "Test event");
+        Event event = new Event(createUUID(), "text/plain", "Streaming-test", "Test event");
         event.setBody("Test body.");
         System.out.write(event.serialize());
     }

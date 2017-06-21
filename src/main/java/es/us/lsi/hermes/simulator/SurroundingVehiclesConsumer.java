@@ -2,12 +2,15 @@ package es.us.lsi.hermes.simulator;
 
 import com.google.gson.Gson;
 import es.us.lsi.hermes.analysis.Vehicle;
+import es.us.lsi.hermes.config.PresetSimulation;
 import es.us.lsi.hermes.kafka.Kafka;
-import es.us.lsi.hermes.util.Constants;
+import es.us.lsi.hermes.config.Constants;
 import java.util.Collections;
 import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import es.us.lsi.hermes.util.classes.ISimulatorControllerObserver;
 import kafka.utils.ShutdownableThread;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;

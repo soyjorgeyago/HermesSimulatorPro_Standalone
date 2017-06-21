@@ -1,6 +1,5 @@
 package es.us.lsi.hermes.location;
 
-import es.us.lsi.hermes.location.detail.LocationLogDetail;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Date;

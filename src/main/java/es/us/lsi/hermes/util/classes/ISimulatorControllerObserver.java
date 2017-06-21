@@ -1,4 +1,4 @@
-package es.us.lsi.hermes.simulator;
+package es.us.lsi.hermes.util.classes;
 
 //import es.us.lsi.hermes.analysis.Vehicle;
 

@@ -1,10 +1,12 @@
 package es.us.lsi.hermes.util;
 
 import com.squareup.okhttp.HttpUrl;
+import es.us.lsi.hermes.config.Constants;
 import es.us.lsi.hermes.location.LocationLog;
-import es.us.lsi.hermes.location.detail.LocationLogDetail;
-import es.us.lsi.hermes.simulator.PresetSimulation;
+import es.us.lsi.hermes.location.LocationLogDetail;
+import es.us.lsi.hermes.config.PresetSimulation;
 import es.us.lsi.hermes.simulator.SimulatorController;
+import es.us.lsi.hermes.util.classes.DriverParameters;
 import org.supercsv.cellprocessor.ift.CellProcessor;
 import org.supercsv.io.CsvBeanReader;
 import org.supercsv.io.CsvBeanWriter;

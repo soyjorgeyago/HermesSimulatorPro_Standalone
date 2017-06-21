@@ -1,4 +1,4 @@
-package es.us.lsi.hermes.util;
+package es.us.lsi.hermes.util.classes;
 
 import java.text.MessageFormat;
 import java.util.ResourceBundle;

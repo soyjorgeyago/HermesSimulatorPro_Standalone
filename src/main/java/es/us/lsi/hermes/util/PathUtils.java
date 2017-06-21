@@ -5,13 +5,14 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
+import es.us.lsi.hermes.config.Constants;
 import es.us.lsi.hermes.google.directions.*;
 import es.us.lsi.hermes.location.LocationLog;
-import es.us.lsi.hermes.location.detail.LocationLogDetail;
+import es.us.lsi.hermes.location.LocationLogDetail;
 import es.us.lsi.hermes.openStreetMap.PositionSimulatedSpeed;
-import es.us.lsi.hermes.simulator.PathRequestWebService;
-import es.us.lsi.hermes.simulator.PresetSimulation;
+import es.us.lsi.hermes.config.PresetSimulation;
 import es.us.lsi.hermes.simulator.SimulatorController;
+import es.us.lsi.hermes.util.classes.PathRequestWebService;
 import org.apache.commons.io.IOUtils;
 
 import java.io.IOException;
@@ -57,7 +58,7 @@ public class PathUtils {
 
             List<Double> previousCoordinates = previous.getPosition().getCoordinates();
             // Calculamos la distancia en metros entre los puntos previo y actual, así como el tiempo necesario para recorrer dicha distancia.
-            Double pointDistance = Util.distanceHaversine(previousCoordinates.get(1), previousCoordinates.get(0), currentCoordinates.get(1), currentCoordinates.get(0));
+            Double pointDistance = Utils.distanceHaversine(previousCoordinates.get(1), previousCoordinates.get(0), currentCoordinates.get(1), currentCoordinates.get(0));
             pathDistance += pointDistance;
 
             // Convertimos los Km/h en m/s.
@@ -115,7 +116,7 @@ public class PathUtils {
         for (Location location : locationList) {
 
             // Calculamos la distancia en metros entre los puntos previo y actual, así como el tiempo necesario para recorrer dicha distancia.
-            Double pointDistance = Util.distanceHaversine(previous.getLat(), previous.getLng(), location.getLat(), location.getLng());
+            Double pointDistance = Utils.distanceHaversine(previous.getLat(), previous.getLng(), location.getLat(), location.getLng());
             pathDistance += pointDistance;
             // Calculamos el tiempo en segundos que tarda en recorrer la distancia entre los puntos.
             int pointDuration = (int) Math.ceil(l.getDuration().getValue() * pointDistance / l.getDistance().getValue());

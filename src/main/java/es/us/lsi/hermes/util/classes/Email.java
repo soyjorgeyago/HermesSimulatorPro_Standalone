@@ -1,4 +1,6 @@
-package es.us.lsi.hermes.util;
+package es.us.lsi.hermes.util.classes;
+
+import es.us.lsi.hermes.util.Utils;
 
 import javax.activation.DataHandler;
 import javax.activation.DataSource;
@@ -22,7 +24,7 @@ public class Email {
     static {
         LOG.log(Level.INFO, "Email() - Email manager init.");
 
-        MAIL_SERVER_PROPERTIES = Util.initProperties("Email.properties");
+        MAIL_SERVER_PROPERTIES = Utils.initProperties("Email.properties");
         MAIL_SESSION = Session.getDefaultInstance(MAIL_SERVER_PROPERTIES, null);
     }
 

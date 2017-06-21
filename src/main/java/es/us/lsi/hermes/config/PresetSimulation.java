@@ -1,8 +1,7 @@
-package es.us.lsi.hermes.simulator;
+package es.us.lsi.hermes.config;
 
-import es.us.lsi.hermes.util.Constants;
 import es.us.lsi.hermes.util.StorageUtils;
-import es.us.lsi.hermes.util.Util;
+import es.us.lsi.hermes.util.Utils;
 import java.text.MessageFormat;
 
 import java.text.ParseException;
@@ -44,7 +43,7 @@ public class PresetSimulation {
     static {
         LOG.log(Level.INFO, "PresetSimulation() - Preset configuration init.");
         
-        PRESET_SIMULATION_PROPERTIES = Util.initProperties("PresetSimulation.properties");
+        PRESET_SIMULATION_PROPERTIES = Utils.initProperties("PresetSimulation.properties");
         validate();
     }
 
@@ -150,7 +149,7 @@ public class PresetSimulation {
     private static String getEmailValue(String propertyName, String defaultValue) {
         String property = PRESET_SIMULATION_PROPERTIES.getProperty(propertyName, defaultValue);
 
-        if (!Util.isValidEmail(property)) {
+        if (!Utils.isValidEmail(property)) {
             LOG.log(Level.SEVERE, "validate() - Invalid e-mail format for {0}. Should be a valid e-mail. Using default");
             return null;
         }

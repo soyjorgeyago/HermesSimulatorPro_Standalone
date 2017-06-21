@@ -1,4 +1,4 @@
-package es.us.lsi.hermes.util;
+package es.us.lsi.hermes.config;
 
 import es.us.lsi.hermes.google.directions.Location;
 
@@ -6,14 +6,10 @@ import java.text.DecimalFormat;
 import java.text.MessageFormat;
 import java.text.SimpleDateFormat;
 import java.util.ResourceBundle;
-import java.util.logging.Logger;
 
 public final class Constants {
     
-    private Constants() {
-    }
-
-    private static final Logger LOG = Logger.getLogger(Constants.class.getName());
+    private Constants() { }
 
     private static final ResourceBundle BUNDLE = ResourceBundle.getBundle("Bundle");
 
@@ -60,14 +56,12 @@ public final class Constants {
     }
 
     // Simulated Smart Driver ----------------------------------------------
-    // Parámetros recogidos de SmartDriver.
+
     public static final int SEND_INTERVAL_SECONDS = 10;
-    public static final int SEND_INTERVAL_METERS = 500;
     public static final double HIGH_ACCELERATION_THRESHOLD = 2.5d;
     public static final double HIGH_DECELERATION_THRESHOLD = -3.5d;
-    public static final double MIN_SPEED = 10.0d; // Velocidad mínima de los SmartDrivers.
+    public static final int MIN_SPEED = 10; // Velocidad mínima de los SmartDrivers.
 
-    public static final String DATA_SECTION = "Data Section";
     public static final String VEHICLE_LOCATION = "Vehicle Location";
     public static final String HERMES_SERVER = "madeirasic.us.es";
     public static final String SERVER_HERMES_FOLDER = "hermes";

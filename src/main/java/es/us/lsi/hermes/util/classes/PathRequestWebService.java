@@ -1,4 +1,4 @@
-package es.us.lsi.hermes.simulator;
+package es.us.lsi.hermes.util.classes;
 
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -21,7 +21,7 @@ public class PathRequestWebService {
         executor.submit(runnable);
     }
 
-    public static synchronized Future<String> submitTask(Callable callable) {
+    public static synchronized Future<String> submitTask(Callable<String> callable) {
         init();
         return executor.submit(callable);
     }
