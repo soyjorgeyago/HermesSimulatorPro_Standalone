@@ -24,7 +24,7 @@ import java.util.logging.Logger;
 
 public class CSVUtils {
 
-    private static final Logger LOG = Logger.getLogger(SimulatorController.class.getName());
+    private static final Logger LOG = Logger.getLogger(CSVUtils.class.getName());
 
     static final Path PERMANENT_FOLDER_PATHS = StorageUtils.createCsvFolders(Constants.PATHS_FOLDER),
             PERMANENT_FOLDER_DRIVERS = StorageUtils.createCsvFolders(Constants.DRIVERS_FOLDER);

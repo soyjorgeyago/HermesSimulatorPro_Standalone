@@ -363,7 +363,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 break;
             case LINEAL:
                 // Se repartirá el total de conductores linealmente.
-                delay = 1000 * (int) (id / smartDriversBunch) + (id % smartDriversBunch);
+                delay = 10000 * (int) (id / smartDriversBunch) + (id % smartDriversBunch);
                 break;
             case SAME_TIME:
                 break;

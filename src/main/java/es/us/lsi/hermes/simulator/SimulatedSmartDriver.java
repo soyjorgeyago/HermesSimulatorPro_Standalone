@@ -48,13 +48,11 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
     private SurroundingVehiclesConsumer surroundingVehiclesConsumer = null;
     private boolean paused, started;
 
-
     // FIXME: Pass to MonitorizedDriver
     private int secondsCount, secondsBetweenRetries;
     private boolean locationChanged;
 
     // Driver related constants
-
     private final String sha;   // Identificador único del SmartDriver.
     private final int MAX_RR, MIN_RR;
     private final double speedRandomFactor;
@@ -62,7 +60,6 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
     private final double[] pathPointsSecondsToRemainHere;
 
     // Driver related params
-
     private int stressLoad; // Indicará el nivel de carga de estrés.
     private boolean relaxing; // Indicará si el usuario está relajándose tras una carga de estrés.
     private int rrTime;
@@ -70,18 +67,12 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
     private int speed;
 
     /**
-     * Constructor para cada instancia de 'SmartDriver'.
-     *
-     * // TODO Update // * @param ll Contendrá los datos de la ruta que debe
-     * seguir. // * @param randomBehaviour Indicará si tendrá una componente
-     * aleatoria en su comportamiento. no. // * @param infiniteSimulation
-     * Indicará si se debe parar la simulación o volver de vuelta cada
-     * SmartDriver, cuando llegue a su destino. // * @param streamServer
-     * Indicará el servidor de tramas que recibirá la información de la
-     * simulación. // * @param retries Indicará el número de reintentos de envío
-     * de una trama fallida, antes de descartarla.
-     *
-     * // * @throws MalformedURLException // * @throws HermesException
+     * 'SmartDriver' constructor.
+     * @param id Unique identifier of the driver.
+     * @param pathId Path identifier used by the driver.
+     * @param dp Driver parameters that affect driver behaviour.
+     * @throws MalformedURLException
+     * @throws HermesException 
      */
     public SimulatedSmartDriver(long id, int pathId, DriverParameters dp) throws MalformedURLException, HermesException {
         final SecureRandom random = new SecureRandom();
@@ -186,8 +177,8 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
             // Check if we can continue to next location
             if (getPointToPointElapsedSeconds() >= pathPointsSecondsToRemainHere[getCurrentPosition()]) {
                 // ¿Have we reached the destination?
-                if ((direction > 0 && getCurrentPosition() == pathPointsSecondsToRemainHere.length - 1)
-                        || (direction < 0 && getCurrentPosition() == 0)) {
+                if ((direction > 0 && getCurrentPosition() >= pathPointsSecondsToRemainHere.length - 1)
+                        || (direction < 0 && getCurrentPosition() <= 0)) {
                     finishOrRepeat();
                 } else {
                     // Update the current location
@@ -255,9 +246,8 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
             LOG.log(Level.FINE, "SimulatedSmartDriver.run() - El usuario ha llegado a su destino en: {0}", DurationFormatUtils.formatDuration(getPointToPointElapsedSeconds(), "HH:mm:ss", true));
             finish();
 
-            // When we reach the end in an infinite simulation, turn around and repeat the process
         } else {
-            // We have reached the end of the path, but as it is an infinite simulation, we go back.
+            // When we reach the end in an infinite simulation, turn around and repeat the process.
             direction *= -1;
             resetPointToPointElapsedSeconds();
         }
@@ -267,11 +257,17 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
 
         int previousPosition = getCurrentPosition();
 
-        double jumpSeconds = 0.0d;
+        double staySeconds = 0.0d;
+        boolean nextPositionFound = false;
         // We haven't reached the end, move to the corresponding next location.
-        while (getPointToPointElapsedSeconds() > jumpSeconds) {
+        while (!nextPositionFound) {
             setCurrentPosition(getCurrentPosition() + direction);
-            jumpSeconds += pathPointsSecondsToRemainHere[getCurrentPosition()];
+            staySeconds += pathPointsSecondsToRemainHere[getCurrentPosition()];
+            if ((getPointToPointElapsedSeconds() <= staySeconds)
+                    || (getCurrentPosition() >= (pathPointsSecondsToRemainHere.length - 1))
+                    || (getCurrentPosition() <= 0)) {
+                nextPositionFound = true;
+            }
         }
 
         resetPointToPointElapsedSeconds();
@@ -281,6 +277,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         // Calculamos la orientación para simular estrés al entrar en una curva.
         double bearing = Utils.bearing(previousLocationLogDetail.getLatitude(), previousLocationLogDetail.getLongitude(), currentLocationLogDetail.getLatitude(), currentLocationLogDetail.getLongitude());
 
+        // FIXME: Review operation.
         if (previousPosition > 1) {
             LocationLogDetail antePreviousLocationLogDetail = SimulatorController.getPath(pathId).get(previousPosition - 1);
             double previousBearing = Utils.bearing(antePreviousLocationLogDetail.getLatitude(), antePreviousLocationLogDetail.getLongitude(), previousLocationLogDetail.getLatitude(), previousLocationLogDetail.getLongitude());
@@ -311,8 +308,9 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         // Mark location as changed and update the speed value
         locationChanged = true;
         speed = (int) Math.round(currentLocationLogDetail.getSpeed() * speedRandomFactor);
-        if(speed < Constants.MIN_SPEED)
+        if (speed < Constants.MIN_SPEED) {
             speed = Constants.MIN_SPEED;
+        }
 
         return currentLocationLogDetail;
     }
@@ -418,9 +416,9 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
 
             // Log the Json's biggest size for debugging purposes
             int sizeInBits = json.getBytes("UTF-8").length * 8;
-            if(sizeInBits > maxJsonSize){
+            if (sizeInBits > maxJsonSize) {
                 maxJsonSize = sizeInBits;
-                LOG.log(Level.INFO, "Maximum Json size till now: {0}", sizeInBits);
+                LOG.log(Level.FINE, "Maximum Json size till now: {0}", sizeInBits);
             }
 
             if (SimulatorController.isKafkaProducerPerSmartDriver()) {

@@ -2,7 +2,6 @@ package es.us.lsi.hermes.kafka;
 
 import com.google.gson.Gson;
 
-import java.io.IOException;
 import java.nio.charset.Charset;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -164,11 +163,5 @@ public class Event {
     private byte[] bodyAsJSON() {
         Gson gson = new Gson();
         return gson.toJson(this.body).getBytes(charsetUTF8);
-    }
-
-    public static void main(String[] args) throws IOException {
-        Event event = new Event(createUUID(), "text/plain", "Streaming-test", "Test event");
-        event.setBody("Test body.");
-        System.out.write(event.serialize());
     }
 }

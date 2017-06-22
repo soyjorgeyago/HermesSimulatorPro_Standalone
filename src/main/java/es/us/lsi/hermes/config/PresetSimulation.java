@@ -88,7 +88,7 @@ public class PresetSimulation {
     private static String getPathValue(String propertyName, String defaultValue) {
         String property = PRESET_SIMULATION_PROPERTIES.getProperty(propertyName);
 
-        if (!StorageUtils.canWrite(property)) {
+        if (!StorageUtils.canWrite(property.trim())) {
             property = defaultValue;
             LOG.log(Level.SEVERE, "{0} property not declared or not writable, using default: {1}", new Object[]{propertyName, property});
         }
@@ -100,7 +100,7 @@ public class PresetSimulation {
         int value = defaultValue;
 
         try {
-            value = Integer.parseInt(property);
+            value = Integer.parseInt(property.trim());
         } catch (NumberFormatException ex) {
             LOG.log(Level.SEVERE, "validate() - Invalid value for {0}. Using default value: {1}", new Object[]{propertyName, defaultValue});
         }
@@ -113,7 +113,7 @@ public class PresetSimulation {
         int value = defaultValue;
 
         try {
-            int v = Integer.parseInt(property);
+            int v = Integer.parseInt(property.trim());
             if (v < minimum || v > maximum) {
                 LOG.log(Level.SEVERE, "validate() - Invalid value for {0}. Should be [{1} to {2}] - Using default value: {3}", new Object[]{propertyName, minimum, maximum, defaultValue});
             } else {
@@ -128,7 +128,7 @@ public class PresetSimulation {
 
     private static boolean getBooleanValue(String propertyName, boolean defaultValue) {
         String property = PRESET_SIMULATION_PROPERTIES.getProperty(propertyName, String.valueOf(defaultValue));
-        return Boolean.parseBoolean(property);
+        return Boolean.parseBoolean(property.trim());
     }
 
     private static Date getDateValue(String propertyName, SimpleDateFormat sdf) {
@@ -137,7 +137,7 @@ public class PresetSimulation {
 
         if (property != null) {
             try {
-                value = sdf.parse(property);
+                value = sdf.parse(property.trim());
             } catch (ParseException ex) {
                 LOG.log(Level.SEVERE, "validate() - Invalid date format for {0}. Should be [yyyy-MM-dd_HH.mm.ss]", propertyName);
             }
@@ -149,7 +149,7 @@ public class PresetSimulation {
     private static String getEmailValue(String propertyName, String defaultValue) {
         String property = PRESET_SIMULATION_PROPERTIES.getProperty(propertyName, defaultValue);
 
-        if (!Utils.isValidEmail(property)) {
+        if (!Utils.isValidEmail(property.trim())) {
             LOG.log(Level.SEVERE, "validate() - Invalid e-mail format for {0}. Should be a valid e-mail. Using default");
             return null;
         }
