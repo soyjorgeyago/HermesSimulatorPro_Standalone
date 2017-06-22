@@ -46,7 +46,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     private static ScheduledFuture emergencyScheduler, simulationScheduler, statusMonitorScheduler;
     private static ScheduledThreadPoolExecutor threadPool;
     private static String statusString;
-
     private static Date scheduledDate;
 
     // Kafka
@@ -56,6 +55,15 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     private static Properties kafkaProducerProperties;
     private static Properties kafkaMonitoringProducerProperties;
     private static boolean localMode;
+
+    // TODO - INFO - Remove before delivery
+    private static int maxJsonSizeBytes = 0;
+    static synchronized void checkMaxJsonSize(int maxJsonSizeBytes){
+        if(SimulatorController.maxJsonSizeBytes < maxJsonSizeBytes){
+            SimulatorController.maxJsonSizeBytes = maxJsonSizeBytes;
+            LOG.log(Level.INFO, "Maximum Json size till now: {0}", maxJsonSizeBytes);
+        }
+    }
 
     public SimulatorController(boolean localMode) {
         SimulatorController.localMode = localMode;
@@ -307,12 +315,22 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 LOG.log(Level.FINE, "executeSimulation() - Cada 10 segundos, se iniciarán {0} SmartDrivers en "
                         + "el trayecto {1}", new Object[]{smartDriversBunch, pathIndex});
 
+                // Make sure the the loaded parameters for each path is at least the number requested by the user
+                if(PresetSimulation.isLoadPathsAndDriversFromHdd()
+                        && loadedDriverParameters != null && loadedDriverParameters.size() > pathIndex
+                        && loadedDriverParameters.get(pathIndex).size() < PresetSimulation.getDriversByPath()) {
+                    LOG.log(Level.SEVERE, "The driver parameters (from disk) size size for path: {0} is {1} \n " +
+                            "while the ones requested in the preset are: {2}", new Object[]{pathIndex,
+                            loadedDriverParameters.size(), PresetSimulation.getDriversByPath()});
+                    loadedDriverParameters = null;
+                }
+
                 List<DriverParameters> driverParameters = new ArrayList<>();
                 for (int driverIndex = 0; driverIndex < PresetSimulation.getDriversByPath(); driverIndex++) {
 
                     DriverParameters driverParams;
-                    if (PresetSimulation.isLoadPathsAndDriversFromHdd() && loadedDriverParameters != null) {
-                        driverParams = loadedDriverParameters.get(pathIndex).get(driverIndex);
+                    if (loadedDriverParameters != null) {
+                            driverParams = loadedDriverParameters.get(pathIndex).get(driverIndex);
                     } else {
                         if (PresetSimulation.isRandomizeEachSmartDriverBehaviour()) {
                             // Aleatory values.
@@ -323,9 +341,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                         }
                     }
 
-                    //FIXME por Raul
-//                    initSimulatedSmartDriver(id, pathIndex, pathPointsCount, smartDriversBunch,
-//                            driverParams.getSpeedRandomFactor(), driverParams.getHrRandomFactor());
                     initSimulatedSmartDriver(id, pathIndex, driverParams, smartDriversBunch);
                     driverParameters.add(driverParams);
                     id++;

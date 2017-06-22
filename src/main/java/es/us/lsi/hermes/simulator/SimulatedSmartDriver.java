@@ -391,8 +391,6 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         return secondsBetweenRetries >= PresetSimulation.getIntervalBetweenRetriesInSeconds();
     }
 
-    private int maxJsonSize = 0;
-
     private void sendEvery10SecondsIfLocationChanged(LocationLogDetail currentLocationLogDetail) {
         // Creamos un objeto de tipo 'VehicleLocation' de los que 'SmartDriver' envía al servidor de tramas.
         VehicleLocation smartDriverLocation = new VehicleLocation();
@@ -417,11 +415,8 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
             String json = new Gson().toJson(event);
 
             // Log the Json's biggest size for debugging purposes
-            int sizeInBits = json.getBytes("UTF-8").length * 8;
-            if(sizeInBits > maxJsonSize){
-                maxJsonSize = sizeInBits;
-                LOG.log(Level.INFO, "Maximum Json size till now: {0}", sizeInBits);
-            }
+            int sizeInBytes = json.getBytes("UTF-8").length;
+            SimulatorController.checkMaxJsonSize(sizeInBytes);
 
             if (SimulatorController.isKafkaProducerPerSmartDriver()) {
                 smartDriverKafkaProducer.send(

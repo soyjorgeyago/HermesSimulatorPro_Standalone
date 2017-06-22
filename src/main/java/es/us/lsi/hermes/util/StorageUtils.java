@@ -1,5 +1,6 @@
 package es.us.lsi.hermes.util;
 
+import es.us.lsi.hermes.config.Constants;
 import es.us.lsi.hermes.config.PresetSimulation;
 import joptsimple.internal.Strings;
 import java.io.File;
@@ -81,10 +82,10 @@ public class StorageUtils {
     static File generateCsvFile(String fileNameHeader, String fileNameWithExtension, String subfolder) {
         Path folder;
         switch (subfolder) {
-            case "drivers":
+            case Constants.DRIVERS_FOLDER:
                 folder = CSVUtils.PERMANENT_FOLDER_DRIVERS;
                 break;
-            case "paths":
+            case Constants.PATHS_FOLDER:
                 folder = CSVUtils.PERMANENT_FOLDER_PATHS;
                 break;
             default:
