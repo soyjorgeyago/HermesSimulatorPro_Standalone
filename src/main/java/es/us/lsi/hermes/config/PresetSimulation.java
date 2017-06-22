@@ -68,7 +68,7 @@ public class PresetSimulation {
         sendResultsToEmail = getEmailValue("send.results.to.email", "jorgeyago.ingeniero@gmail.com");
         randomizeEachSmartDriverBehaviour = getBooleanValue("randomize.behaviour", true);
         retries = getIntValue("retries", -1, 5, 1);
-        loadPathsAndDriversFromHdd = getBooleanValue("hdd.load", false);
+        loadPathsAndDriversFromHdd = getBooleanValue("load.preset.paths", false);
         csvStorageFolder = getPathValue("csv.storage.folder", Constants.CSV_FOLDER);
         maxResponseDelayMs = getIntValue("max.response.delay.ms", 10, 10000, 5000);
         maxSimulationTimeInSeconds = getIntValue("max.simulation.time.s", 0);
