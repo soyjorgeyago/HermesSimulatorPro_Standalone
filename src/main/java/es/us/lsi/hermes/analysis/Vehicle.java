@@ -1,90 +1,58 @@
 package es.us.lsi.hermes.analysis;
 
-import es.us.lsi.hermes.topics.VehicleLocation;
-import java.util.List;
+import java.io.Serializable;
+import java.util.HashSet;
+import java.util.Set;
 
-public class Vehicle {
+public class Vehicle implements Serializable {
 
-    private String id;
-    private int score;
-    private List<VehicleLocation> historicLocations;
-    private List<SurroundingVehicle> surroundingVehicles;
+    private final String id;
+    private double latitude, longitude;
+    private int speed;
+    private int stress;
+    private final Set<String> surroundingVehicles;
+    private long lastUpdate;
 
-    public Vehicle() {
+    /**
+     * Constructor en el que se indicará el identificador del 'SmartDriver'.
+     *
+     * @param id identificador del 'SmartDriver'
+     */
+    public Vehicle(String id) {
+        this.id = id;
+        this.stress = 0;
+        this.speed = 0;
+        this.latitude = 0.0d;
+        this.longitude = 0.0d;
+        this.surroundingVehicles = new HashSet<>();
+        this.lastUpdate = System.currentTimeMillis();
     }
 
     public String getId() {
         return id;
     }
 
-    public void setId(String id) {
-        this.id = id;
+    public double getLatitude() {
+        return latitude;
     }
 
-    public int getScore() {
-        return score;
+    public double getLongitude() {
+        return longitude;
     }
 
-    public void setScore(int score) {
-        this.score = score;
+    public int getSpeed() {
+        return speed;
     }
 
-    public List<VehicleLocation> getHistoricLocations() {
-        return historicLocations;
+    public int getStress() {
+        return stress;
     }
 
-    public void setHistoricLocations(List<VehicleLocation> historicLocations) {
-        this.historicLocations = historicLocations;
-    }
-
-    public List<SurroundingVehicle> getSurroundingVehicles() {
+    public Set<String> getSurroundingVehicles() {
         return surroundingVehicles;
     }
 
-    public void setSurroundingVehicles(List<SurroundingVehicle> surroundingVehicles) {
-        this.surroundingVehicles = surroundingVehicles;
-    }
-
-    public class SurroundingVehicle {
-
-        private String id;
-        private int score;
-        private Double latitude;
-        private Double longitude;
-
-        public SurroundingVehicle() {
-        }
-
-        public String getId() {
-            return id;
-        }
-
-        public void setId(String id) {
-            this.id = id;
-        }
-
-        public int getScore() {
-            return score;
-        }
-
-        public void setScore(int score) {
-            this.score = score;
-        }
-
-        public Double getLatitude() {
-            return latitude;
-        }
-
-        public void setLatitude(Double latitude) {
-            this.latitude = latitude;
-        }
-
-        public Double getLongitude() {
-            return longitude;
-        }
-
-        public void setLongitude(Double longitude) {
-            this.longitude = longitude;
-        }
+    public long getLastUpdate() {
+        return lastUpdate;
     }
 }

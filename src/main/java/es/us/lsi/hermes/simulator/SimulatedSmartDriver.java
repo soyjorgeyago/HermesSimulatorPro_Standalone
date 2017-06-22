@@ -176,7 +176,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
 
             // Check if we can continue to next location
             if (getPointToPointElapsedSeconds() >= pathPointsSecondsToRemainHere[getCurrentPosition()]) {
-                // ¿Have we reached the destination?
+                // Have we reached the destination?
                 if ((direction > 0 && getCurrentPosition() >= pathPointsSecondsToRemainHere.length - 1)
                         || (direction < 0 && getCurrentPosition() <= 0)) {
                     finishOrRepeat();
@@ -316,46 +316,39 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
     }
 
     private void stressDueToDeviation(double bearingDiff) {
-        // Graduación del estrés por el cambio de trayectoria
-        if (bearingDiff < 25.0d) {
-            // Es un tramo 'fácil'.
-            if (stressLoad > 0) {
-                stressLoad--;
+        // Do not alter the stress unless the difference in direction is less than 25.
+        if (bearingDiff < 75.0d) {
+            // And relax only on small changes
+            if (bearingDiff < 25) {
+                adjustStress(-1);
             }
-        } else if (bearingDiff < 45.0d) {
+        // The more radical the direction change, the more stress the driver gets
+        } else if (bearingDiff < 90.0d) {
             // Es una curva algo cerrada, añadimos un punto de estrés.
-            stressLoad++;
-            relaxing = false;
-        } else if (bearingDiff < 45.0d) {
+            adjustStress(1);
+        } else if (bearingDiff < 120.0d) {
             // Es una curva cerrada, añadimos 2 punto de estrés.
-            stressLoad += 2;
-            relaxing = false;
+            adjustStress(2);
         } else {
             // Es un giro muy cerrado, añadimos 5 punto de estrés.
-            stressLoad += 5;
-            relaxing = false;
+            adjustStress(5);
         }
     }
 
     private void stressDueToSpeedChange(double speedDiff) {
         // Graduación del estrés por cambios de la velocidad
-        if (speedDiff < 30.0d) {
+        if (speedDiff < 40.0d) {
             //  Es una variación de velocidad moderada.
-            if (stressLoad > 0) {
-                stressLoad--;
-            }
-        } else if (speedDiff < 50.0d) {
+            adjustStress(-1);
+        } else if (speedDiff < 70.0d) {
             // Es una variación de velocidad alta, añadimos un punto de estrés.
-            stressLoad++;
-            relaxing = false;
+            adjustStress(1);
         } else if (speedDiff < 100.0d) {
             // Es una variación de velocidad muy alta, añadimos 2 punto de estrés.
-            stressLoad += 2;
-            relaxing = false;
+            adjustStress(2);
         } else {
             // Es una variación de velocidad brusca, añadimos 5 puntos de estrés.
-            stressLoad += 5;
-            relaxing = false;
+            adjustStress(5);
         }
     }
 
@@ -363,21 +356,29 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         // Graduación del estrés por cambios de la velocidad
         if (surroundingVehicles < 10) {
             //  Es una variación de velocidad moderada.
-            if (stressLoad > 0) {
-                stressLoad--;
-            }
-        } else if (surroundingVehicles < 15) {
+            adjustStress(-1);
+        } else if (surroundingVehicles < 200) {
             // Es una variación de velocidad alta, añadimos un punto de estrés.
-            stressLoad++;
-            relaxing = false;
-        } else if (surroundingVehicles < 20) {
+            adjustStress(1);
+        } else if (surroundingVehicles < 400) {
             // Es una variación de velocidad muy alta, añadimos 2 punto de estrés.
-            stressLoad += 2;
-            relaxing = false;
+            adjustStress(2);
         } else {
             // Es una variación de velocidad brusca, añadimos 5 puntos de estrés.
-            stressLoad += 5;
-            relaxing = false;
+            adjustStress(5);
+        }
+    }
+
+    private synchronized void adjustStress(double changeInStress){
+        relaxing = changeInStress < 0;
+
+        stressLoad += changeInStress;
+
+        // Make sure the new stress meets the constraints
+        if(stressLoad < Constants.MIN_STRESS){
+            stressLoad = Constants.MIN_STRESS;
+        }else if (stressLoad > Constants.MAX_STRESS){
+            stressLoad = Constants.MAX_STRESS;
         }
     }
 
@@ -389,8 +390,6 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         return secondsBetweenRetries >= PresetSimulation.getIntervalBetweenRetriesInSeconds();
     }
 
-    private int maxJsonSize = 0;
-
     private void sendEvery10SecondsIfLocationChanged(LocationLogDetail currentLocationLogDetail) {
         // Creamos un objeto de tipo 'VehicleLocation' de los que 'SmartDriver' envía al servidor de tramas.
         VehicleLocation smartDriverLocation = new VehicleLocation();
@@ -399,7 +398,6 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         smartDriverLocation.setSpeed(speed);
         smartDriverLocation.setAccuracy(0);
         smartDriverLocation.setStress(stressLoad);
-        // Asignamos el momento actual del envío de la trama a Ztreamy al LocationLogDetail.
         smartDriverLocation.setTimeStamp(Constants.dfISO8601.format(new Date()));
 
         HashMap<String, Object> bodyObject = new HashMap<>();
@@ -415,11 +413,8 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
             String json = new Gson().toJson(event);
 
             // Log the Json's biggest size for debugging purposes
-            int sizeInBits = json.getBytes("UTF-8").length * 8;
-            if (sizeInBits > maxJsonSize) {
-                maxJsonSize = sizeInBits;
-                LOG.log(Level.FINE, "Maximum Json size till now: {0}", sizeInBits);
-            }
+            int sizeInBytes = json.getBytes("UTF-8").length;
+            SimulatorController.checkMaxJsonSize(sizeInBytes);
 
             if (SimulatorController.isKafkaProducerPerSmartDriver()) {
                 smartDriverKafkaProducer.send(
@@ -551,8 +546,8 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
                         break;
                     case NORMAL_VEHICLE_LOCATION:
                         increaseErrors();
+                        // If fails to send the 'VehicleLocation' stream, it is stored in order to be sent later.
                         if (PresetSimulation.isRetryOnFail()) {
-                            // If fails to send the 'VehicleLocation' stream, it is stored in order to be sent later.
                             pendingVehicleLocations.addAll(Arrays.asList(events));
                         }
                         break;

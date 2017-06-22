@@ -8,7 +8,9 @@ import java.text.SimpleDateFormat;
 import java.util.ResourceBundle;
 
 public final class Constants {
-    
+
+    public static final int MIN_STRESS = 0, MAX_STRESS = 100;
+
     private Constants() { }
 
     private static final ResourceBundle BUNDLE = ResourceBundle.getBundle("Bundle");
