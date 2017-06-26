@@ -22,8 +22,8 @@ send.results.to.email=jorgeyago.ingeniero@gmail.com
 randomize.behaviour=true
 # Number of retries sending an event before being discarded from -1 (means infinite retries) to 5.
 retries = 1
-# Indicates if paths and drivers conditions should be loaded from HDD or generated on every execution.
-load.preset.routes=false
+# Indicates if paths and drivers conditions should be loaded from local/server or generated on every execution.
+load.preset.paths=false
 # Name of the folder to store the generated paths and drivers conditions.
 csv.storage.folder=CSV_storage.
 # Maximum allowed streaming server response delay from 10 to 10000 milliseconds.
