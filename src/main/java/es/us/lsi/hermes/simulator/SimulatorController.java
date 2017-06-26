@@ -9,6 +9,8 @@ import es.us.lsi.hermes.kafka.Kafka;
 import es.us.lsi.hermes.location.LocationLogDetail;
 import es.us.lsi.hermes.util.*;
 import java.io.Serializable;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Target;
 import java.net.MalformedURLException;
 import java.text.MessageFormat;
 import java.util.*;
@@ -31,7 +33,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     private static final Logger LOG = Logger.getLogger(SimulatorController.class.getName());
 
     private static long startSimulationTime = 0L;
-    private static long endSimulationTime = 0L;
 
     public enum State {
         CONFIG_CHANGED, READY_TO_SIMULATE, SCHEDULED_SIMULATION, SIMULATING, ENDED, INTERRUPTED
@@ -304,7 +305,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         }
 
         try {
-            long id = 0L;
+            long driverCount = 0L;
             // Get the smallest of them both, for the cases when we request 5 paths and only 4 are generated
             int pathAmount = Math.min(locationLogList.size(), PresetSimulation.getPathsAmount());
             // Para el caso del modo de inicio LINEAL, si hay más de 10 SmartDrivers, se toma el 10% para repartir su inicio durante 100 segundos.
@@ -341,9 +342,9 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                         }
                     }
 
-                    initSimulatedSmartDriver(id, pathIndex, driverParams, smartDriversBunch);
+                    initSimulatedSmartDriver(driverCount, pathIndex, driverParams, smartDriversBunch);
                     driverParameters.add(driverParams);
-                    id++;
+                    driverCount++;
                 }
 
                 if (!PresetSimulation.isLoadPathsAndDriversFromHdd()) {
@@ -362,10 +363,10 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         }
     }
 
-    private void initSimulatedSmartDriver(long id, int pathId, DriverParameters dp, int smartDriversBunch)
+    private void initSimulatedSmartDriver(long driverNumber, int pathId, DriverParameters dp, int smartDriversBunch)
             throws MalformedURLException, HermesException {
 
-        SimulatedSmartDriver ssd = new SimulatedSmartDriver(id, pathId, dp);
+        SimulatedSmartDriver ssd = new SimulatedSmartDriver(pathId, dp);
 
         simulatedSmartDriverHashMap.put(ssd.getSha(), ssd);
 
@@ -378,12 +379,12 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 break;
             case LINEAL:
                 // Se repartirá el total de conductores linealmente.
-                delay = 10000 * (int) (id / smartDriversBunch) + (id % smartDriversBunch);
+                delay = 10000 * (int) (driverNumber / smartDriversBunch) + (driverNumber % smartDriversBunch);
                 break;
             case SAME_TIME:
                 break;
         }
-        LOG.log(Level.FINE, "SmartDriver {0} con inicio en {1} ms", new Object[]{id, delay});
+        LOG.log(Level.FINE, "SmartDriver no. {0} con inicio en {1} ms", new Object[]{driverNumber, delay});
         threadPool.scheduleAtFixedRate(ssd, delay, 1000, TimeUnit.MILLISECONDS);
     }
 
@@ -429,7 +430,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 if (surroundingVehiclesConsumer != null) {
                     surroundingVehiclesConsumer.stopConsumer();
                 }
-                endSimulationTime = System.currentTimeMillis();
+                long endSimulationTime = System.currentTimeMillis();
                 String timeSummary = MessageFormat.format("Inicio de la simulacion: {0} -> Fin de la simulación: {1} ({2})", Constants.dfISO8601.format(startSimulationTime), Constants.dfISO8601.format(endSimulationTime), DurationFormatUtils.formatDuration(endSimulationTime - startSimulationTime, "HH:mm:ss", true));
                 LOG.log(Level.INFO, "finishSimulation() - {0}", timeSummary);
 

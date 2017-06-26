@@ -6,10 +6,11 @@ public class VehicleLocation implements Serializable {
 
     private String timeStamp;
     private Double longitude;
-    private Integer stress;
     private Double latitude;
+    private Integer stress;
     private int speed;
     private Integer accuracy;
+    private int retries;
 
     public String getTimeStamp() {
         return timeStamp;
@@ -59,6 +60,13 @@ public class VehicleLocation implements Serializable {
         this.accuracy = accuracy;
     }
 
+    public int getRetries() {
+        return retries;
+    }
+
+    public void decreaseRetries() {
+        retries--;
+    }
 
     @Override
     public String toString() {
