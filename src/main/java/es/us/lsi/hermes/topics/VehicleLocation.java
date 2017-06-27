@@ -4,6 +4,7 @@ import java.io.Serializable;
 
 public class VehicleLocation implements Serializable {
 
+    private String vehicleId;
     private String timeStamp;
     private Double longitude;
     private Double latitude;
@@ -68,15 +69,21 @@ public class VehicleLocation implements Serializable {
         retries--;
     }
 
+    public void setVehicleId(String vehicleId) {
+        this.vehicleId = vehicleId;
+    }
+
     @Override
     public String toString() {
         return "VehicleLocation{" +
-                "timeStamp='" + timeStamp + '\'' +
+                "vehicleId='" + vehicleId + '\'' +
+                ", timeStamp='" + timeStamp + '\'' +
                 ", longitude=" + longitude +
-                ", stress=" + stress +
                 ", latitude=" + latitude +
+                ", stress=" + stress +
                 ", speed=" + speed +
                 ", accuracy=" + accuracy +
+                ", retries=" + retries +
                 '}';
     }
 }

@@ -53,8 +53,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     private static AtomicLong kafkaRecordId;
     private static volatile KafkaProducer<Long, String> kafkaProducer;
     private static volatile KafkaProducer<String, String> kafkaMonitoringProducer;
-    private static Properties kafkaProducerProperties;
-    private static Properties kafkaMonitoringProducerProperties;
+    private static Properties kafkaProducerProperties, kafkaMonitoringProducerProperties;
     private static boolean localMode;
 
     // TODO - INFO - Remove before delivery
