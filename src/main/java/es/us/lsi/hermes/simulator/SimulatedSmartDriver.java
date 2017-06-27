@@ -392,15 +392,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         smartDriverLocation.setAccuracy(0);
         smartDriverLocation.setStress(stressLoad);
         smartDriverLocation.setTimeStamp(Constants.dfISO8601.format(new Date()));
-
-        //FIXME
-//        HashMap<String, Object> bodyObject = new HashMap<>();
-
-//        bodyObject.put("Location", smartDriverLocation);
-//        increaseGenerated();
-
-//        ExtendedEvent event = new ExtendedEvent(sha, "application/json", Constants.SIMULATOR_APPLICATION_ID,
-//                Constants.VEHICLE_LOCATION, bodyObject, PresetSimulation.getRetries());
+        smartDriverLocation.setVehicleId(sha);
 
         increaseSent();
         try {
