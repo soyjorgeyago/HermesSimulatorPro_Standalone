@@ -38,7 +38,8 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
     private long smartDriverKafkaRecordId;
     private KafkaProducer<Long, String> smartDriverKafkaProducer;
     private final List<VehicleLocation> pendingVehicleLocations;     // Failed locations to retry.
-    private SurroundingVehiclesConsumer surroundingVehiclesConsumer = null;
+    // PRUEBA
+//    private SurroundingVehiclesConsumer surroundingVehiclesConsumer;
     private boolean paused, started;
 
     // FIXME: Pass to MonitorizedDriver
@@ -86,10 +87,11 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         this.MIN_RR = (int) Math.ceil(60000.0d / (220 - age)); // Min R-R, to establish the max HR.
         this.MAX_RR = (int) Math.ceil(240000.0d / (220 - age)); // Max R-R, to establish the min HR.
 
-        // TODO: Probar otros timeouts más altos.1
-        if (PresetSimulation.isKafkaProducerPerSmartDriver()) {
-            this.surroundingVehiclesConsumer = new SurroundingVehiclesConsumer(this);
-        }
+        // PRUEBA
+//        // TODO: Probar otros timeouts más altos.1
+//        if (PresetSimulation.isKafkaProducerPerSmartDriver()) {
+//            this.surroundingVehiclesConsumer = new SurroundingVehiclesConsumer(this);
+//        }
         List<LocationLogDetail> path = SimulatorController.getPath(pathId);
         this.pathPointsSecondsToRemainHere = new double[path.size()];
         for (int position = 0; position < path.size(); position++) {
@@ -100,9 +102,10 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
     }
 
     private void init() {
-        if (surroundingVehiclesConsumer != null) {
-            surroundingVehiclesConsumer.start();
-        }
+        // PRUEBA
+//        if (surroundingVehiclesConsumer != null) {
+//            surroundingVehiclesConsumer.start();
+//        }
 
         if (SimulatorController.isKafkaProducerPerSmartDriver()) {
             // Inicializamos el 'kafkaProducer' de Kafka.
@@ -208,6 +211,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
         try {
             String json = new Gson().toJson(pendingVehicleLocations);
             if (SimulatorController.isKafkaProducerPerSmartDriver()) {
+                LOG.log(Level.INFO, "REINTENTO DE FALLIDOS {0}", Constants.dfTime.format(new Date()));
                 smartDriverKafkaProducer.send(
                         new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION, smartDriverKafkaRecordId, json),
                         new KafkaCallBack(System.currentTimeMillis(), pendingVehicleLocations,
@@ -403,11 +407,12 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
             String json = new Gson().toJson(smartDriverLocation);
             increaseGenerated();
 
-            // Log the Json's biggest size for debugging purposes
-            int sizeInBytes = json.getBytes("UTF-8").length;
-            SimulatorController.checkMaxJsonSize(sizeInBytes);
+//            // Log the Json's biggest size for debugging purposes
+//            int sizeInBytes = json.getBytes("UTF-8").length;
+//            SimulatorController.checkMaxJsonSize(sizeInBytes);
 
             if (SimulatorController.isKafkaProducerPerSmartDriver()) {
+                LOG.log(Level.INFO, "ENVIO NORMAL {0}", Constants.dfTime.format(new Date()));
                 smartDriverKafkaProducer.send(
                         new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION, smartDriverKafkaRecordId, json),
                         new KafkaCallBack(System.currentTimeMillis(),  Collections.singletonList(smartDriverLocation),
@@ -450,7 +455,8 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
                 }
             }
 
-            surroundingVehiclesConsumer.stopConsumer();
+            // PRUEBA
+//            surroundingVehiclesConsumer.stopConsumer();
         } catch (Exception ex) {
             // No need to capture
         }

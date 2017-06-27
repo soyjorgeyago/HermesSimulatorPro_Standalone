@@ -9,8 +9,6 @@ import es.us.lsi.hermes.kafka.Kafka;
 import es.us.lsi.hermes.location.LocationLogDetail;
 import es.us.lsi.hermes.util.*;
 import java.io.Serializable;
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Target;
 import java.net.MalformedURLException;
 import java.text.MessageFormat;
 import java.util.*;
@@ -33,6 +31,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     private static final Logger LOG = Logger.getLogger(SimulatorController.class.getName());
 
     private static long startSimulationTime = 0L;
+    private static long endSimulationTime = 0L;
 
     public enum State {
         CONFIG_CHANGED, READY_TO_SIMULATE, SCHEDULED_SIMULATION, SIMULATING, ENDED, INTERRUPTED
@@ -57,15 +56,14 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     private static Properties kafkaMonitoringProducerProperties;
     private static boolean localMode;
 
-    // TODO - INFO - Remove before delivery
-    private static int maxJsonSizeBytes = 0;
-    static synchronized void checkMaxJsonSize(int maxJsonSizeBytes){
-        if(SimulatorController.maxJsonSizeBytes < maxJsonSizeBytes){
-            SimulatorController.maxJsonSizeBytes = maxJsonSizeBytes;
-            LOG.log(Level.INFO, "Maximum Json size till now: {0}", maxJsonSizeBytes);
-        }
-    }
-
+//    // TODO - INFO - Remove before delivery
+//    private static int maxJsonSizeBytes = 0;
+//    static synchronized void checkMaxJsonSize(int maxJsonSizeBytes){
+//        if(SimulatorController.maxJsonSizeBytes < maxJsonSizeBytes){
+//            SimulatorController.maxJsonSizeBytes = maxJsonSizeBytes;
+//            LOG.log(Level.INFO, "Maximum Json size till now: {0}", maxJsonSizeBytes);
+//        }
+//    }
     public SimulatorController(boolean localMode) {
         SimulatorController.localMode = localMode;
         LOG.log(Level.INFO, "SimulatorController() - Simulator controller init. LOCAL MODE: {0}", localMode);
@@ -305,7 +303,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         }
 
         try {
-            long driverCount = 0L;
+            int driverCount = 0;
             // Get the smallest of them both, for the cases when we request 5 paths and only 4 are generated
             int pathAmount = Math.min(locationLogList.size(), PresetSimulation.getPathsAmount());
             // Para el caso del modo de inicio LINEAL, si hay más de 10 SmartDrivers, se toma el 10% para repartir su inicio durante 100 segundos.
@@ -317,12 +315,12 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                         + "el trayecto {1}", new Object[]{smartDriversBunch, pathIndex});
 
                 // Make sure the the loaded parameters for each path is at least the number requested by the user
-                if(PresetSimulation.isLoadPathsAndDriversFromHdd()
+                if (PresetSimulation.isLoadPathsAndDriversFromHdd()
                         && loadedDriverParameters != null && loadedDriverParameters.size() > pathIndex
                         && loadedDriverParameters.get(pathIndex).size() < PresetSimulation.getDriversByPath()) {
-                    LOG.log(Level.SEVERE, "The driver parameters (from disk) size size for path: {0} is {1} \n " +
-                            "while the ones requested in the preset are: {2}", new Object[]{pathIndex,
-                            loadedDriverParameters.size(), PresetSimulation.getDriversByPath()});
+                    LOG.log(Level.SEVERE, "The driver parameters (from disk) size size for path: {0} is {1} \n "
+                            + "while the ones requested in the preset are: {2}", new Object[]{pathIndex,
+                                loadedDriverParameters.size(), PresetSimulation.getDriversByPath()});
                     loadedDriverParameters = null;
                 }
 
@@ -331,7 +329,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
                     DriverParameters driverParams;
                     if (loadedDriverParameters != null) {
-                            driverParams = loadedDriverParameters.get(pathIndex).get(driverIndex);
+                        driverParams = loadedDriverParameters.get(pathIndex).get(driverIndex);
                     } else {
                         if (PresetSimulation.isRandomizeEachSmartDriverBehaviour()) {
                             // Aleatory values.
@@ -363,7 +361,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         }
     }
 
-    private void initSimulatedSmartDriver(long driverNumber, int pathId, DriverParameters dp, int smartDriversBunch)
+    private void initSimulatedSmartDriver(int id, int pathId, DriverParameters dp, int smartDriversBunch)
             throws MalformedURLException, HermesException {
 
         SimulatedSmartDriver ssd = new SimulatedSmartDriver(pathId, dp);
@@ -378,13 +376,13 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 delay = rand.nextInt(Constants.MAX_INITIAL_DELAY);
                 break;
             case LINEAL:
-                // Se repartirá el total de conductores linealmente.
-                delay = 10000 * (int) (driverNumber / smartDriversBunch) + (driverNumber % smartDriversBunch);
+                // Drivers' start time will be spread along 100 seconds.
+                delay = (id * 10000 / smartDriversBunch) % 100000;
                 break;
             case SAME_TIME:
                 break;
         }
-        LOG.log(Level.FINE, "SmartDriver no. {0} con inicio en {1} ms", new Object[]{driverNumber, delay});
+        LOG.log(Level.FINE, "SmartDriver {0} goes to path {2} with start time {3} ms", new Object[]{id, pathId, delay});
         threadPool.scheduleAtFixedRate(ssd, delay, 1000, TimeUnit.MILLISECONDS);
     }
 
@@ -430,7 +428,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 if (surroundingVehiclesConsumer != null) {
                     surroundingVehiclesConsumer.stopConsumer();
                 }
-                long endSimulationTime = System.currentTimeMillis();
+                endSimulationTime = System.currentTimeMillis();
                 String timeSummary = MessageFormat.format("Inicio de la simulacion: {0} -> Fin de la simulación: {1} ({2})", Constants.dfISO8601.format(startSimulationTime), Constants.dfISO8601.format(endSimulationTime), DurationFormatUtils.formatDuration(endSimulationTime - startSimulationTime, "HH:mm:ss", true));
                 LOG.log(Level.INFO, "finishSimulation() - {0}", timeSummary);
 
