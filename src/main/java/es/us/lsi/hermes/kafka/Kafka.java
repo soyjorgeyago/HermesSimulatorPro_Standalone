@@ -11,6 +11,7 @@ public class Kafka {
 
     public static final String TOPIC_VEHICLE_LOCATION = "VehicleLocation";
     public static final String TOPIC_SIMULATOR_STATUS = "SimulatorStatus";
+    public static final String TOPIC_SURROUNDING_VEHICLES = "SurroundingVehicles";
 
     private static final Properties KAFKA_PRODUCER_PROPERTIES;
     private static final Properties KAFKA_CONSUMER_PROPERTIES;

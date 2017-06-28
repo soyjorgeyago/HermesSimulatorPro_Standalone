@@ -7,11 +7,12 @@ import java.util.Set;
 public class Vehicle implements Serializable {
 
     private final String id;
-    private double latitude, longitude;
-    private int speed;
-    private int stress;
+    private final double latitude;
+    private final double longitude;
+    private final int speed;
+    private final int stress;
     private final Set<String> surroundingVehicles;
-    private long lastUpdate;
+    private final long lastUpdate;
 
     /**
      * Constructor en el que se indicará el identificador del 'SmartDriver'.

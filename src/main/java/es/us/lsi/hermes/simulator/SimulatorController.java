@@ -1,11 +1,13 @@
 package es.us.lsi.hermes.simulator;
 
 import com.google.gson.Gson;
+import es.us.lsi.hermes.analysis.Vehicle;
 import es.us.lsi.hermes.config.Constants;
 import es.us.lsi.hermes.config.PresetSimulation;
 import es.us.lsi.hermes.topics.SimulatorStatus;
 import es.us.lsi.hermes.location.LocationLog;
 import es.us.lsi.hermes.kafka.Kafka;
+import static es.us.lsi.hermes.kafka.Kafka.TOPIC_SURROUNDING_VEHICLES;
 import es.us.lsi.hermes.location.LocationLogDetail;
 import es.us.lsi.hermes.util.*;
 import java.io.Serializable;
@@ -21,12 +23,14 @@ import javax.mail.MessagingException;
 import es.us.lsi.hermes.util.classes.DriverParameters;
 import es.us.lsi.hermes.util.classes.Email;
 import es.us.lsi.hermes.util.classes.HermesException;
-import es.us.lsi.hermes.util.classes.ISimulatorControllerObserver;
 import org.apache.commons.lang.time.DurationFormatUtils;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 
-public class SimulatorController implements Serializable, ISimulatorControllerObserver {
+public class SimulatorController implements Serializable {
 
     private static final Logger LOG = Logger.getLogger(SimulatorController.class.getName());
 
@@ -38,8 +42,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     }
     private static State currentState = State.READY_TO_SIMULATE;
 
-    private static volatile SurroundingVehiclesConsumer surroundingVehiclesConsumer;
-
     private static ConcurrentHashMap<String, SimulatedSmartDriver> simulatedSmartDriverHashMap = new ConcurrentHashMap<>();
     private static List<LocationLog> locationLogList = new ArrayList<>();
 
@@ -50,9 +52,10 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
     // Kafka
     private static AtomicLong kafkaRecordId;
-    private static volatile KafkaProducer<Long, String> kafkaProducer;
+    private static volatile KafkaProducer<Long, String> driversKafkaProducer;
+    private static volatile KafkaConsumer<String, String> surroundingDriversKafkaConsumer;
     private static volatile KafkaProducer<String, String> kafkaMonitoringProducer;
-    private static Properties kafkaProducerProperties, kafkaMonitoringProducerProperties;
+    private static Properties kafkaProducerProperties, kafkaMonitoringProducerProperties, kafkaConsumerProperties;
     private static boolean localMode;
 
 //    // TODO - INFO - Remove before delivery
@@ -78,6 +81,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
         kafkaRecordId = new AtomicLong(0);
         kafkaProducerProperties = Kafka.getKafkaProducerProperties();
+        kafkaConsumerProperties = Kafka.getKafkaConsumerProperties();
         kafkaMonitoringProducerProperties = Kafka.getKafkaMonitoringProducerProperties();
     }
 
@@ -257,7 +261,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     private void executeSimulation() {
         currentState = State.SIMULATING;
 
-        kafkaProducer = new KafkaProducer<>(kafkaProducerProperties);
         kafkaMonitoringProducer = new KafkaProducer<>(kafkaMonitoringProducerProperties);
 
         startSimulationTime = System.currentTimeMillis();
@@ -265,8 +268,9 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         LOG.log(Level.INFO, "executeSimulation() - Se inicia el consumidor de análisis de vehículos cercanos");
 
         if (!PresetSimulation.isKafkaProducerPerSmartDriver()) {
-            surroundingVehiclesConsumer = new SurroundingVehiclesConsumer(this);
-            surroundingVehiclesConsumer.start();
+            driversKafkaProducer = new KafkaProducer<>(kafkaProducerProperties);
+            surroundingDriversKafkaConsumer = new KafkaConsumer<>(kafkaConsumerProperties);
+            surroundingDriversKafkaConsumer.subscribe(Collections.singletonList(TOPIC_SURROUNDING_VEHICLES));
         }
 
         // Simulator status monitor initCSV.
@@ -305,7 +309,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
             int driverCount = 0;
             // Get the smallest of them both, for the cases when we request 5 paths and only 4 are generated
             int pathAmount = Math.min(locationLogList.size(), PresetSimulation.getPathsAmount());
-            // Para el caso del modo de inicio LINEAL, si hay más de 10 SmartDrivers, se toma el 10% para repartir su inicio durante 100 segundos.
+            // If there are more than 10 drivers, they will be aggregated in bunches of 10%.
             int smartDriversBunch = PresetSimulation.getDriversByPath() > 10
                     ? (int) (PresetSimulation.getDriversByPath() * 0.1) : 1;
 
@@ -375,13 +379,13 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 delay = rand.nextInt(Constants.MAX_INITIAL_DELAY);
                 break;
             case LINEAL:
-                // Drivers' start time will be spread along 100 seconds.
-                delay = (id * 10000 / smartDriversBunch) % 100000;
+                // Drivers' start time will be spread along 60 seconds.
+                delay = (id * 5000 / smartDriversBunch) % 60000;
                 break;
             case SAME_TIME:
                 break;
         }
-        LOG.log(Level.FINE, "SmartDriver {0} goes to path {2} with start time {3} ms", new Object[]{id, pathId, delay});
+        LOG.log(Level.FINE, "SmartDriver {0} goes to path {1} with start time {2} ms", new Object[]{id, pathId, delay});
         threadPool.scheduleAtFixedRate(ssd, delay, 1000, TimeUnit.MILLISECONDS);
     }
 
@@ -424,9 +428,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
                 }
                 LOG.log(Level.INFO, "finishSimulation() - Se para el consumidor de análisis de vehículos cercanos");
 
-                if (surroundingVehiclesConsumer != null) {
-                    surroundingVehiclesConsumer.stopConsumer();
-                }
                 endSimulationTime = System.currentTimeMillis();
                 String timeSummary = MessageFormat.format("Inicio de la simulacion: {0} -> Fin de la simulación: {1} ({2})", Constants.dfISO8601.format(startSimulationTime), Constants.dfISO8601.format(endSimulationTime), DurationFormatUtils.formatDuration(endSimulationTime - startSimulationTime, "HH:mm:ss", true));
                 LOG.log(Level.INFO, "finishSimulation() - {0}", timeSummary);
@@ -441,9 +442,16 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
 
             resetSimulation();
 
-            if (kafkaProducer != null) {
-                kafkaProducer.flush();
-                kafkaProducer.close();
+            if (driversKafkaProducer != null) {
+                driversKafkaProducer.flush();
+                driversKafkaProducer.close();
+                // FIXME: Algunas veces salta una excepción de tipo 'java.lang.InterruptedException'.
+                // Es un 'bug' que aún está en estado aabierto en Kafka.
+                // https://issues.streamsets.com/browse/SDC-4925
+            }
+
+            if (surroundingDriversKafkaConsumer != null) {
+                surroundingDriversKafkaConsumer.close();
                 // FIXME: Algunas veces salta una excepción de tipo 'java.lang.InterruptedException'.
                 // Es un 'bug' que aún está en estado aabierto en Kafka.
                 // https://issues.streamsets.com/browse/SDC-4925
@@ -475,7 +483,6 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         return currentState.equals(State.READY_TO_SIMULATE);
     }
 
-    @Override
     public void update(String id, int surroundingSize) {
         SimulatedSmartDriver ssd = simulatedSmartDriverHashMap.get(id);
         if (ssd != null) {
@@ -519,7 +526,7 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
     }
 
     public static synchronized KafkaProducer<Long, String> getKafkaProducer() {
-        return kafkaProducer;
+        return driversKafkaProducer;
     }
 
     public static synchronized List<LocationLog> getLocationLogList() {
@@ -542,6 +549,17 @@ public class SimulatorController implements Serializable, ISimulatorControllerOb
         }
 
         return new ArrayList<>();
+    }
+
+    public static void processSurroundingVehicles(SimulatedSmartDriver s) {
+        ConsumerRecords<String, String> records = surroundingDriversKafkaConsumer.poll(0);
+        for (ConsumerRecord<String, String> record : records) {
+            Vehicle vehicle = new Gson().fromJson(record.value(), Vehicle.class);
+            if (vehicle.getId().equals(s.getSha())) {
+                s.stressDueToSurrounding(vehicle.getSurroundingVehicles().size());
+                break;
+            }
+        }
     }
 
     class EmergencyShutdown implements Runnable {
