@@ -2,9 +2,9 @@ package es.us.lsi.hermes.simulator;
 
 import es.us.lsi.hermes.config.PresetSimulation;
 import com.google.gson.Gson;
-import es.us.lsi.hermes.analysis.Vehicle;
 import es.us.lsi.hermes.location.LocationLogDetail;
 import es.us.lsi.hermes.kafka.Kafka;
+import es.us.lsi.hermes.topics.SurroundingVehicle;
 import es.us.lsi.hermes.topics.VehicleLocation;
 import es.us.lsi.hermes.config.Constants;
 import static es.us.lsi.hermes.kafka.Kafka.TOPIC_SURROUNDING_VEHICLES;
@@ -189,7 +189,7 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
                 if (SimulatorController.isKafkaProducerPerSmartDriver()) {
                     ConsumerRecords<String, String> records = surroundingDriversKafkaConsumer.poll(0);
                     for (ConsumerRecord<String, String> record : records) {
-                        Vehicle vehicle = new Gson().fromJson(record.value(), Vehicle.class);
+                        SurroundingVehicle vehicle = new Gson().fromJson(record.value(), SurroundingVehicle.class);
                         if (vehicle.getId().equals(sha)) {
                             stressDueToSurrounding(vehicle.getSurroundingVehicles().size());
                             break;
