@@ -1,5 +1,6 @@
 package es.us.lsi.hermes.simulator;
 
+import com.google.gson.GsonBuilder;
 import es.us.lsi.hermes.config.PresetSimulation;
 import com.google.gson.Gson;
 import es.us.lsi.hermes.location.LocationLogDetail;
@@ -407,12 +408,15 @@ public final class SimulatedSmartDriver extends MonitorizedDriver implements Run
 
         increaseSent();
         try {
-            String json = new Gson().toJson(smartDriverLocation);
+            final GsonBuilder builder = new GsonBuilder();
+            builder.excludeFieldsWithoutExposeAnnotation();
+            final Gson gson = builder.create();
+            String json = gson.toJson(smartDriverLocation);
             increaseGenerated();
 
-//            // Log the Json's biggest size for debugging purposes
-//            int sizeInBytes = json.getBytes("UTF-8").length;
-//            SimulatorController.checkMaxJsonSize(sizeInBytes);
+            // Log the Json's biggest size for debugging purposes
+            int sizeInBytes = json.getBytes("UTF-8").length;
+            SimulatorController.checkMaxJsonSize(sizeInBytes);
             if (SimulatorController.isKafkaProducerPerSmartDriver()) {
                 driverKafkaProducer.send(
                         new ProducerRecord<>(Kafka.TOPIC_VEHICLE_LOCATION, smartDriverKafkaRecordId, json),

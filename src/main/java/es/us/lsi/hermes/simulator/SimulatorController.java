@@ -58,14 +58,15 @@ public class SimulatorController implements Serializable {
     private static Properties kafkaProducerProperties, kafkaMonitoringProducerProperties, kafkaConsumerProperties;
     private static boolean localMode;
 
-//    // TODO - INFO - Remove before delivery
-//    private static int maxJsonSizeBytes = 0;
-//    static synchronized void checkMaxJsonSize(int maxJsonSizeBytes){
-//        if(SimulatorController.maxJsonSizeBytes < maxJsonSizeBytes){
-//            SimulatorController.maxJsonSizeBytes = maxJsonSizeBytes;
-//            LOG.log(Level.INFO, "Maximum Json size till now: {0}", maxJsonSizeBytes);
-//        }
-//    }
+    // TODO - INFO - Remove before delivery
+    private static int maxJsonSizeBytes = 0;
+    static synchronized void checkMaxJsonSize(int maxJsonSizeBytes){
+        if(SimulatorController.maxJsonSizeBytes < maxJsonSizeBytes){
+            SimulatorController.maxJsonSizeBytes = maxJsonSizeBytes;
+            LOG.log(Level.INFO, "Maximum Json size till now: {0}", maxJsonSizeBytes);
+        }
+    }
+
     public SimulatorController(boolean localMode) {
         SimulatorController.localMode = localMode;
         LOG.log(Level.INFO, "SimulatorController() - Simulator controller init. LOCAL MODE: {0}", localMode);

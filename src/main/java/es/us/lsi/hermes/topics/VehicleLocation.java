@@ -1,15 +1,24 @@
 package es.us.lsi.hermes.topics;
 
+import com.google.gson.annotations.Expose;
+
 import java.io.Serializable;
 
 public class VehicleLocation implements Serializable {
 
+    @Expose
     private String vehicleId;
+    @Expose
     private String timeStamp;
+    @Expose
     private Double longitude;
+    @Expose
     private Double latitude;
+    @Expose
     private Integer stress;
+    @Expose
     private int speed;
+    @Expose
     private Integer accuracy;
     private int retries;
 
